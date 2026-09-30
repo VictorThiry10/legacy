@@ -67,7 +67,7 @@ export default async function Rosters({ searchParams }: PageProps<"/settings/ros
           <label><span className="label">Team B</span>{teamSelect("b", b || teams[1]?.id || "")}</label>
           <button className="btn-ghost">Pick players</button>
         </form>
-        {a && b && a !== b && (
+        {a !== b && teams.some((t) => t.id === a) && teams.some((t) => t.id === b) && (
           <ActionForm action={makeTrade} className="card space-y-3 text-sm">
             <input type="hidden" name="team_a" value={a} />
             <input type="hidden" name="team_b" value={b} />

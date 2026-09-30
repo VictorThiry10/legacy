@@ -24,7 +24,7 @@ export default async function Schedule() {
             <Field label="Weeks"><input name="weeks" type="number" min="1" max="30" defaultValue={20} required className="input" /></Field>
             <button className="btn">{ms.length ? "Rebuild" : "Build"}</button>
             <p className="sm:col-span-3 text-xs text-muted">
-              Round robin between the {teams.length} teams signed up now: every team plays every other once, then it repeats.
+              Round robin between the {teams.length} team{teams.length === 1 ? "" : "s"} signed up now: every team plays every other once, then it repeats.
               Week 1 runs from the first day to Sunday, then every week is Monday to Sunday. Rebuild after all teams join.
             </p>
           </ActionForm>
