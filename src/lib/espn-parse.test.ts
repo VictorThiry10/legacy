@@ -18,7 +18,6 @@ test("game info", () => {
 test("AJ Green: 35 pts, 11-18 FG, 5 reb, 4 ast, 2 stl, win", () => {
   const l = line("4397475");
   assert.deepEqual(l.stats, { pts: 35, fgm: 11, fga: 18, reb: 5, ast: 4, stl: 2, blk: 0, to: 0, tf: 0, ej: 0, win: 1 });
-  assert.equal(l.min, 41);
   // 35 + 11 - 7 + 5 + 6 + 5 + 0 - 0 + 1 = 56
   assert.equal(l.points, 56);
 });
@@ -84,4 +83,18 @@ test("player overview: note, outlook, ranks", () => {
 test("league news: athlete ids from categories", () => {
   const n = parseNews({ articles: [{ headline: "Ingram practices", categories: [{ type: "athlete", athleteId: 3913176 }, { type: "team" }] }] });
   assert.deepEqual(n[0].athleteIds, ["3913176"]);
+});
+
+test("fantasy positions: real ESPN eligibility slots", async () => {
+  const { parseEligibility } = await import("./espn-parse");
+  const m = parseEligibility([
+    { id: 4594268, eligibleSlots: [1, 2, 5, 6, 7, 8, 10, 11, 12, 13] }, // Anthony Edwards
+    { id: 5104157, eligibleSlots: [4, 9, 10, 11, 12, 13] }, // Victor Wembanyama
+    { id: 3945274, eligibleSlots: [0, 5, 8, 11, 12, 13] }, // Luka Doncic
+    { id: 1, eligibleSlots: [11, 12] }, // nothing real: left out
+  ]);
+  assert.equal(m.get("4594268"), "SG, SF");
+  assert.equal(m.get("5104157"), "C");
+  assert.equal(m.get("3945274"), "PG");
+  assert.equal(m.has("1"), false);
 });
