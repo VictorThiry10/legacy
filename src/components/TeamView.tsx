@@ -1,7 +1,10 @@
 import Link from "next/link";
 import { getSettings, type TeamSummary } from "@/lib/league";
-import { boxLines, gamesBetween, lineupFor, rosters, teamAbbrs, today, type BoxLine, type Game, type RosterPlayer } from "@/lib/fantasy";
-import { addDays, canPlay, isDay, isStarter, slotLabel } from "@/lib/lineup";
+import { boxLines, gamesBetween, teamAbbrs, type BoxLine, type Game } from "@/lib/nba";
+import { rosters, type RosterPlayer } from "@/lib/roster";
+import { lineupFor } from "@/lib/lineup-store";
+import { canPlay, isStarter, slotLabel } from "@/lib/lineup";
+import { addDays, isDay, longDate, shortDate, today, weekday } from "@/lib/dates";
 import { money } from "@/lib/rules";
 import { moveSlot } from "@/app/team/actions";
 
@@ -183,10 +186,6 @@ function Pills({ items, active, to }: { items: [string, string][]; active: strin
 }
 
 const round = (n: number) => String(Math.round(n * 10) / 10);
-const at = (day: string) => new Date(`${day}T12:00:00Z`);
-const shortDate = (day: string) => at(day).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" }).toUpperCase();
-const longDate = (day: string) => at(day).toLocaleDateString("en-US", { month: "long", day: "numeric", timeZone: "UTC" });
-const weekday = (day: string) => at(day).toLocaleDateString("en-US", { weekday: "short", timeZone: "UTC" }).toUpperCase();
 
 function opp(g: Game, teamId: string, abbr: Map<string, string>) {
   return g.home_team_id === teamId ? abbr.get(g.away_team_id) ?? "?" : `@${abbr.get(g.home_team_id) ?? "?"}`;

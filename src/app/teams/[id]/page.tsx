@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
-import { getMe, teamSummaries } from "@/lib/league";
+import { getMe } from "@/lib/auth";
+import { teamSummaries } from "@/lib/league";
 import TeamView from "@/components/TeamView";
 
 export const dynamic = "force-dynamic";

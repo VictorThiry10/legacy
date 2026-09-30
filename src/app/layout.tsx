@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import Nav from "@/components/Nav";
 import "./globals.css";
-import { getMe } from "@/lib/league";
+import { getMe } from "@/lib/auth";
 
 export const metadata: Metadata = { title: "Legacy League", description: "Our dynasty basketball league" };
 

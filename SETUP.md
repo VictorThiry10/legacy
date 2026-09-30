@@ -4,7 +4,7 @@ You need 3 free accounts: GitHub (stores the code), Supabase (the database and l
 
 ## 1. Supabase: the database
 1. Go to supabase.com, sign up, click New project. Name it `legacy`, pick a strong database password (save it), region Europe West (London). Create.
-2. Left menu, SQL Editor, New query. Open `supabase/schema.sql`, copy everything, paste, click Run. You should see "Success".
+2. Left menu, SQL Editor, New query. Paste each file in `supabase/migrations` in filename order, clicking Run after each. You should see "Success".
 3. Left menu, Project Settings, API. Keep this tab open: you'll copy 3 values in step 3 (Project URL, anon public key, service_role secret key).
 
 ## 2. GitHub: the code
@@ -33,8 +33,7 @@ then pick a team name and GM name. The commissioner email gets commissioner righ
 For the code to appear in the email, in Supabase go to Authentication, Emails, and make sure both the
 "Magic Link" and "Confirm signup" templates include `{{ .Token }}`.
 
-Matchups are added in Supabase's Table Editor for now (`matchups`: season, week, starts, ends,
-home_team_id, away_team_id; dates are US Eastern).
+Once everyone has joined, the commissioner builds the head to head schedule in Settings, Schedule.
 
 Players and the schedule load by themselves through the refresh job below.
 

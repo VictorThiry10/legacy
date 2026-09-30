@@ -2,7 +2,7 @@
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { authClient, db, linkClient } from "@/lib/supabase/server";
-import { LEAGUE_SIZE } from "@/lib/league";
+import { getSettings } from "@/lib/league";
 
 // The email waiting for its code lives in a short cookie, not the URL.
 const EMAIL_COOKIE = "login_email";
@@ -13,12 +13,13 @@ export async function sendCode(form: FormData) {
   const email = String(form.get("email") ?? "").trim().toLowerCase();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) fail("That doesn't look like an email.");
   const d = db();
-  const [{ data: team, error: dbError }, { count }] = await Promise.all([
+  const [{ data: team, error: dbError }, { count }, { leagueSize }] = await Promise.all([
     d.from("teams").select("id").ilike("manager_email", email).maybeSingle(),
     d.from("teams").select("id", { count: "exact", head: true }),
+    getSettings(),
   ]);
   if (dbError) fail("Database problem: " + dbError.message);
-  if (!team && (count ?? 0) >= LEAGUE_SIZE) fail(`The league is full (${LEAGUE_SIZE} teams).`);
+  if (!team && (count ?? 0) >= leagueSize) fail(`The league is full (${leagueSize} teams).`);
   // The email carries a link that works on any device (and a code, once the email template shows it).
   const h = await headers();
   const origin = h.get("origin") ?? `https://${h.get("host")}`;

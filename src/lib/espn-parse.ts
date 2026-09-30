@@ -1,5 +1,5 @@
 // Turns raw ESPN responses into our own simple shapes. Pure functions: tested against real ESPN data.
-import { fantasyPoints, type StatLine } from "./rules";
+import { fantasyPoints, SCORING, type Scoring, type StatLine } from "./rules";
 
 // ESPN play type ids (checked against real games)
 export const PLAY = { TECHNICAL: "35", DOUBLE_TECHNICAL: "30", DEFENSIVE_3_SECONDS: "29", EJECTION: "517" };
@@ -101,7 +101,7 @@ type SummaryJson = {
 };
 
 // One game's box score -> one line per player with our fantasy points.
-export function parseSummary(json: SummaryJson): { game: GameRow; lines: Line[] } {
+export function parseSummary(json: SummaryJson, w: Scoring = SCORING): { game: GameRow; lines: Line[] } {
   const game = gameFrom(json.header.competitions[0]);
   const winnerId = game.final ? json.header.competitions[0].competitors.find((c) => c.winner)?.id : undefined;
 
@@ -134,7 +134,7 @@ export function parseSummary(json: SummaryJson): { game: GameRow; lines: Line[] 
           }
         : { pts: 0, fgm: 0, fga: 0, reb: 0, ast: 0, stl: 0, blk: 0, to: 0, tf: 0, ej: 0, win: 0 };
       const min = played ? num(at(a.stats, "minutes")) : 0;
-      lines.push({ playerId: id, teamId: team.team.id, gameId: game.id, played, min, stats, points: played ? fantasyPoints(stats) : 0 });
+      lines.push({ playerId: id, teamId: team.team.id, gameId: game.id, played, min, stats, points: played ? fantasyPoints(stats, w) : 0 });
     }
   }
   return { game, lines };
@@ -153,7 +153,7 @@ type ByAthlete = {
   athletes: { athlete: { id: string }; categories: { name: string; values: number[] }[] }[];
 };
 
-export function parseSeasonStats(json: ByAthlete): Map<string, SeasonLine> {
+export function parseSeasonStats(json: ByAthlete, w: Scoring = SCORING): Map<string, SeasonLine> {
   const names = new Map(json.categories.map((c) => [c.name, c.names]));
   const out = new Map<string, SeasonLine>();
   for (const a of json.athletes) {
@@ -170,7 +170,7 @@ export function parseSeasonStats(json: ByAthlete): Map<string, SeasonLine> {
     out.set(a.athlete.id, {
       season: json.requestedSeason?.year ?? 0, gp: v("general", "gamesPlayed"), min: v("general", "minutes"),
       fgm: s.fgm, fga: s.fga, reb: s.reb, ast: s.ast, stl: s.stl, blk: s.blk, to: s.to, tf: s.tf, ej: s.ej, pts: s.pts,
-      fpts: fantasyPoints(s),
+      fpts: fantasyPoints(s, w),
     });
   }
   return out;

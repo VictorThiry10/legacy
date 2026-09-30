@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { addDays, buildLineup, canPlay, etDay, swap, type LineupPlayer, type LineupRow } from "./lineup";
+import { buildLineup, canPlay, swap, type LineupPlayer, type LineupRow } from "./lineup";
+import { addDays, etDay } from "./dates";
 
 const p = (id: string, position: string, injury_status: string | null = null): LineupPlayer => ({ id, position, injury_status });
 const roster = [p("pg", "PG"), p("sg", "SG"), p("sf", "SF"), p("pf", "PF"), p("c", "C"), p("g", "G"), p("f", "F"),

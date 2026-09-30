@@ -176,22 +176,37 @@ export type StatLine = {
   to: number; tf: number; ej: number; win: number;
 };
 
-export const SCORING = { pts: 1, fgm: 1, fgmi: -1, reb: 1, ast: 1.5, stl: 2.5, blk: 2.5, to: -1.5, tf: -1, ej: -2, win: 1 };
+export type Scoring = { pts: number; fgm: number; fgmi: number; reb: number; ast: number; stl: number; blk: number; to: number; tf: number; ej: number; win: number };
 
-export function fantasyPoints(l: StatLine): number {
+// Default weights. The league's live weights are in settings.scoring (editable on the Settings page).
+export const SCORING: Scoring = { pts: 1, fgm: 1, fgmi: -1, reb: 1, ast: 1.5, stl: 2.5, blk: 2.5, to: -1.5, tf: -1, ej: -2, win: 1 };
+
+export function fantasyPoints(l: StatLine, w: Scoring = SCORING): number {
   const p =
-    l.pts * SCORING.pts +
-    l.fgm * SCORING.fgm +
-    (l.fga - l.fgm) * SCORING.fgmi +
-    l.reb * SCORING.reb +
-    l.ast * SCORING.ast +
-    l.stl * SCORING.stl +
-    l.blk * SCORING.blk +
-    l.to * SCORING.to +
-    l.tf * SCORING.tf +
-    l.ej * SCORING.ej +
-    l.win * SCORING.win;
+    l.pts * w.pts +
+    l.fgm * w.fgm +
+    (l.fga - l.fgm) * w.fgmi +
+    l.reb * w.reb +
+    l.ast * w.ast +
+    l.stl * w.stl +
+    l.blk * w.blk +
+    l.to * w.to +
+    l.tf * w.tf +
+    l.ej * w.ej +
+    l.win * w.win;
   return Math.round(p * 10) / 10;
+}
+
+// Is a team legal after a roster move? Hard cap, roster size, and contract-length slots for this season's signings.
+export function rosterProblems(t: TeamState, s: Settings): string[] {
+  const out: string[] = [];
+  if (t.salary > s.cap) out.push(`over the ${money(s.cap)} cap by ${money(t.salary - s.cap)}`);
+  if (t.rosterCount > s.rosterMax) out.push(`${t.rosterCount} players, max is ${s.rosterMax}`);
+  for (const [len, max] of Object.entries(s.slotLimits)) {
+    const n = t.slotsUsed[+len] ?? 0;
+    if (n > max) out.push(`${n} ${len}-year contracts signed this season, max is ${max}`);
+  }
+  return out;
 }
 
 export function money(n: number) {

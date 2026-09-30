@@ -1,7 +1,11 @@
 import Link from "next/link";
-import { myTeamOrWelcome, teamSummaries } from "@/lib/league";
-import { currentOf, lineupFor, matchups, rosters, score, today, type RosterPlayer } from "@/lib/fantasy";
-import { isStarter, slotLabel, weekLabel, type LineupRow } from "@/lib/lineup";
+import { myTeamOrWelcome } from "@/lib/auth";
+import { teamSummaries } from "@/lib/league";
+import { currentOf, matchups, scores, weekPoints } from "@/lib/season";
+import { rosters, type RosterPlayer } from "@/lib/roster";
+import { lineupFor } from "@/lib/lineup-store";
+import { isStarter, slotLabel, type LineupRow } from "@/lib/lineup";
+import { today, weekLabel } from "@/lib/dates";
 import { load } from "@/lib/guard";
 import AutoRefresh from "@/components/AutoRefresh";
 
@@ -17,14 +21,14 @@ export default async function MatchupPage({ searchParams }: PageProps<"/matchup"
     const m = mine.find((x) => String(x.week) === sp.week) ?? currentOf(mine, now);
     if (!m) return null;
     const ref = now < m.starts ? m.starts : now > m.ends ? m.ends : now; // lineup shown: today, clamped to the week
-    const [s, roster] = await Promise.all([score([m]), rosters([m.home_team_id, m.away_team_id])]);
+    const [s, pts, roster] = await Promise.all([scores([m]), weekPoints(m), rosters([m.home_team_id, m.away_team_id])]);
     const side = async (teamId: string) => {
       const players = roster.filter((p) => p.team_id === teamId);
       return { teamId, players, rows: await lineupFor(teamId, ref, players) };
     };
     const sides = await Promise.all([side(m.home_team_id), side(m.away_team_id)]);
     if (m.away_team_id === me.id) sides.reverse();
-    return { m, s: s.get(m.id)!, sides, weeks: mine, ref };
+    return { m, s: s.get(m.id)!, pts, sides, weeks: mine, ref };
   });
 
   if ("err" in r) return <p className="card text-bad text-sm">{r.err}</p>;
@@ -36,7 +40,7 @@ export default async function MatchupPage({ searchParams }: PageProps<"/matchup"
       </div>
     );
   }
-  const { m, s, sides, weeks, ref } = r.ok;
+  const { m, s, pts, sides, weeks, ref } = r.ok;
   const live = m.starts <= now && now <= m.ends;
   const total = (teamId: string) => (teamId === m.home_team_id ? s.home : s.away);
   const i = weeks.findIndex((w) => w.id === m.id);
@@ -62,7 +66,7 @@ export default async function MatchupPage({ searchParams }: PageProps<"/matchup"
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
-        {sides.map((x) => <Side key={x.teamId} rows={x.rows} players={x.players} pts={(id) => s.byPlayer.get(`${x.teamId}:${id}`)} />)}
+        {sides.map((x) => <Side key={x.teamId} rows={x.rows} players={x.players} pts={(id) => pts.get(`${x.teamId}:${id}`)} />)}
       </div>
       <p className="text-xs text-muted">Lineups as of {ref}. Week points count only days a player was in a starting slot.</p>
     </div>

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { resolveRound, DEFAULT_SETTINGS as S, drawLottery, lotteryOdds, fantasyPoints, canRenounce, type TeamState, type Bid } from "./rules";
+import { resolveRound, DEFAULT_SETTINGS as S, drawLottery, lotteryOdds, fantasyPoints, canRenounce, rosterProblems, type TeamState, type Bid } from "./rules";
 
 const M = 1_000_000;
 const team = (id: string, salary = 0, rosterCount = 0): TeamState => ({ id, salary, rosterCount, slotsUsed: {} });
@@ -83,4 +83,18 @@ test("fantasy points", () => {
   const p = fantasyPoints({ pts: 20, fgm: 8, fga: 15, reb: 10, ast: 5, stl: 2, blk: 1, to: 3, tf: 0, ej: 0, win: 1 });
   // 20 + 8 - 7 + 10 + 7.5 + 5 + 2.5 - 4.5 + 1 = 42.5
   assert.equal(p, 42.5);
+});
+
+test("custom scoring weights", () => {
+  const line = { pts: 10, fgm: 4, fga: 8, reb: 0, ast: 0, stl: 0, blk: 0, to: 0, tf: 0, ej: 0, win: 0 };
+  assert.equal(fantasyPoints(line, { pts: 2, fgm: 0, fgmi: 0, reb: 0, ast: 0, stl: 0, blk: 0, to: 0, tf: 0, ej: 0, win: 0 }), 20);
+});
+
+test("roster problems: cap, roster size, contract slots", () => {
+  const ok: TeamState = { id: "a", salary: 150_000_000, rosterCount: 13, slotsUsed: { 4: 1 } };
+  assert.deepEqual(rosterProblems(ok, S), []);
+  const bad: TeamState = { id: "a", salary: 151_000_000, rosterCount: 14, slotsUsed: { 4: 2 } };
+  const p = rosterProblems(bad, S);
+  assert.equal(p.length, 3);
+  assert.match(p[0], /over the \$150m cap by \$1m/);
 });

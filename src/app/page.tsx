@@ -1,7 +1,8 @@
 import Link from "next/link";
-import { myTeamOrWelcome, teamSummaries } from "@/lib/league";
-import { currentOf, matchups, score, standings } from "@/lib/fantasy";
-import { weekLabel } from "@/lib/lineup";
+import { myTeamOrWelcome } from "@/lib/auth";
+import { teamSummaries } from "@/lib/league";
+import { currentOf, matchups, scores, standings } from "@/lib/season";
+import { weekLabel } from "@/lib/dates";
 import { load } from "@/lib/guard";
 
 export const dynamic = "force-dynamic";
@@ -36,7 +37,7 @@ function Head({ title, href, link }: { title: string; href: string; link: string
 async function CurrentMatchup({ myId, name }: { myId: string; name: (id: string) => string }) {
   const r = await load(async () => {
     const m = currentOf(await matchups(myId));
-    return m ? { m, s: (await score([m])).get(m.id)! } : null;
+    return m ? { m, s: (await scores([m])).get(m.id)! } : null;
   });
   if ("err" in r) return <p className="text-sm text-bad">{r.err}</p>;
   if (!r.ok) return <p className="text-sm text-muted">No matchups scheduled yet.</p>;

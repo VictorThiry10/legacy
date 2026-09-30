@@ -1,7 +1,10 @@
 import Link from "next/link";
-import { getMe, getSettings, teamSummaries } from "@/lib/league";
-import { standings } from "@/lib/fantasy";
+import { getMe } from "@/lib/auth";
+import { getSettings, teamSummaries } from "@/lib/league";
+import { standings } from "@/lib/season";
 import { money } from "@/lib/rules";
+import { recentMoves } from "@/lib/roster";
+import Moves from "@/components/Moves";
 import { load } from "@/lib/guard";
 
 export const dynamic = "force-dynamic";
@@ -10,7 +13,7 @@ export default async function League() {
   const [me, { rules, leagueName, season }, teams] = await Promise.all([getMe(), getSettings(), teamSummaries()]);
   const myId = me?.team?.id;
   const name = (id: string) => teams.find((t) => t.id === id)?.name ?? "?";
-  const table = await load(() => standings(teams.map((t) => t.id)));
+  const [table, moves] = await Promise.all([load(() => standings(teams.map((t) => t.id))), recentMoves(20)]);
   return (
     <div className="space-y-6">
       <div>
@@ -71,6 +74,10 @@ export default async function League() {
           </table>
         </div>
         <p className="text-xs text-muted">Max bid keeps $1m for every other open roster spot, per league rules.</p>
+      </section>
+      <section className="space-y-2">
+        <h2 className="font-semibold">Recent moves</h2>
+        <div className="card"><Moves moves={moves} /></div>
       </section>
     </div>
   );

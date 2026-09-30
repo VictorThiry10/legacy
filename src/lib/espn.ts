@@ -1,6 +1,7 @@
 import "server-only";
 import { db } from "./supabase/server";
 import { getSettings } from "./league";
+import { refreshScores } from "./season";
 import { parseEligibility, parseInjuries, parseNews, parseOverview, parseRoster, parseScoreboard, parseSeasonStats, parseSummary, type GameRow, type PlayerRow } from "./espn-parse";
 
 // ESPN's free public data feed (unofficial: if ESPN changes it, espn-parse.ts is the file to fix).
@@ -45,10 +46,11 @@ export async function syncDay(date: string, force = false) {
     ? { data: [] as { id: string }[] }
     : await db().from("games").select("id").in("id", games.map((g) => g.id)).eq("final", true);
   const finished = new Set((done ?? []).map((g) => g.id));
+  const { scoring } = await getSettings();
   await saveGames(games);
   let lines = 0;
   for (const g of games.filter((g) => g.state !== "pre" && !finished.has(g.id))) {
-    const { game, lines: rows } = parseSummary(await get(`/summary?event=${g.id}`));
+    const { game, lines: rows } = parseSummary(await get(`/summary?event=${g.id}`), scoring);
     await saveGames([game]);
     const { error } = await db().from("player_games").upsert(
       rows.map((l) => ({
@@ -92,7 +94,8 @@ export async function syncRecent() {
 
 async function lastSeasonStats(year: number) {
   try {
-    return parseSeasonStats(await get(`/statistics/byathlete?isqualified=false&page=1&limit=1000&season=${year}&seasontype=2`, WEB));
+    const { scoring } = await getSettings();
+    return parseSeasonStats(await get(`/statistics/byathlete?isqualified=false&page=1&limit=1000&season=${year}&seasontype=2`, WEB), scoring);
   } catch {
     return new Map(); // stats are a bonus: never block the roster refresh
   }
@@ -153,6 +156,7 @@ async function attempt<T>(fn: () => Promise<T>) {
 export async function autoRefresh() {
   if (!(await due("scores", 4))) return { skipped: "ran less than 4 minutes ago" };
   const out: Record<string, unknown> = { scores: await attempt(syncRecent) };
+  out.fantasy = await attempt(refreshScores); // after box scores, so lineups score the latest stats
   if (await due("players", 55)) out.players = await attempt(syncPlayers);
   if (await due("schedule", 60 * 24 - 10)) {
     const day = 24 * 3600_000;

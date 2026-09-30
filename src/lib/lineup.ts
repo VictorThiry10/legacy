@@ -81,15 +81,3 @@ export function swap(rows: LineupRow[], playerId: string, to: string, players: M
   next[i].playerId = other?.id ?? null;
   return next;
 }
-
-// ---------- dates (the NBA runs on US Eastern time) ----------
-const fmt = new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit" });
-export const etDay = (d: Date | string) => fmt.format(new Date(d));
-export function addDays(day: string, n: number) {
-  const d = new Date(`${day}T12:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + n);
-  return d.toISOString().slice(0, 10);
-}
-const md = (day: string) => new Date(`${day}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
-export const weekLabel = (m: { week: number; starts: string; ends: string }) => `Week ${m.week} · ${md(m.starts)} to ${md(m.ends)}`;
-export const isDay =(s: unknown): s is string => typeof s === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s);

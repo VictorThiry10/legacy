@@ -1,4 +1,5 @@
-import { myTeamOrWelcome, teamSummaries } from "@/lib/league";
+import { myTeamOrWelcome } from "@/lib/auth";
+import { teamSummaries } from "@/lib/league";
 import TeamView from "@/components/TeamView";
 
 export const dynamic = "force-dynamic";

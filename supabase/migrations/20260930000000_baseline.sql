@@ -1,4 +1,4 @@
--- Legacy League database. Paste this whole file into Supabase > SQL Editor > Run.
+-- Baseline: the database as it stood on 2026-09-30 (tables, box scores, lineups, matchups). Already applied.
 -- All reads and writes go through the app's server (service key), so every table has
 -- row level security ON with no public policies: nobody can touch data directly.
 

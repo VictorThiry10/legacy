@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { createClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
+import type { Database } from "./types";
 
 const URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 // Supabase's Vercel link fills these in. Newer key names first, older ones as backup.
@@ -30,10 +31,10 @@ export async function authClient() {
 // Sends login emails whose link signs you in on any device (the session rides in the link,
 // finished by /auth/confirm), instead of only in the browser that asked for it.
 export function linkClient() {
-  return createClient(URL, ANON, { auth: { flowType: "implicit", persistSession: false, autoRefreshToken: false } });
+  return createClient<Database>(URL, ANON, { auth: { flowType: "implicit", persistSession: false, autoRefreshToken: false } });
 }
 
 // Full database access. Server only, never sent to the browser.
 export function db() {
-  return createClient(URL, SERVICE, { auth: { persistSession: false } });
+  return createClient<Database>(URL, SERVICE, { auth: { persistSession: false } });
 }

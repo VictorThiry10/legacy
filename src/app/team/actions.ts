@@ -1,9 +1,13 @@
 "use server";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { requireTeam } from "@/lib/league";
-import { gamesBetween, lineupFor, rosters, saveLineup, today } from "@/lib/fantasy";
-import { isDay, swap } from "@/lib/lineup";
+import { requireTeam } from "@/lib/auth";
+import { gamesBetween } from "@/lib/nba";
+import { rosters } from "@/lib/roster";
+import { lineupFor, saveLineup } from "@/lib/lineup-store";
+import { refreshScores } from "@/lib/season";
+import { swap } from "@/lib/lineup";
+import { isDay, today } from "@/lib/dates";
 
 // Move a player into a slot (swapping with whoever is there) for one day. Later days follow until changed.
 export async function moveSlot(f: FormData) {
@@ -29,6 +33,7 @@ export async function moveSlot(f: FormData) {
     const next = swap(rows, playerId, to, players);
     if (typeof next === "string") throw new Error(next);
     await saveLineup(team.id, day, next);
+    if (day === today()) await refreshScores(); // live matchup shows the new lineup right away
   } catch (e) {
     err = e instanceof Error ? e.message : "Something went wrong.";
   }
