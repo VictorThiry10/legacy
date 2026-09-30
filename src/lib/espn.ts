@@ -52,7 +52,7 @@ export async function syncDay(date: string, force = false) {
     await saveGames([game]);
     const { error } = await db().from("player_games").upsert(
       rows.map((l) => ({
-        game_id: l.gameId, player_id: l.playerId, nba_team_id: l.teamId, played: l.played,
+        game_id: l.gameId, player_id: l.playerId, nba_team_id: l.teamId, played: l.played, min: l.min,
         pts: l.stats.pts, fgm: l.stats.fgm, fga: l.stats.fga, reb: l.stats.reb, ast: l.stats.ast,
         stl: l.stats.stl, blk: l.stats.blk, tov: l.stats.to, tf: l.stats.tf, ej: l.stats.ej, win: l.stats.win,
         fpts: l.points, updated_at: new Date().toISOString(),

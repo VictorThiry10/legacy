@@ -87,7 +87,7 @@ export function parseScoreboard(json: { events?: { competitions: Competition[] }
   return (json.events ?? []).map((e) => gameFrom(e.competitions[0]));
 }
 
-export type Line = { playerId: string; teamId: string; gameId: string; played: boolean; stats: StatLine; points: number };
+export type Line = { playerId: string; teamId: string; gameId: string; played: boolean; min: number; stats: StatLine; points: number };
 
 type SummaryJson = {
   header: { competitions: Competition[] };
@@ -133,7 +133,8 @@ export function parseSummary(json: SummaryJson): { game: GameRow; lines: Line[] 
             win: winnerId === team.team.id ? 1 : 0,
           }
         : { pts: 0, fgm: 0, fga: 0, reb: 0, ast: 0, stl: 0, blk: 0, to: 0, tf: 0, ej: 0, win: 0 };
-      lines.push({ playerId: id, teamId: team.team.id, gameId: game.id, played, stats, points: played ? fantasyPoints(stats) : 0 });
+      const min = played ? num(at(a.stats, "minutes")) : 0;
+      lines.push({ playerId: id, teamId: team.team.id, gameId: game.id, played, min, stats, points: played ? fantasyPoints(stats) : 0 });
     }
   }
   return { game, lines };
