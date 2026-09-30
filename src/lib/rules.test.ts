@@ -1,0 +1,86 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { resolveRound, DEFAULT_SETTINGS as S, drawLottery, lotteryOdds, fantasyPoints, canRenounce, type TeamState, type Bid } from "./rules";
+
+const M = 1_000_000;
+const team = (id: string, salary = 0, rosterCount = 0): TeamState => ({ id, salary, rosterCount, slotsUsed: {} });
+let n = 0;
+const bid = (teamId: string, playerId: string, amount: number, years = 1, t = n++): Bid => ({
+  id: `b${n}`, teamId, playerId, amount: amount * M, years, createdAt: new Date(1e12 + t * 1000).toISOString(),
+});
+
+test("highest bid wins", () => {
+  const r = resolveRound(["p1"], [bid("A", "p1", 10), bid("B", "p1", 12)], [team("A"), team("B")]);
+  assert.equal(r.awards[0].teamId, "B");
+  assert.equal(r.awards[0].amount, 12 * M);
+});
+
+test("tie goes to most cap space", () => {
+  const r = resolveRound(["p1"], [bid("A", "p1", 10), bid("B", "p1", 10)], [team("A", 20 * M), team("B", 5 * M)]);
+  assert.equal(r.awards[0].teamId, "B");
+  assert.equal(r.awards[0].tie, false);
+});
+
+test("double tie is flagged for rock paper scissors", () => {
+  const r = resolveRound(["p1"], [bid("A", "p1", 10), bid("B", "p1", 10)], [team("A"), team("B")]);
+  assert.equal(r.awards[0].tie, true);
+});
+
+test("over cap: most recent win goes to second highest bidder", () => {
+  // A has 100m committed, 0 players. Wins p1 (30m, earlier) and p2 (25m, later): 155m > cap.
+  const bids = [bid("A", "p1", 30), bid("A", "p2", 25), bid("B", "p2", 20)];
+  const r = resolveRound(["p1", "p2"], bids, [team("A", 100 * M), team("B")]);
+  const p2 = r.awards.find((a) => a.playerId === "p2")!;
+  assert.equal(p2.teamId, "B");
+  assert.equal(r.voided[0].reason, "over_cap");
+});
+
+test("must keep $1m per open roster spot", () => {
+  // 13 spots. A has 0 players, bids 139m: 139 + 12 open spots * 1m = 151 > 150
+  const r = resolveRound(["p1"], [bid("A", "p1", 139)], [team("A")]);
+  assert.equal(r.awards.length, 0);
+  assert.deepEqual(r.unsold, ["p1"]);
+  const ok = resolveRound(["p1"], [bid("A", "p1", 138)], [team("A")]);
+  assert.equal(ok.awards.length, 1);
+});
+
+test("contract slot limit: only one 4 year deal", () => {
+  const bids = [bid("A", "p1", 10, 4), bid("A", "p2", 10, 4), bid("B", "p2", 5, 2)];
+  const r = resolveRound(["p1", "p2"], bids, [team("A"), team("B")]);
+  assert.equal(r.awards.find((a) => a.playerId === "p2")!.teamId, "B");
+});
+
+test("renounced bid passes player to next bidder", () => {
+  const b1 = bid("A", "p1", 10), b2 = bid("B", "p1", 8);
+  const r = resolveRound(["p1"], [b1, b2], [team("A"), team("B")], S, new Set([b1.id]));
+  assert.equal(r.awards[0].teamId, "B");
+});
+
+test("renounce: one per block of 4 rounds", () => {
+  assert.equal(canRenounce(3, [0]), false);
+  assert.equal(canRenounce(5, [0]), true);
+  assert.equal(canRenounce(12, [0, 1]), true);
+  assert.equal(canRenounce(12, [0, 1, 2]), false);
+});
+
+test("lottery odds match the deck and sum to 100", () => {
+  const ids = ["w1", "w2", "w3", "w4", "t1", "t2", "t3", "t4"];
+  const o = lotteryOdds(ids);
+  assert.deepEqual([o.w1, o.w2, o.w3, o.w4, o.t1], [25, 20, 15, 10, 7.5]);
+  assert.equal(Object.values(o).reduce((a, b) => a + b, 0), 100);
+  const counts: Record<string, number> = {};
+  let seed = 1;
+  const rand = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  for (let i = 0; i < 20000; i++) {
+    const first = drawLottery(ids, rand)[0];
+    counts[first] = (counts[first] ?? 0) + 1;
+  }
+  assert.ok(Math.abs(counts.w1 / 20000 - 0.25) < 0.02);
+});
+
+test("fantasy points", () => {
+  // 20 pts, 8-15 FG, 10 reb, 5 ast, 2 stl, 1 blk, 3 to, 0 tf, 0 ej, win
+  const p = fantasyPoints({ pts: 20, fgm: 8, fga: 15, reb: 10, ast: 5, stl: 2, blk: 1, to: 3, tf: 0, ej: 0, win: 1 });
+  // 20 + 8 - 7 + 10 + 7.5 + 5 + 2.5 - 4.5 + 1 = 42.5
+  assert.equal(p, 42.5);
+});
