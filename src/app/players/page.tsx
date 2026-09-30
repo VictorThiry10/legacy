@@ -66,7 +66,7 @@ async function StatsTable({ sp }: { sp: Params }) {
 
   const list = players
     .filter((p) => !q || p.name.toLowerCase().includes(q))
-    .filter((p) => !sp.pos || (p.position ?? "").includes(sp.pos) || (sp.pos.length === 2 && (p.position ?? "") === sp.pos[1]))
+    .filter((p) => !sp.pos || fits(p.position, sp.pos))
     .filter((p) => (show === "fa" ? !owner.has(p.id) : show === "owned" ? owner.has(p.id) : true))
     .map((p) => ({ p, v: stat(p.last_season, sort, perGame) }))
     .sort((a, b) => (a.v == null ? 1 : b.v == null ? -1 : asc ? a.v - b.v : b.v - a.v) || a.p.name.localeCompare(b.p.name));
@@ -148,6 +148,12 @@ async function StatsTable({ sp }: { sp: Params }) {
     </>
   );
 }
+
+// "SG, SF" fits SG and SF. Players with only a basic ESPN position ("G") fit PG and SG.
+const fits = (position: string | null, pos: string) => {
+  const list = (position ?? "").split(/,\s*/);
+  return list.includes(pos) || list.includes(pos.slice(-1));
+};
 
 const threeHoursAgo = () => new Date(Date.now() - 3 * 3600_000).toISOString();
 

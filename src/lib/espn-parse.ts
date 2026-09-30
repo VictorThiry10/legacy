@@ -87,7 +87,7 @@ export function parseScoreboard(json: { events?: { competitions: Competition[] }
   return (json.events ?? []).map((e) => gameFrom(e.competitions[0]));
 }
 
-export type Line = { playerId: string; teamId: string; gameId: string; played: boolean; min: number; stats: StatLine; points: number };
+export type Line = { playerId: string; teamId: string; gameId: string; played: boolean; stats: StatLine; points: number };
 
 type SummaryJson = {
   header: { competitions: Competition[] };
@@ -133,8 +133,7 @@ export function parseSummary(json: SummaryJson): { game: GameRow; lines: Line[] 
             win: winnerId === team.team.id ? 1 : 0,
           }
         : { pts: 0, fgm: 0, fga: 0, reb: 0, ast: 0, stl: 0, blk: 0, to: 0, tf: 0, ej: 0, win: 0 };
-      const min = played ? num(at(a.stats, "minutes")) : 0;
-      lines.push({ playerId: id, teamId: team.team.id, gameId: game.id, played, min, stats, points: played ? fantasyPoints(stats) : 0 });
+      lines.push({ playerId: id, teamId: team.team.id, gameId: game.id, played, stats, points: played ? fantasyPoints(stats) : 0 });
     }
   }
   return { game, lines };
@@ -227,4 +226,17 @@ export function parseNews(json: NewsJson): NewsItem[] {
     image: a.images?.[0]?.url ?? null,
     athleteIds: (a.categories ?? []).filter((c) => c.type === "athlete" && c.athleteId != null).map((c) => String(c.athleteId)),
   }));
+}
+
+// ---------- fantasy positions (PG, SG, SF, PF, C, with dual eligibility) ----------
+// ESPN's roster feed only says G / F / C. ESPN's fantasy game lists every slot a player can fill.
+const SLOT: Record<number, string> = { 0: "PG", 1: "SG", 2: "SF", 3: "PF", 4: "C" };
+
+export function parseEligibility(json: { id: number | string; eligibleSlots?: number[] }[]): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const p of json) {
+    const pos = (p.eligibleSlots ?? []).filter((s) => s in SLOT).sort((a, b) => a - b).map((s) => SLOT[s]);
+    if (pos.length) out.set(String(p.id), pos.join(", "));
+  }
+  return out;
 }
