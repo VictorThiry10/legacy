@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireTeam, teamSummaries } from "@/lib/league";
+import { myTeamOrWelcome, teamSummaries } from "@/lib/league";
 import { currentOf, lineupFor, matchups, rosters, score, today, type RosterPlayer } from "@/lib/fantasy";
 import { isStarter, slotLabel, weekLabel, type LineupRow } from "@/lib/lineup";
 import { load } from "@/lib/guard";
@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 
 // My head to head for a week: both lineups side by side with points scored this week.
 export default async function MatchupPage({ searchParams }: PageProps<"/matchup">) {
-  const [me, teams, sp] = await Promise.all([requireTeam(), teamSummaries(), searchParams]);
+  const [me, teams, sp] = await Promise.all([myTeamOrWelcome(), teamSummaries(), searchParams]);
   const name = (id: string) => teams.find((t) => t.id === id)?.name ?? "?";
   const now = today();
   const r = await load(async () => {

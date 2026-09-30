@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getMe, teamSummaries } from "@/lib/league";
+import { myTeamOrWelcome, teamSummaries } from "@/lib/league";
 import { currentOf, matchups, score, standings } from "@/lib/fantasy";
 import { weekLabel } from "@/lib/lineup";
 import { load } from "@/lib/guard";
@@ -7,9 +7,8 @@ import { load } from "@/lib/guard";
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
-  const [me, teams] = await Promise.all([getMe(), teamSummaries()]);
-  if (!me?.team) return <p className="card">{me?.email} is not on a team yet. Ask the commissioner to add you.</p>;
-  const myId = me.team.id;
+  const [me, teams] = await Promise.all([myTeamOrWelcome(), teamSummaries()]);
+  const myId = me.id;
   const name = (id: string) => teams.find((t) => t.id === id)?.name ?? "?";
   return (
     <div className="grid gap-4 sm:grid-cols-2 items-start">

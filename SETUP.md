@@ -26,11 +26,15 @@ In Supabase: Authentication, URL Configuration.
 - Site URL: your Vercel link
 - Redirect URLs: add your Vercel link followed by `/auth/callback`
 
-## 5. First login
-Open your Vercel link, enter your email, click the link in your inbox. You're in as commissioner.
-The commissioner page is gone for now, so this part is done in Supabase's Table Editor:
-- `teams`: rename your team and add a row per GM (name, manager_name, manager_email).
-- `matchups`: one row per game per week (season, week, starts, ends, home_team_id, away_team_id). Dates are US Eastern.
+## 5. Sign ups
+Anyone can join until the league has 8 teams: they enter their email, type the code Supabase emails them,
+then pick a team name and GM name. The commissioner email gets commissioner rights the same way.
+
+For the code to appear in the email, in Supabase go to Authentication, Emails, and make sure both the
+"Magic Link" and "Confirm signup" templates include `{{ .Token }}`.
+
+Matchups are added in Supabase's Table Editor for now (`matchups`: season, week, starts, ends,
+home_team_id, away_team_id; dates are US Eastern).
 
 Players and the schedule load by themselves through the refresh job below.
 

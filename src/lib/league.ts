@@ -1,5 +1,6 @@
 import "server-only";
-import { authClient, commissionerEmail, db } from "./supabase/server";
+import { redirect } from "next/navigation";
+import { authClient, db } from "./supabase/server";
 import { resolveRound, type Bid, type Settings, type TeamState } from "./rules";
 import type { SeasonLine } from "./espn-parse";
 
@@ -26,6 +27,9 @@ export type Player = {
   last_season?: SeasonLine | null;
 };
 
+// Teams in the league. The first 8 people to sign up each get one.
+export const LEAGUE_SIZE = 8;
+
 export type Round = { id: string; season: number; number: number; status: string; closes_at: string | null };
 
 export async function getSettings() {
@@ -45,15 +49,7 @@ export async function getMe(): Promise<{ email: string; team: Team | null } | nu
   const user = (await testUser()) ?? (await (await authClient()).auth.getUser()).data.user;
   if (!user?.email) return null;
   const email = user.email.toLowerCase();
-  let { data: team } = await db().from("teams").select("*").ilike("manager_email", email).maybeSingle();
-  if (!team && email === commissionerEmail()) {
-    // first login of the commissioner: create their team
-    ({ data: team } = await db()
-      .from("teams")
-      .insert({ name: "Commissioner", manager_email: email, is_commish: true, user_id: user.id })
-      .select()
-      .single());
-  }
+  const { data: team } = await db().from("teams").select("*").ilike("manager_email", email).maybeSingle();
   if (team && !team.user_id) await db().from("teams").update({ user_id: user.id }).eq("id", team.id);
   return { email, team: (team as Team) ?? null };
 }
@@ -69,9 +65,17 @@ async function testUser() {
   return { id: "00000000-0000-0000-0000-" + email.length.toString().padStart(12, "0"), email };
 }
 
+// For pages: signed in without a team yet -> pick a team name first.
+export async function myTeamOrWelcome() {
+  const me = await getMe();
+  if (!me) redirect("/login");
+  if (!me.team) redirect("/welcome");
+  return me.team;
+}
+
 export async function requireTeam() {
   const me = await getMe();
-  if (!me?.team) throw new Error("Your email is not on a team. Ask the commissioner to add you.");
+  if (!me?.team) throw new Error("You don't have a team yet.");
   return me.team;
 }
 

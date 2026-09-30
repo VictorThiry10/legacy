@@ -10,7 +10,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en">
       <body className="min-h-screen">
-        {me && (
+        {me?.team && (
           <header className="border-b border-line bg-card">
             <nav className="mx-auto max-w-7xl flex items-center gap-4 px-4 py-3 text-sm overflow-x-auto">
               <span className="font-semibold whitespace-nowrap">Legacy</span>
