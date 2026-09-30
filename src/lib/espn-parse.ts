@@ -138,3 +138,92 @@ export function parseSummary(json: SummaryJson): { game: GameRow; lines: Line[] 
   }
   return { game, lines };
 }
+
+// ---------- last season stat lines (one ESPN call for every player) ----------
+export type SeasonLine = {
+  season: number; gp: number; min: number; fgm: number; fga: number; reb: number; ast: number;
+  stl: number; blk: number; to: number; tf: number; ej: number; pts: number;
+  fpts: number; // our scoring, without the +1 win bonus (ESPN doesn't say which games a player's team won)
+};
+
+type ByAthlete = {
+  requestedSeason?: { year?: number };
+  categories: { name: string; names: string[] }[];
+  athletes: { athlete: { id: string }; categories: { name: string; values: number[] }[] }[];
+};
+
+export function parseSeasonStats(json: ByAthlete): Map<string, SeasonLine> {
+  const names = new Map(json.categories.map((c) => [c.name, c.names]));
+  const out = new Map<string, SeasonLine>();
+  for (const a of json.athletes) {
+    const v = (cat: string, key: string) => {
+      const i = names.get(cat)?.indexOf(key) ?? -1;
+      const n = a.categories.find((c) => c.name === cat)?.values[i];
+      return i < 0 || n == null || !Number.isFinite(n) ? 0 : Math.round(n);
+    };
+    const s = {
+      pts: v("offensive", "points"), fgm: v("offensive", "fieldGoalsMade"), fga: v("offensive", "fieldGoalsAttempted"),
+      reb: v("general", "rebounds"), ast: v("offensive", "assists"), stl: v("defensive", "steals"), blk: v("defensive", "blocks"),
+      to: v("offensive", "turnovers"), tf: v("general", "technicalFouls"), ej: v("general", "ejections"), win: 0,
+    };
+    out.set(a.athlete.id, {
+      season: json.requestedSeason?.year ?? 0, gp: v("general", "gamesPlayed"), min: v("general", "minutes"),
+      fgm: s.fgm, fga: s.fga, reb: s.reb, ast: s.ast, stl: s.stl, blk: s.blk, to: s.to, tf: s.tf, ej: s.ej, pts: s.pts,
+      fpts: fantasyPoints(s),
+    });
+  }
+  return out;
+}
+
+// ---------- one player's page: latest note, outlook, ranks, headlines ----------
+export type NewsItem = { headline: string; description: string | null; published: string | null; url: string | null; image?: string | null; athleteIds?: string[] };
+export type Overview = {
+  note: { headline: string; story: string | null; published: string | null } | null;
+  outlook: string | null;
+  rank: number | null;
+  positionRank: number | null;
+  rostered: number | null;
+  news: NewsItem[];
+};
+
+type OverviewJson = {
+  rotowire?: { headline?: string; story?: string; description?: string; published?: string };
+  fantasy?: { draftRank?: string; positionRank?: string; percentOwned?: string; projection?: string };
+  news?: { headline?: string; description?: string; published?: string; links?: { web?: { href?: string } } }[];
+};
+
+const num = (s?: string) => (s && Number.isFinite(Number(s)) ? Number(s) : null);
+
+export function parseOverview(json: OverviewJson): Overview {
+  const r = json.rotowire;
+  return {
+    note: r?.headline ? { headline: r.headline, story: r.story ?? null, published: r.published ?? null } : null,
+    outlook: json.fantasy?.projection ?? null,
+    rank: num(json.fantasy?.draftRank),
+    positionRank: num(json.fantasy?.positionRank),
+    rostered: num(json.fantasy?.percentOwned),
+    news: (json.news ?? []).filter((n) => n.headline).slice(0, 6).map((n) => ({
+      headline: n.headline!, description: n.description ?? null, published: n.published ?? null, url: n.links?.web?.href ?? null,
+    })),
+  };
+}
+
+// ---------- league news feed ----------
+type NewsJson = {
+  articles?: {
+    headline?: string; description?: string; published?: string;
+    links?: { web?: { href?: string } }; images?: { url?: string }[];
+    categories?: { type?: string; athleteId?: number | string }[];
+  }[];
+};
+
+export function parseNews(json: NewsJson): NewsItem[] {
+  return (json.articles ?? []).filter((a) => a.headline).map((a) => ({
+    headline: a.headline!,
+    description: a.description ?? null,
+    published: a.published ?? null,
+    url: a.links?.web?.href ?? null,
+    image: a.images?.[0]?.url ?? null,
+    athleteIds: (a.categories ?? []).filter((c) => c.type === "athlete" && c.athleteId != null).map((c) => String(c.athleteId)),
+  }));
+}

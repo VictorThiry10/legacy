@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { db } from "@/lib/supabase/server";
 import { getSettings, latestRound, requireTeam, resolve, roundPlayers, teamSummaries } from "@/lib/league";
 import { canRenounce, money } from "@/lib/rules";
@@ -63,9 +64,10 @@ async function Bidding({ roundId, teamId, closed }: { roundId: string; teamId: s
               <div className="flex items-center gap-3">
                 {p.headshot && <img src={p.headshot} alt="" className="h-12 w-12 rounded-full object-cover bg-line" />}
                 <div>
-                  <div className="font-medium">{p.name}</div>
+                  <Link href={`/players/${p.id}`} className="font-medium hover:underline">{p.name}</Link>
                   <div className="text-xs text-muted">
                     {p.nba_team} · {p.position}
+                    {p.last_season?.gp ? <span> · {(p.last_season.fpts / p.last_season.gp).toFixed(1)} FP/G last season</span> : null}
                     {p.injury_status && <span className="text-bad"> · {p.injury_status}</span>}
                   </div>
                 </div>
@@ -115,7 +117,7 @@ async function Results({ round, teamId }: { round: Awaited<ReturnType<typeof lat
         return (
           <div key={p.id} className="card">
             <div className="flex flex-wrap items-baseline gap-2">
-              <span className="font-medium">{p.name}</span>
+              <Link href={`/players/${p.id}`} className="font-medium hover:underline">{p.name}</Link>
               <span className="text-xs text-muted">{p.nba_team} · {p.position}</span>
               <span className="ml-auto text-sm">
                 {award ? (

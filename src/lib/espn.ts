@@ -1,28 +1,34 @@
 import "server-only";
 import { db } from "./supabase/server";
-import { parseInjuries, parseRoster, parseScoreboard, parseSummary, type GameRow, type PlayerRow } from "./espn-parse";
+import { getSettings } from "./league";
+import { parseInjuries, parseNews, parseOverview, parseRoster, parseScoreboard, parseSeasonStats, parseSummary, type GameRow, type PlayerRow } from "./espn-parse";
 
 // ESPN's free public data feed (unofficial: if ESPN changes it, espn-parse.ts is the file to fix).
 const BASE = process.env.ESPN_BASE ?? "https://site.api.espn.com/apis/site/v2/sports/basketball/nba";
+// Second ESPN feed with season totals and player pages.
+const WEB = process.env.ESPN_WEB_BASE ?? "https://site.web.api.espn.com/apis/common/v3/sports/basketball/nba";
 
-async function get<T>(path: string): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, { cache: "no-store" });
+async function get<T>(path: string, base = BASE): Promise<T> {
+  const res = await fetch(`${base}${path}`, { cache: "no-store" });
   if (!res.ok) throw new Error(`ESPN ${path}: ${res.status}`);
   return res.json() as Promise<T>;
 }
 
 type EspnTeams = { sports: { leagues: { teams: { team: { id: string; abbreviation: string } }[] }[] }[] };
 
-// Every NBA roster plus the league injury report -> players table.
+// Every NBA roster, the league injury report and last season's stat line -> players table.
 export async function syncPlayers() {
+  const { season } = await getSettings();
   const teams = (await get<EspnTeams>("/teams")).sports[0].leagues[0].teams.map((t) => t.team);
   const rosters = await Promise.all(teams.map((t) => get<Parameters<typeof parseRoster>[0]>(`/teams/${t.id}/roster`).then((r) => parseRoster(r, t))));
   const players: PlayerRow[] = rosters.flat();
   const injuries = new Map(parseInjuries(await get("/injuries")).map((i) => [i.playerId, i]));
+  // ESPN names a season by the year it ends: our 2026-27 season's "last season" is ESPN's 2026.
+  const last = await lastSeasonStats(season);
   const now = new Date().toISOString();
   const rows = players.map((p) => {
     const inj = injuries.get(p.id);
-    return { ...p, injury_status: inj?.status ?? p.injury_status, injury_note: inj?.note ?? null, updated_at: now };
+    return { ...p, injury_status: inj?.status ?? p.injury_status, injury_note: inj?.note ?? null, last_season: last.get(p.id) ?? null, updated_at: now };
   });
   const { error } = await db().from("players").upsert(rows);
   if (error) throw new Error(error.message);
@@ -77,4 +83,30 @@ export async function syncRecent() {
   const a = await syncDay(ymd(yesterday));
   const b = await syncDay(ymd(now));
   return { games: a.games + b.games, lines: a.lines + b.lines };
+}
+
+async function lastSeasonStats(year: number) {
+  try {
+    return parseSeasonStats(await get(`/statistics/byathlete?isqualified=false&page=1&limit=1000&season=${year}&seasontype=2`, WEB));
+  } catch {
+    return new Map(); // stats are a bonus: never block the roster refresh
+  }
+}
+
+// One player's latest note, outlook, ranks and headlines (fetched when their page opens).
+export async function playerOverview(id: string) {
+  try {
+    return parseOverview(await get(`/athletes/${encodeURIComponent(id)}/overview`, WEB));
+  } catch {
+    return null;
+  }
+}
+
+// League news feed.
+export async function leagueNews() {
+  try {
+    return parseNews(await get("/news?limit=50"));
+  } catch {
+    return [];
+  }
 }

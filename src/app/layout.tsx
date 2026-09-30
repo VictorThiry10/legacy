@@ -12,7 +12,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
       <body className="min-h-screen">
         {me && (
           <header className="border-b border-line bg-card">
-            <nav className="mx-auto max-w-5xl flex items-center gap-4 px-4 py-3 text-sm overflow-x-auto">
+            <nav className="mx-auto max-w-7xl flex items-center gap-4 px-4 py-3 text-sm overflow-x-auto">
               <Link href="/" className="font-semibold whitespace-nowrap">Legacy</Link>
               <Link href="/draft" className="text-muted hover:text-fg">Draft</Link>
               <Link href="/players" className="text-muted hover:text-fg">Players</Link>
@@ -24,7 +24,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
             </nav>
           </header>
         )}
-        <main className="mx-auto max-w-5xl px-4 py-6">{children}</main>
+        <main className="mx-auto max-w-7xl px-4 py-6">{children}</main>
       </body>
     </html>
   );

@@ -44,3 +44,43 @@ test("injury report: player id pulled from profile link", () => {
   });
   assert.deepEqual(rows, [{ playerId: "5105571", status: "Out", note: "Torn ACL", returnDate: "2027-07-01" }]);
 });
+
+// Real ESPN season totals, 2025-26 (trimmed to two players).
+import { parseSeasonStats, parseOverview, parseNews } from "./espn-parse";
+const season = parseSeasonStats(JSON.parse(readFileSync(new URL("./fixtures/byathlete-2026.json", import.meta.url), "utf8")));
+
+test("season totals: Wembanyama 2025-26", () => {
+  const w = season.get("5104157")!;
+  assert.deepEqual(
+    { gp: w.gp, min: w.min, pts: w.pts, fgm: w.fgm, fga: w.fga, reb: w.reb, ast: w.ast, stl: w.stl, blk: w.blk, to: w.to, tf: w.tf, ej: w.ej },
+    { gp: 64, min: 1866, pts: 1600, fgm: 553, fga: 1080, reb: 736, ast: 199, stl: 66, blk: 197, to: 155, tf: 2, ej: 0 },
+  );
+  // 1600 + 553 - 527 + 736 + 298.5 + 165 + 492.5 - 232.5 - 2 = 3083.5
+  assert.equal(w.fpts, 3083.5);
+  assert.equal(w.season, 2026);
+});
+
+test("season totals: Doncic technicals count", () => {
+  const l = season.get("3945274")!;
+  assert.equal(l.tf, 17);
+  // 2143 + 693 - 764 + 495 + 795 + 262.5 + 85 - 382.5 - 17 = 3310
+  assert.equal(l.fpts, 3310);
+});
+
+test("player overview: note, outlook, ranks", () => {
+  const o = parseOverview({
+    rotowire: { headline: "Feeling good", story: "More detail", published: "Mon Sep 28 12:12:40 PDT 2026" },
+    fantasy: { draftRank: "4", positionRank: "2", percentOwned: "99.92", projection: "Big year ahead." },
+    news: [{ headline: "H1", description: "D1", published: "2026-09-28T21:29:27.000+00:00", links: { web: { href: "https://espn.com/x" } } }, { description: "no headline" }],
+  });
+  assert.equal(o.note?.headline, "Feeling good");
+  assert.equal(o.rank, 4);
+  assert.equal(o.rostered, 99.92);
+  assert.equal(o.news.length, 1);
+  assert.equal(o.news[0].url, "https://espn.com/x");
+});
+
+test("league news: athlete ids from categories", () => {
+  const n = parseNews({ articles: [{ headline: "Ingram practices", categories: [{ type: "athlete", athleteId: 3913176 }, { type: "team" }] }] });
+  assert.deepEqual(n[0].athleteIds, ["3913176"]);
+});

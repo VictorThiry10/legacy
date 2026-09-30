@@ -1,6 +1,7 @@
 import "server-only";
 import { authClient, commissionerEmail, db } from "./supabase/server";
 import { resolveRound, type Bid, type Settings, type TeamState } from "./rules";
+import type { SeasonLine } from "./espn-parse";
 
 export type Team = {
   id: string;
@@ -21,6 +22,8 @@ export type Player = {
   injury_note: string | null;
   espn_salary: number | null;
   rank: number | null;
+  nba_team_id?: string | null;
+  last_season?: SeasonLine | null;
 };
 
 export type Round = { id: string; season: number; number: number; status: string; closes_at: string | null };

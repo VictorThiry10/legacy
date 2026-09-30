@@ -145,3 +145,6 @@ create index if not exists player_games_player on player_games(player_id);
 
 alter table games enable row level security;
 alter table player_games enable row level security;
+
+-- ---------- added Sep 30: last season's stat line per player ----------
+alter table players add column if not exists last_season jsonb;

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { db } from "@/lib/supabase/server";
 import { getSettings, teamSummaries } from "@/lib/league";
@@ -37,7 +38,7 @@ export default async function TeamPage({ params }: PageProps<"/teams/[id]">) {
               return (
                 <tr key={c.id}>
                   <td>
-                    {c.player.name} <span className="text-xs text-muted">{c.player.nba_team}</span>
+                    <Link href={`/players/${c.player.id}`} className="hover:underline">{c.player.name}</Link> <span className="text-xs text-muted">{c.player.nba_team}</span>
                     {c.player.injury_status && <span className="ml-2 text-xs text-bad">{c.player.injury_status}</span>}
                   </td>
                   <td>{c.player.position}</td>
