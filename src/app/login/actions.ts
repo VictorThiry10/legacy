@@ -23,7 +23,7 @@ export async function sendCode(form: FormData) {
   const h = await headers();
   const origin = h.get("origin") ?? `https://${h.get("host")}`;
   const { error } = await (await authClient()).auth.signInWithOtp({ email, options: { shouldCreateUser: true, emailRedirectTo: `${origin}/auth/callback` } });
-  if (error) fail(error.message);
+  if (error) fail(/rate limit/i.test(error.message) ? "Too many sign ins right now. Try again in an hour." : error.message);
   (await cookies()).set(EMAIL_COOKIE, email, { httpOnly: true, secure: true, sameSite: "lax", maxAge: 60 * 30, path: "/" });
   redirect("/login?step=code");
 }
