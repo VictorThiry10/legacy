@@ -1,5 +1,5 @@
 import "server-only";
-import { authClient, db } from "./supabase/server";
+import { authClient, commissionerEmail, db } from "./supabase/server";
 import { resolveRound, type Bid, type Settings, type TeamState } from "./rules";
 
 export type Team = {
@@ -43,7 +43,7 @@ export async function getMe(): Promise<{ email: string; team: Team | null } | nu
   if (!user?.email) return null;
   const email = user.email.toLowerCase();
   let { data: team } = await db().from("teams").select("*").ilike("manager_email", email).maybeSingle();
-  if (!team && email === process.env.COMMISSIONER_EMAIL?.toLowerCase()) {
+  if (!team && email === commissionerEmail()) {
     // first login of the commissioner: create their team
     ({ data: team } = await db()
       .from("teams")

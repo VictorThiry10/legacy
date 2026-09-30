@@ -8,7 +8,7 @@ export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request });
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    (process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)!,
     {
       cookies: {
         getAll: () => request.cookies.getAll(),
@@ -22,7 +22,7 @@ export async function proxy(request: NextRequest) {
   );
   const { data } = await supabase.auth.getUser();
   const path = request.nextUrl.pathname;
-  const open = path.startsWith("/login") || path.startsWith("/auth") || path.startsWith("/api/cron");
+  const open = path.startsWith("/login") || path.startsWith("/auth") || path.startsWith("/api/cron") || path === "/api/health";
   if (!data.user && !open) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
