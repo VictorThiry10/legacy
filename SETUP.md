@@ -19,7 +19,6 @@ You need 3 free accounts: GitHub (stores the code), Supabase (the database and l
    - `NEXT_PUBLIC_SUPABASE_ANON_KEY` = Supabase anon public key
    - `SUPABASE_SERVICE_ROLE_KEY` = Supabase service_role key (secret: never share it)
    - `COMMISSIONER_EMAIL` = your email
-   - `CRON_SECRET` = any long random password you make up (it stops strangers triggering the ESPN sync)
 4. Click Deploy. After a minute you get a link like `legacy-xyz.vercel.app`.
 
 ## 4. Connect login emails to your site
@@ -31,20 +30,18 @@ In Supabase: Authentication, URL Configuration.
 Open your Vercel link, enter your email, click the link in your inbox. You're in as commissioner.
 Then in Commish: rename your team, add the 7 GMs' emails, and click Load players from ESPN.
 
-Then click Load season schedule once (every tipoff time for the season).
+Then click Load season schedule once (every tipoff time for the season). After that everything refreshes by itself.
 
-## 6. Live scores every 10 minutes
-Vercel's free plan refreshes rosters and injuries once a day by itself. For box scores during games,
-Supabase runs a 10 minute timer. In Supabase: Database, Extensions, turn on `pg_cron` and `pg_net`.
-Then SQL Editor, paste this with your Vercel link and CRON_SECRET filled in, and Run:
+## 6. Automatic refresh
+A timer in Supabase calls the site every 10 minutes. The site then refreshes scores every time,
+injuries and stats every hour, and the next two weeks of schedule once a day (it keeps track itself).
+Vercel also calls it once a day as a backup. In Supabase SQL Editor, run once:
 
 ```sql
-select cron.schedule('espn-live', '*/10 * * * *', $$
-  select net.http_get(
-    url := 'https://YOUR-SITE.vercel.app/api/cron/espn',
-    headers := jsonb_build_object('Authorization', 'Bearer YOUR_CRON_SECRET')
-  );
-$$);
+create extension if not exists pg_cron;
+create extension if not exists pg_net;
+select cron.schedule('espn-refresh', '*/10 * * * *',
+  $$ select net.http_get(url := 'https://YOUR-SITE.vercel.app/api/cron/espn', timeout_milliseconds := 290000) $$);
 ```
 
 Note: Supabase's free email sender only sends a few login emails per hour. Logins last for weeks, so ask GMs to sign in over a day or two rather than all at once.

@@ -148,3 +148,17 @@ alter table player_games enable row level security;
 
 -- ---------- added Sep 30: last season's stat line per player ----------
 alter table players add column if not exists last_season jsonb;
+
+-- ---------- added Sep 30: automatic refresh ----------
+-- When each part of the ESPN refresh last ran (so it never runs more often than it should).
+create table if not exists sync_log (
+  name text primary key,
+  last_run timestamptz not null
+);
+alter table sync_log enable row level security;
+
+-- The 10 minute timer (run once, in the SQL Editor):
+-- create extension if not exists pg_cron;
+-- create extension if not exists pg_net;
+-- select cron.schedule('espn-refresh', '*/10 * * * *',
+--   $$ select net.http_get(url := 'https://legacy-topaz-nine.vercel.app/api/cron/espn', timeout_milliseconds := 290000) $$);

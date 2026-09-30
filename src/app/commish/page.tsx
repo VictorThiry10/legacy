@@ -2,6 +2,8 @@ import { db } from "@/lib/supabase/server";
 import { getSettings, requireCommish, roundPlayers, teamSummaries, type Round } from "@/lib/league";
 import { money } from "@/lib/rules";
 import ActionForm from "@/components/ActionForm";
+import LocalTime from "@/components/LocalTime";
+import { lastRuns } from "@/lib/espn";
 import * as A from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -112,7 +114,8 @@ export default async function Commish({ searchParams }: PageProps<"/commish">) {
         </ActionForm>
       </Section>
 
-      <Section title="Players" note={`${playerCount ?? 0} players loaded. Data comes from ESPN; the scheduled job refreshes it automatically once live.`}>
+      <Section title="Players and scores" note={`${playerCount ?? 0} players. Everything refreshes from ESPN by itself: scores every 10 minutes, injuries and stats every hour, schedule daily. The buttons below are only for forcing a refresh.`}>
+        <LastRuns />
         <div className="flex flex-wrap gap-3 items-end">
           <ActionForm action={A.loadPlayers}><button className="btn">Load players and injuries</button></ActionForm>
           <ActionForm action={A.loadSchedule}><button className="btn-ghost">Load season schedule</button></ActionForm>
@@ -155,6 +158,18 @@ export default async function Commish({ searchParams }: PageProps<"/commish">) {
         </ActionForm>
       </Section>
     </div>
+  );
+}
+
+async function LastRuns() {
+  const runs = await lastRuns();
+  const rows: [string, string][] = [["scores", "Scores"], ["players", "Injuries and stats"], ["schedule", "Schedule"]];
+  return (
+    <p className="text-xs text-muted flex flex-wrap gap-x-4">
+      {rows.map(([k, label]) => (
+        <span key={k}>{label}: {runs[k] ? <><LocalTime iso={runs[k]} mode="day" /> <LocalTime iso={runs[k]} /></> : "not yet"}</span>
+      ))}
+    </p>
   );
 }
 

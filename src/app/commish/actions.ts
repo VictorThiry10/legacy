@@ -95,7 +95,7 @@ export async function loadBoxScores(f: FormData) {
   return guard(async () => {
     await requireCommish();
     const date = str(f, "date").replace(/-/g, "");
-    const r = await syncDay(date);
+    const r = await syncDay(date, true);
     done();
     return `${r.games} games, ${r.lines} player lines saved.`;
   });

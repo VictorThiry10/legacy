@@ -38,11 +38,16 @@ export async function syncPlayers() {
 const ymd = (d: Date) => d.toISOString().slice(0, 10).replace(/-/g, "");
 
 // Save the schedule for a date (YYYYMMDD) and the box score of every game that has started.
-export async function syncDay(date: string) {
+// Games already saved as final are skipped (their box score can't change), unless force is set.
+export async function syncDay(date: string, force = false) {
   const games = parseScoreboard(await get(`/scoreboard?dates=${date}`));
+  const { data: done } = force || !games.length
+    ? { data: [] as { id: string }[] }
+    : await db().from("games").select("id").in("id", games.map((g) => g.id)).eq("final", true);
+  const finished = new Set((done ?? []).map((g) => g.id));
   await saveGames(games);
   let lines = 0;
-  for (const g of games.filter((g) => g.state !== "pre")) {
+  for (const g of games.filter((g) => g.state !== "pre" && !finished.has(g.id))) {
     const { game, lines: rows } = parseSummary(await get(`/summary?event=${g.id}`));
     await saveGames([game]);
     const { error } = await db().from("player_games").upsert(
@@ -109,4 +114,39 @@ export async function leagueNews() {
   } catch {
     return [];
   }
+}
+
+// ---------- automatic refresh ----------
+// Called every 10 minutes by a timer. Each part has its own rhythm, remembered in the sync_log table,
+// so calling it more often (or by a stranger) never does extra work.
+async function due(name: string, minutes: number) {
+  const d = db();
+  const { data } = await d.from("sync_log").select("last_run").eq("name", name).maybeSingle();
+  if (data && Date.now() - new Date(data.last_run).getTime() < minutes * 60_000) return false;
+  await d.from("sync_log").upsert({ name, last_run: new Date().toISOString() });
+  return true;
+}
+
+async function attempt<T>(fn: () => Promise<T>) {
+  try {
+    return await fn();
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+export async function autoRefresh() {
+  if (!(await due("scores", 4))) return { skipped: "ran less than 4 minutes ago" };
+  const out: Record<string, unknown> = { scores: await attempt(syncRecent) };
+  if (await due("players", 55)) out.players = await attempt(syncPlayers);
+  if (await due("schedule", 60 * 24 - 10)) {
+    const day = 24 * 3600_000;
+    out.schedule = await attempt(() => syncSchedule(new Date(Date.now() - day), new Date(Date.now() + 14 * day)));
+  }
+  return out;
+}
+
+export async function lastRuns() {
+  const { data } = await db().from("sync_log").select("name, last_run");
+  return Object.fromEntries((data ?? []).map((r) => [r.name as string, r.last_run as string]));
 }
