@@ -7,8 +7,8 @@ const URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const ANON = (process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)!;
 const SERVICE = (process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY)!;
 
-// The commissioner's email, cleaned up (no stray spaces or capitals).
-export const commissionerEmail = () => (process.env.COMMISSIONER_EMAIL ?? "").trim().toLowerCase();
+// The commissioner's email (Vercel setting if present, otherwise Victor), cleaned up.
+export const commissionerEmail = () => (process.env.COMMISSIONER_EMAIL || "victortthiry@gmail.com").trim().toLowerCase();
 
 // Knows who is logged in (reads the login cookie). Used only for auth.
 export async function authClient() {
