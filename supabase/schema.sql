@@ -162,3 +162,30 @@ alter table sync_log enable row level security;
 -- create extension if not exists pg_net;
 -- select cron.schedule('espn-refresh', '*/10 * * * *',
 --   $$ select net.http_get(url := 'https://legacy-topaz-nine.vercel.app/api/cron/espn', timeout_milliseconds := 290000) $$);
+
+-- ---------- added Sep 30: lineups and matchups (same as supabase/2026-09-30-lineups.sql) ----------
+alter table player_games add column if not exists min int not null default 0;
+
+-- A team's lineup as saved on a given day (US Eastern). A day with no rows uses the latest earlier save.
+create table if not exists lineups (
+  team_id uuid not null references teams(id) on delete cascade,
+  day date not null,
+  slot text not null,                -- PG SG SF PF C G F UTIL1-3 BE1-3 IR
+  player_id text not null references players(id),
+  primary key (team_id, day, slot)
+);
+
+-- One row per game in a scoring week. Starters' fantasy points from starts to ends (inclusive) count.
+create table if not exists matchups (
+  id uuid primary key default gen_random_uuid(),
+  season int not null,
+  week int not null,
+  starts date not null,
+  ends date not null,
+  home_team_id uuid not null references teams(id) on delete cascade,
+  away_team_id uuid not null references teams(id) on delete cascade
+);
+create index if not exists matchups_week on matchups(season, week);
+
+alter table lineups enable row level security;
+alter table matchups enable row level security;

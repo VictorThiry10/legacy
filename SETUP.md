@@ -28,9 +28,11 @@ In Supabase: Authentication, URL Configuration.
 
 ## 5. First login
 Open your Vercel link, enter your email, click the link in your inbox. You're in as commissioner.
-Then in Commish: rename your team, add the 7 GMs' emails, and click Load players from ESPN.
+The commissioner page is gone for now, so this part is done in Supabase's Table Editor:
+- `teams`: rename your team and add a row per GM (name, manager_name, manager_email).
+- `matchups`: one row per game per week (season, week, starts, ends, home_team_id, away_team_id). Dates are US Eastern.
 
-Then click Load season schedule once (every tipoff time for the season). After that everything refreshes by itself.
+Players and the schedule load by themselves through the refresh job below.
 
 ## 6. Automatic refresh
 A timer in Supabase calls the site every 10 minutes. The site then refreshes scores every time,
