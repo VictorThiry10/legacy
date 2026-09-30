@@ -1,7 +1,7 @@
 "use server";
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { authClient, db } from "@/lib/supabase/server";
+import { authClient, db, linkClient } from "@/lib/supabase/server";
 import { LEAGUE_SIZE } from "@/lib/league";
 
 // The email waiting for its code lives in a short cookie, not the URL.
@@ -19,10 +19,10 @@ export async function sendCode(form: FormData) {
   ]);
   if (dbError) fail("Database problem: " + dbError.message);
   if (!team && (count ?? 0) >= LEAGUE_SIZE) fail(`The league is full (${LEAGUE_SIZE} teams).`);
-  // The email carries a code (and a link, which works when opened in this same browser).
+  // The email carries a link that works on any device (and a code, once the email template shows it).
   const h = await headers();
   const origin = h.get("origin") ?? `https://${h.get("host")}`;
-  const { error } = await (await authClient()).auth.signInWithOtp({ email, options: { shouldCreateUser: true, emailRedirectTo: `${origin}/auth/callback` } });
+  const { error } = await linkClient().auth.signInWithOtp({ email, options: { shouldCreateUser: true, emailRedirectTo: `${origin}/auth/callback` } });
   if (error) fail(/rate limit/i.test(error.message) ? "Too many sign ins right now. Try again in an hour." : error.message);
   (await cookies()).set(EMAIL_COOKIE, email, { httpOnly: true, secure: true, sameSite: "lax", maxAge: 60 * 30, path: "/" });
   redirect("/login?step=code");

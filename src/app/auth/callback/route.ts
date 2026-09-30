@@ -6,6 +6,9 @@ export async function GET(request: NextRequest) {
   if (code) {
     const supa = await authClient();
     await supa.auth.exchangeCodeForSession(code);
+    return NextResponse.redirect(new URL("/", request.url));
   }
-  return NextResponse.redirect(new URL("/", request.url));
+  // Links from linkClient() carry the session after the # (never sent to the server): the browser keeps it
+  // through this redirect and /auth/confirm finishes the sign in.
+  return NextResponse.redirect(new URL("/auth/confirm", request.url));
 }

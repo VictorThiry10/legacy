@@ -27,6 +27,12 @@ export async function authClient() {
   });
 }
 
+// Sends login emails whose link signs you in on any device (the session rides in the link,
+// finished by /auth/confirm), instead of only in the browser that asked for it.
+export function linkClient() {
+  return createClient(URL, ANON, { auth: { flowType: "implicit", persistSession: false, autoRefreshToken: false } });
+}
+
 // Full database access. Server only, never sent to the browser.
 export function db() {
   return createClient(URL, SERVICE, { auth: { persistSession: false } });
