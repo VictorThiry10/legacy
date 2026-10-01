@@ -111,8 +111,8 @@ async function StatsTable({ sp }: { sp: Params }) {
                   </td>
                   <td className="text-center text-xs font-semibold">
                     {o ? <Link href={`/teams/${o.id}`} prefetch={false} transitionTypes={["nav-forward"]} title={o.name} className="hover:underline">{initials(o.name)}</Link>
-                      : waivers.has(p.id) ? <Link href={`/players/${p.id}/add`} prefetch={false} transitionTypes={["nav-forward"]} className="inline-flex h-6 items-center justify-center rounded-full bg-accent px-1.5 text-[10px] font-bold text-bg" title="On waivers: sealed bids" aria-label={`Bid on ${p.name}`}>WA</Link>
-                      : <Link href={`/players/${p.id}/add`} prefetch={false} transitionTypes={["nav-forward"]} className="inline-flex h-6 w-6 items-center justify-center rounded-full border-[1.5px] border-accent text-accent font-bold" aria-label={`Add ${p.name}`}>+</Link>}
+                      : waivers.has(p.id) ? <Link href={`/players/${p.id}/add`} prefetch={false} transitionTypes={["nav-forward"]} className="inline-flex h-6 w-6 items-center justify-center rounded-full border-[1.5px] border-orange text-orange font-bold" title="On waivers: sealed bids" aria-label={`Bid on ${p.name}`}>+</Link>
+                      : <Link href={`/players/${p.id}/add`} prefetch={false} transitionTypes={["nav-forward"]} className="inline-flex h-6 w-6 items-center justify-center rounded-full border-[1.5px] border-good text-good font-bold" title="Free agent" aria-label={`Add ${p.name}`}>+</Link>}
                   </td>
                   <td className="border-l border-line text-accent">{g?.opp ?? <span className="text-muted">–</span>}</td>
                   <td className="text-xs text-muted">{g ? <><LocalTime iso={g.start} mode="day" /> <LocalTime iso={g.start} /></> : "–"}</td>

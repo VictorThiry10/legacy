@@ -75,7 +75,7 @@ export default async function PlayerPage({ params, searchParams }: PageProps<"/p
                 </>
               ) : w ? (
                 <>
-                  <span className="font-medium text-accent">On waivers</span>
+                  <span className="font-medium text-orange">On waivers</span>
                   <div className="text-xs text-muted">Bids close <LocalTime iso={w.waiver.closes_at} mode="day" /> <LocalTime iso={w.waiver.closes_at} /></div>
                 </>
               ) : "Free Agent"}
@@ -85,12 +85,12 @@ export default async function PlayerPage({ params, searchParams }: PageProps<"/p
                 w.waiver.dropped_by === me.team.id ? (
                   <span className="rounded-full bg-line px-3 py-1.5 text-xs font-semibold">You dropped him</span>
                 ) : (
-                <Link href={`/players/${p.id}/add`} transitionTypes={FORWARD} className="rounded-full bg-accent px-5 py-1.5 text-sm font-semibold text-bg">
-                  {w.myBid ? `Your bid ${money(Number(w.myBid.amount))}` : "Bid"}
+                <Link href={`/players/${p.id}/add`} transitionTypes={FORWARD} className="rounded-full border-[1.5px] border-orange bg-card px-5 py-1.5 text-sm font-semibold text-orange hover:bg-orange/10">
+                  {w.myBid ? `Your bid ${money(Number(w.myBid.amount))}` : "+ Bid"}
                 </Link>
                 )
               ) : (
-                <Link href={`/players/${p.id}/add`} transitionTypes={FORWARD} className="rounded-full border-[1.5px] border-accent bg-card px-5 py-1.5 text-sm font-semibold text-accent hover:bg-accent/10">+ Add</Link>
+                <Link href={`/players/${p.id}/add`} transitionTypes={FORWARD} className="rounded-full border-[1.5px] border-good bg-card px-5 py-1.5 text-sm font-semibold text-good hover:bg-good/10">+ Add</Link>
               ))}
               {c && me?.team?.id === c.team.id && (
                 <Link href={`/players/${p.id}/drop`} transitionTypes={FORWARD} className="rounded-full bg-bad px-5 py-1.5 text-sm font-semibold text-white">Drop</Link>
