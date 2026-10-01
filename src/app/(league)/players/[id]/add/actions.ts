@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { requireTeam } from "@/lib/auth";
 import { pickUp } from "@/lib/roster";
 import { placeBid, settleWaivers, withdrawBid } from "@/lib/waivers";
+import { BID_STEP } from "@/lib/rules";
 
 // Add a free agent (dropping someone if the roster is full), then go to my team.
 export async function addPlayer(f: FormData) {
@@ -42,7 +43,7 @@ export async function bid(f: FormData) {
     placeBid({
       teamId,
       playerId,
-      amount: Math.round(Number(f.get("amount")) * 10) * 100_000, // $0.1m steps
+      amount: Number(f.get("amount")) * BID_STEP, // typed in $m, whole millions (placeBid refuses anything else)
       dropContractId: String(f.get("drop") ?? "") || undefined,
     }),
   );

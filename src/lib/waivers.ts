@@ -4,7 +4,7 @@ import { fail, rpc } from "./db";
 import { getSettings } from "./league";
 import { capSpaces, lockedToday, problemsFor, rosters } from "./roster";
 import { onIR } from "./lineup-store";
-import { money, rankWaiverBids } from "./rules";
+import { BID_STEP, money, rankWaiverBids } from "./rules";
 import type { Row } from "./supabase/types";
 
 // Waivers. Every dropped player sits on waivers for 48 hours (settings.waiver_hours). Meanwhile GMs send sealed
@@ -14,6 +14,9 @@ import type { Row } from "./supabase/types";
 
 export type Waiver = Row<"waivers">;
 export type WaiverBidRow = Row<"waiver_bids">;
+
+// Bids are in whole millions, like free agency: the lowest is the min salary rounded up to a whole million.
+export const lowestBid = (minSalary: number) => Math.ceil(minSalary / BID_STEP) * BID_STEP;
 
 async function openWaiver(playerId: string): Promise<Waiver | null> {
   const { data, error } = await db().from("waivers").select("*").eq("player_id", playerId).eq("status", "open").maybeSingle();
@@ -56,7 +59,8 @@ export async function placeBid(o: { teamId: string; playerId: string; amount: nu
   const w = await openWaiver(o.playerId);
   if (!w) throw new Error("He is not on waivers anymore.");
   if (w.dropped_by === o.teamId) throw new Error("You dropped him, so you can't bid on him until he clears waivers.");
-  if (!(o.amount >= rules.minSalary)) throw new Error(`The lowest bid is ${money(rules.minSalary)}.`);
+  if (!Number.isInteger(o.amount / BID_STEP)) throw new Error("Bids are in whole millions.");
+  if (!(o.amount >= rules.minSalary)) throw new Error(`The lowest bid is ${money(lowestBid(rules.minSalary))}.`);
   const [mine, ir] = await Promise.all([rosters([o.teamId]), onIR([o.teamId])]);
   if (o.dropContractId && !mine.some((p) => p.contract_id === o.dropContractId)) throw new Error("That player is no longer on your team.");
   if (!o.dropContractId && mine.filter((p) => !ir.has(p.id)).length >= rules.rosterMax) {
