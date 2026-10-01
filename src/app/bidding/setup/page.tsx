@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { bidTeam, PER_ROUND, searchFreeAgents, setupRounds } from "@/lib/bidding";
+import { bidTeam, commishVerified, PER_ROUND, searchFreeAgents, setupRounds } from "@/lib/bidding";
 import { getSettings, teamSummaries } from "@/lib/league";
 import { money } from "@/lib/rules";
 import ActionForm from "@/components/ActionForm";
@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
 // Commissioner: which free agents go in which round, the GMs who can sign in, and a restart for test runs.
 export default async function Setup({ searchParams }: PageProps<"/bidding/setup">) {
   const team = await bidTeam();
-  if (!team?.is_commish) redirect("/bidding");
+  if (!team || !(await commishVerified(team))) redirect("/bidding");
   const sp = await searchParams;
   const q = typeof sp.q === "string" ? sp.q : "";
   const [rounds, results, { leagueSize }, teams] = await Promise.all([setupRounds(), searchFreeAgents(q), getSettings(), teamSummaries()]);

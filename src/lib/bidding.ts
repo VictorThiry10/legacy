@@ -3,6 +3,7 @@ import { cache } from "react";
 import { cookies } from "next/headers";
 import { createHash, randomBytes } from "node:crypto";
 import { db } from "./supabase/server";
+import { getMe } from "./auth";
 import { fail, rpc } from "./db";
 import { getSettings, teamSummaries, type Team } from "./league";
 import { BID_STEP, maxBid, money, revealRound, RENOUNCE_RIGHTS, ROUND_SECONDS, type Bid, type RevealItem } from "./rules";
@@ -78,7 +79,8 @@ export type Room = {
   now: number; // server clock, so every countdown agrees
   phase: Phase;
   meId: string;
-  isCommish: boolean;
+  isCommish: boolean; // commissioner, signed in to the league app too
+  needsLeagueLogin: boolean; // commissioner by email only: controls stay hidden until the league login
   teams: RoomTeam[];
   rounds: RoundInfo[];
   round: RoundInfo | null; // live round, or the next one while waiting
@@ -97,6 +99,7 @@ const roundInfo = (r: Row<"rounds">): RoundInfo => ({
 });
 
 export async function room(team: Team): Promise<Room> {
+  const verified = commishVerified(team); // league login check, only does work for the commissioner
   const { season, rules, faLocked } = await getSettings();
   const d = db();
   // Everything in one wave of reads: the open round's players and bids come through an inner join on the
@@ -143,7 +146,7 @@ export async function room(team: Team): Promise<Room> {
   }
 
   return {
-    now, phase, meId: team.id, isCommish: team.is_commish, teams,
+    now, phase, meId: team.id, isCommish: await verified, needsLeagueLogin: team.is_commish && !(await verified), teams,
     rounds: rounds.map(roundInfo),
     round: current ? roundInfo(current) : null,
     cardsWaiting: phase === "waiting" ? (current?.round_players[0]?.count ?? 0) : 0,
@@ -221,14 +224,24 @@ export async function setLengths(team: Team, rows: { contractId: string; years: 
 
 // ---------- commissioner ----------
 
-function commish(team: Team) {
-  if (!team.is_commish) throw new Error("Commissioner only.");
+// Commissioner powers need both the commissioner's team here and the league app login (email plus a 6 digit
+// code) in the same browser, so knowing the commissioner's email isn't enough to run the draft.
+export async function commishVerified(team: Team) {
+  if (!team.is_commish) return false;
+  const me = await getMe().catch(() => null);
+  return !!me?.team?.is_commish;
+}
+
+async function commish(team: Team) {
+  if (!(await commishVerified(team))) {
+    throw new Error(team.is_commish ? "Sign in to the league app in this browser to run the draft." : "Commissioner only.");
+  }
 }
 
 const closesIn = (seconds: number) => new Date(Date.now() + seconds * 1000).toISOString();
 
 export async function startNext(team: Team) {
-  commish(team);
+  await commish(team);
   const { season } = await getSettings();
   const { data: rounds } = await db().from("rounds").select("id, status, number").eq("season", season).order("number");
   if (rounds?.some((r) => r.status === "open")) throw new Error("A round is already running.");
@@ -239,7 +252,7 @@ export async function startNext(team: Team) {
 }
 
 export async function changeClock(team: Team, seconds: number | "now") {
-  commish(team);
+  await commish(team);
   const { season } = await getSettings();
   const { data: live } = await db().from("rounds").select("id, closes_at").eq("season", season).eq("status", "open").maybeSingle();
   if (!live?.closes_at || Date.parse(live.closes_at) <= Date.now()) throw new Error("Bidding is already closed.");
@@ -250,7 +263,7 @@ export async function changeClock(team: Team, seconds: number | "now") {
 
 // Sign this round's winners and open the next round (or the last chance round, or finish).
 export async function nextRound(team: Team) {
-  commish(team);
+  await commish(team);
   const r = await room(team);
   if (r.phase !== "reveal" || !r.round || !r.reveal) throw new Error("Wait for the reveal first.");
   const { count } = await db().from("renounces").select("id", { count: "exact", head: true }).eq("round_id", r.round.id);
@@ -259,13 +272,13 @@ export async function nextRound(team: Team) {
 }
 
 export async function lockContracts(team: Team, locked: boolean) {
-  commish(team);
+  await commish(team);
   const { error } = await db().from("settings").update({ fa_locked: locked }).eq("id", 1);
   if (error) fail(error);
 }
 
 export async function restart(team: Team) {
-  commish(team);
+  await commish(team);
   const { season } = await getSettings();
   await rpc("bidding_restart", { p_season: season });
 }
@@ -312,7 +325,7 @@ async function roundRow(season: number, number: number) {
 }
 
 export async function addToRound(team: Team, number: number, playerId: string) {
-  commish(team);
+  await commish(team);
   const { season } = await getSettings();
   if (!(number >= 1 && number <= REGULAR_ROUNDS)) throw new Error("Pick a round.");
   const t = await taken(season);
@@ -326,7 +339,7 @@ export async function addToRound(team: Team, number: number, playerId: string) {
 }
 
 export async function removeFromRound(team: Team, number: number, playerId: string) {
-  commish(team);
+  await commish(team);
   const { season } = await getSettings();
   const id = await roundRow(season, number);
   await db().from("round_players").delete().eq("round_id", id).eq("player_id", playerId);
@@ -336,7 +349,7 @@ export async function removeFromRound(team: Team, number: number, playerId: stri
 
 // Fill every open spot in rounds 1-8 with the best free agents left, by last season's fantasy points per game.
 export async function autoFill(team: Team) {
-  commish(team);
+  await commish(team);
   const { season } = await getSettings();
   const [{ data: players }, t, rounds] = await Promise.all([db().from("players").select("id, last_season"), taken(season), setupRounds()]);
   const pool = (players ?? [])
@@ -355,7 +368,7 @@ export async function autoFill(team: Team) {
 
 // GMs who haven't joined the league app yet can be added here so they can sign in to bid.
 export async function addTeam(team: Team, name: string, manager: string, email: string) {
-  commish(team);
+  await commish(team);
   const { leagueSize } = await getSettings();
   const clean = { name: name.trim(), manager_name: manager.trim() || null, manager_email: email.trim().toLowerCase() };
   if (!clean.name || clean.name.length > 40) throw new Error("Team name: 1 to 40 characters.");

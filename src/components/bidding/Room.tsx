@@ -128,13 +128,21 @@ export default function Room({ data, me: who }: { data: Data; me: { id: string; 
         <AnimatePresence>{locked && <Locked key="locked" />}</AnimatePresence>
         <AnimatePresence>{showing && <RevealShow key="show" data={data} onDone={showDone} />}</AnimatePresence>
       </Portal>
-      <footer className={`mx-auto max-w-5xl px-4 pt-8 text-center text-xs text-white/30 ${data.isCommish ? "pb-28" : "pb-10"}`}>
+      <footer className={`mx-auto max-w-5xl px-4 pt-8 text-center text-xs text-white/30 ${data.isCommish || data.needsLeagueLogin ? "pb-28" : "pb-10"}`}>
         {me.name} ·{" "}
         <form action={A.signOut} className="inline">
           <button className="hover:text-white/70">Sign out</button>
         </form>
       </footer>
       {data.isCommish && <CommishBar data={data} />}
+      {data.needsLeagueLogin && (
+        <div className="glass fixed inset-x-0 bottom-0 z-40 border-t border-white/[0.06] pb-[env(safe-area-inset-bottom)]">
+          <div className="mx-auto flex max-w-5xl items-center gap-3 px-4 py-3 text-sm">
+            <span className="text-white/55">Commissioner controls need the league app login.</span>
+            <a href="/login" className="btn-primary ml-auto h-10 shrink-0 rounded-full px-4 font-semibold leading-10">Sign in</a>
+          </div>
+        </div>
+      )}
     </MotionConfig>
   );
 }
