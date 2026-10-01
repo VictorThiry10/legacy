@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { myTeamOrWelcome } from "@/lib/auth";
-import { teamSummaries } from "@/lib/league";
+import { getSettings, teamSummaries } from "@/lib/league";
 import { rosters, type RosterPlayer } from "@/lib/roster";
 import { preview } from "@/lib/trades";
-import { money } from "@/lib/rules";
+import { money, yearsLeft } from "@/lib/rules";
 import { load } from "@/lib/guard";
 import Slide, { BACK } from "@/components/Slide";
 import { sendOffer } from "../actions";
@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
 // Trade in three steps: pick their players, pick mine, then confirm in a summary pop-up.
 // Selections travel in the address (?get=...&give=...), so each step is a page you can go back to.
 export default async function Trade({ params, searchParams }: PageProps<"/trade/[teamId]">) {
-  const [{ teamId }, sp, me, teams] = await Promise.all([params, searchParams, myTeamOrWelcome(), teamSummaries()]);
+  const [{ teamId }, sp, me, teams, { season }] = await Promise.all([params, searchParams, myTeamOrWelcome(), teamSummaries(), getSettings()]);
   const them = teams.find((t) => t.id === teamId);
   const mine = teams.find((t) => t.id === me.id)!;
   if (!them || them.id === me.id) notFound();
@@ -46,7 +46,7 @@ export default async function Trade({ params, searchParams }: PageProps<"/trade/
           <input type="hidden" name="step" value={step === "get" ? "give" : "review"} />
           {step !== "get" && get.map((g) => <input key={g} type="hidden" name="get" value={g} />)}
           <ul className="bg-card">
-            {roster.map((p) => <PlayerPick key={p.contract_id} p={p} name={field} checked={chosen.includes(p.contract_id)} />)}
+            {roster.map((p) => <PlayerPick key={p.contract_id} p={p} season={season} name={field} checked={chosen.includes(p.contract_id)} />)}
             {!roster.length && <li className="px-4 py-6 text-center text-sm text-muted">No players.</li>}
           </ul>
           <div className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-card/95 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur">
@@ -70,7 +70,7 @@ export default async function Trade({ params, searchParams }: PageProps<"/trade/
 }
 
 // One roster row with the blue add box (a styled checkbox, so several can be picked).
-function PlayerPick({ p, name, checked }: { p: RosterPlayer; name: string; checked: boolean }) {
+function PlayerPick({ p, season, name, checked }: { p: RosterPlayer; season: number; name: string; checked: boolean }) {
   return (
     <li className="border-b border-line/60">
       <label className="flex cursor-pointer items-center gap-3 px-4 py-2.5">
@@ -88,7 +88,7 @@ function PlayerPick({ p, name, checked }: { p: RosterPlayer; name: string; check
         </span>
         <span className="text-right leading-tight">
           <span className="block num text-sm font-semibold">{money(p.salary)}</span>
-          <span className="block text-[11px] text-muted">{p.years}yr · ends {String(p.season_signed + p.years - 1).slice(2)}–{String(p.season_signed + p.years).slice(2)}</span>
+          <span className="block text-[11px] text-muted">{yearsLeft(p, season)}yr left · ends {String(p.season_signed + p.years - 1).slice(2)}–{String(p.season_signed + p.years).slice(2)}</span>
         </span>
       </label>
     </li>

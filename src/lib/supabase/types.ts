@@ -14,6 +14,9 @@ export type Database = {
   public: {
     Tables: {
       activity: Table<{ created_at: string; id: number; kind: string; message: string }, { created_at?: string; kind: string; message: string }>;
+      bid_sessions: Table<{ created_at: string; team_id: string; token: string }, { created_at?: string; team_id: string; token: string },
+        [FK<"bid_sessions_team_id_fkey", "team_id", "teams">]
+      >;
       bids: Table<
         { amount: number; created_at: string; id: string; player_id: string; round_id: string; team_id: string; years: number },
         { amount: number; created_at?: string; id?: string; player_id: string; round_id: string; team_id: string; years: number },
@@ -72,16 +75,16 @@ export type Database = {
         { bid_id: string; block: number; created_at?: string; id?: string; round_id: string; season: number; team_id: string },
         [FK<"renounces_bid_id_fkey", "bid_id", "bids">, FK<"renounces_round_id_fkey", "round_id", "rounds">, FK<"renounces_team_id_fkey", "team_id", "teams">]
       >;
-      round_players: Table<{ player_id: string; round_id: string }, { player_id: string; round_id: string },
+      round_players: Table<{ player_id: string; pos: number; round_id: string }, { player_id: string; pos?: number; round_id: string },
         [FK<"round_players_player_id_fkey", "player_id", "players">, FK<"round_players_round_id_fkey", "round_id", "rounds">]
       >;
       rounds: Table<
-        { closes_at: string | null; created_at: string; id: string; number: number; season: number; status: string },
-        { closes_at?: string | null; created_at?: string; id?: string; number: number; season: number; status?: string }
+        { closes_at: string | null; created_at: string; id: string; kind: string; number: number; result: Json | null; season: number; status: string },
+        { closes_at?: string | null; created_at?: string; id?: string; kind?: string; number: number; result?: Json | null; season: number; status?: string }
       >;
       settings: Table<
-        { cap: number; id: number; league_name: string; league_size: number; min_salary: number; roster_max: number; scoring: Json; season: number; waiver_hours: number },
-        { cap?: number; id?: number; league_name?: string; league_size?: number; min_salary?: number; roster_max?: number; scoring?: Json; season?: number; waiver_hours?: number }
+        { cap: number; fa_locked: boolean; id: number; league_name: string; league_size: number; min_salary: number; roster_max: number; scoring: Json; season: number; waiver_hours: number },
+        { cap?: number; fa_locked?: boolean; id?: number; league_name?: string; league_size?: number; min_salary?: number; roster_max?: number; scoring?: Json; season?: number; waiver_hours?: number }
       >;
       sync_log: Table<{ last_run: string; name: string }, { last_run: string; name: string }>;
       teams: Table<
@@ -132,6 +135,11 @@ export type Database = {
       team_day_points: { Row: { day: string | null; pts: number | null; team_id: string | null }; Relationships: [FK<"lineup_points_team_id_fkey", "team_id", "teams">] };
     };
     Functions: {
+      bidding_finalize: { Args: { p_round: string; p_awards: Json; p_result: Json; p_renounces: number; p_seconds: number }; Returns: undefined };
+      bidding_place: { Args: { p_round: string; p_team: string; p_player: string; p_amount: number | null }; Returns: undefined };
+      bidding_renounce: { Args: { p_bid: string; p_team: string; p_max: number }; Returns: undefined };
+      bidding_restart: { Args: { p_season: number }; Returns: undefined };
+      bidding_set_lengths: { Args: { p_team: string; p_season: number; p_rows: Json; p_limits: Json }; Returns: undefined };
       rescore_all: { Args: { w: Json }; Returns: undefined };
       roster_pickup: {
         Args: { p_team: string; p_player: string; p_salary: number; p_season: number; p_drop: string | null; p_note: string };

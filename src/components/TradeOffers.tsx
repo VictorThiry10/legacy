@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { openOffers } from "@/lib/trades";
 import { money } from "@/lib/rules";
-import { acceptOffer, closeOffer } from "@/app/trade/actions";
+import { acceptOffer, closeOffer } from "@/app/(league)/trade/actions";
 
 // Open trade offers for my team: received ones to accept or decline, sent ones to cancel.
 export default async function TradeOffers({ teamId }: { teamId: string }) {
