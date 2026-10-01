@@ -20,16 +20,16 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
     <html lang="en">
       <body className="min-h-screen">
         {me?.team && (
-          <header className="border-b border-line bg-card">
-            <nav className="mx-auto max-w-7xl flex items-center gap-4 px-4 py-3 text-sm overflow-x-auto">
+          <header className="sticky top-0 z-20 bg-card shadow-[0_1px_2px_rgba(0,0,0,0.12)]">
+            <div className="mx-auto max-w-7xl flex items-center gap-4 px-4 pt-2 text-sm">
               <span className="font-semibold whitespace-nowrap">Legacy</span>
-              <Nav />
-              <span className="ml-auto text-muted whitespace-nowrap hidden sm:inline">{me.team.name}</span>
+              <span className="ml-auto text-muted truncate">{me.team.name}</span>
               {me.team.is_commish && <Link href="/settings" className="text-muted hover:text-fg whitespace-nowrap">Settings</Link>}
-              <form action="/auth/signout" method="post" className="ml-auto sm:ml-0">
-                <button className="text-muted hover:text-fg">Sign out</button>
+              <form action="/auth/signout" method="post">
+                <button className="text-muted hover:text-fg whitespace-nowrap">Sign out</button>
               </form>
-            </nav>
+            </div>
+            <Nav />
           </header>
         )}
         <main className="mx-auto max-w-7xl px-4 py-6">{children}</main>

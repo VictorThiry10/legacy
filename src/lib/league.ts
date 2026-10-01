@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import { db } from "./supabase/server";
 import { SCORING, teamState, type Scoring, type Settings, type TeamState } from "./rules";
 import type { Row } from "./supabase/types";
@@ -12,8 +13,8 @@ export type Player = Omit<Row<"players">, "updated_at" | "last_season" | "nba_te
   last_season?: SeasonLine | null;
 };
 
-// League settings (one row). Everything the commissioner can change lives here.
-export async function getSettings() {
+// League settings (one row). Everything the commissioner can change lives here. Read once per page (cache).
+export const getSettings = cache(async () => {
   const { data: s } = await db().from("settings").select("*").eq("id", 1).single();
   const rules: Settings = {
     cap: Number(s?.cap ?? 150_000_000),
@@ -28,12 +29,12 @@ export async function getSettings() {
     scoring: { ...SCORING, ...(s?.scoring as Partial<Scoring> | null) } as Scoring,
     rules,
   };
-}
+});
 
 export type TeamSummary = Team & { state: TeamState; capSpace: number; adjustments: number };
 
-// Salary, roster size and contract slots used, for every team.
-export async function teamSummaries(): Promise<TeamSummary[]> {
+// Salary, roster size and contract slots used, for every team. Read once per page (cache).
+export const teamSummaries = cache(async (): Promise<TeamSummary[]> => {
   const { season, rules } = await getSettings();
   const d = db();
   const [{ data: teams }, { data: contracts }, { data: adj }] = await Promise.all([
@@ -48,4 +49,4 @@ export async function teamSummaries(): Promise<TeamSummary[]> {
     const state = teamState(t.id, mine, adjustments, season, ir);
     return { ...t, state, capSpace: rules.cap - state.salary, adjustments };
   });
-}
+});

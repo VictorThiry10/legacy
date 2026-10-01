@@ -7,6 +7,7 @@
   --muted: #78716c;
   --line: #e7e5e4;
   --accent: #9a3412;
+  --crimson: #b4122d;
   --good: #15803d;
   --bad: #b91c1c;
 }
@@ -18,6 +19,7 @@
     --muted: #a8a29e;
     --line: #292524;
     --accent: #fb923c;
+    --crimson: #e8475f;
     --good: #4ade80;
     --bad: #f87171;
   }
@@ -29,6 +31,7 @@
   --color-muted: var(--muted);
   --color-line: var(--line);
   --color-accent: var(--accent);
+  --color-crimson: var(--crimson);
   --color-good: var(--good);
   --color-bad: var(--bad);
 }
