@@ -4,7 +4,7 @@ import { db } from "@/lib/supabase/server";
 import { playerOverview } from "@/lib/espn";
 import { getMe } from "@/lib/auth";
 import { getSettings, type Player } from "@/lib/league";
-import { money } from "@/lib/rules";
+import { money, yearsLeft } from "@/lib/rules";
 import { seasonLabel } from "@/lib/player-stats";
 import { nbaLogo } from "@/lib/names";
 import LocalTime from "@/components/LocalTime";
@@ -65,7 +65,7 @@ export default async function PlayerPage({ params, searchParams }: PageProps<"/p
               {c ? (
                 <>
                   <Link href={`/teams/${c.team.id}`} className="font-medium hover:underline">{c.team.name}</Link>
-                  <div className="text-xs text-muted num">{money(Number(c.salary))} · {c.years}yr · ends {seasonLabel(c.season_signed + c.years)}</div>
+                  <div className="text-xs text-muted num">{money(Number(c.salary))} · {yearsLeft(c, season)} {yearsLeft(c, season) === 1 ? "yr" : "yrs"} left · ends {seasonLabel(c.season_signed + c.years)}</div>
                 </>
               ) : "Free Agent"}
             </div>

@@ -4,7 +4,9 @@ import { NextResponse, type NextRequest } from "next/server";
 // Runs before every page: keeps the login fresh and sends logged out visitors to /login.
 export async function proxy(request: NextRequest) {
   const test = !!process.env.LOCAL_TEST_EMAIL && (process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").startsWith("http://localhost");
-  if (test) return NextResponse.next({ request });
+  // The bidding site has its own email sign in (lib/bidding.ts), so it skips the league login entirely.
+  const path = request.nextUrl.pathname;
+  if (test || path.startsWith("/bidding") || path.startsWith("/api/bidding")) return NextResponse.next({ request });
   let response = NextResponse.next({ request });
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -21,7 +23,6 @@ export async function proxy(request: NextRequest) {
     },
   );
   const { data } = await supabase.auth.getUser();
-  const path = request.nextUrl.pathname;
   const open = path.startsWith("/login") || path.startsWith("/install") || path.startsWith("/auth") || path.startsWith("/api/cron") || path === "/api/health";
   if (!data.user && !open) {
     const url = request.nextUrl.clone();

@@ -5,7 +5,7 @@ import { teamSummaries } from "@/lib/league";
 import { getOffer } from "@/lib/trades";
 import { money } from "@/lib/rules";
 import type { RosterPlayer } from "@/lib/roster";
-import { acceptOffer, closeOffer } from "@/app/trade/actions";
+import { acceptOffer, closeOffer } from "@/app/(league)/trade/actions";
 
 export const dynamic = "force-dynamic";
 

@@ -12,7 +12,7 @@ import Slide, { BACK, FORWARD } from "./Slide";
 import DatePicker from "./DatePicker";
 import TradeOffers from "./TradeOffers";
 import { money } from "@/lib/rules";
-import { moveSlot } from "@/app/team/actions";
+import { moveSlot } from "@/app/(league)/team/actions";
 
 type Search = Record<string, string | string[] | undefined>;
 const STATS = [
