@@ -47,7 +47,7 @@ test("injury report: player id pulled from profile link", () => {
 });
 
 // Real ESPN season totals, 2025-26 (trimmed to two players).
-import { parseSeasonStats, parseOverview, parseNews } from "./espn-parse";
+import { parseSeasonStats, parseOverview } from "./espn-parse";
 const season = parseSeasonStats(JSON.parse(readFileSync(new URL("./fixtures/byathlete-2026.json", import.meta.url), "utf8")));
 
 test("season totals: Wembanyama 2025-26", () => {
@@ -79,11 +79,6 @@ test("player overview: note, outlook, ranks", () => {
   assert.equal(o.rostered, 99.92);
   assert.equal(o.news.length, 1);
   assert.equal(o.news[0].url, "https://espn.com/x");
-});
-
-test("league news: athlete ids from categories", () => {
-  const n = parseNews({ articles: [{ headline: "Ingram practices", categories: [{ type: "athlete", athleteId: 3913176 }, { type: "team" }] }] });
-  assert.deepEqual(n[0].athleteIds, ["3913176"]);
 });
 
 test("fantasy positions: real ESPN eligibility slots", async () => {

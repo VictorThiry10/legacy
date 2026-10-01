@@ -209,26 +209,6 @@ export function parseOverview(json: OverviewJson): Overview {
   };
 }
 
-// ---------- league news feed ----------
-type NewsJson = {
-  articles?: {
-    headline?: string; description?: string; published?: string;
-    links?: { web?: { href?: string } }; images?: { url?: string }[];
-    categories?: { type?: string; athleteId?: number | string }[];
-  }[];
-};
-
-export function parseNews(json: NewsJson): NewsItem[] {
-  return (json.articles ?? []).filter((a) => a.headline).map((a) => ({
-    headline: a.headline!,
-    description: a.description ?? null,
-    published: a.published ?? null,
-    url: a.links?.web?.href ?? null,
-    image: a.images?.[0]?.url ?? null,
-    athleteIds: (a.categories ?? []).filter((c) => c.type === "athlete" && c.athleteId != null).map((c) => String(c.athleteId)),
-  }));
-}
-
 // ---------- fantasy positions (PG, SG, SF, PF, C, with dual eligibility) ----------
 // ESPN's roster feed only says G / F / C. ESPN's fantasy game lists every slot a player can fill.
 const SLOT: Record<number, string> = { 0: "PG", 1: "SG", 2: "SF", 3: "PF", 4: "C" };

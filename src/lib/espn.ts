@@ -2,7 +2,7 @@ import "server-only";
 import { db } from "./supabase/server";
 import { getSettings } from "./league";
 import { refreshScores } from "./season";
-import { parseEligibility, parseInjuries, parseNews, parseOverview, parseRoster, parseScoreboard, parseSeasonStats, parseSummary, type GameRow, type PlayerRow } from "./espn-parse";
+import { parseEligibility, parseInjuries, parseOverview, parseRoster, parseScoreboard, parseSeasonStats, parseSummary, type GameRow, type PlayerRow } from "./espn-parse";
 
 // ESPN's free public data feed (unofficial: if ESPN changes it, espn-parse.ts is the file to fix).
 const BASE = process.env.ESPN_BASE ?? "https://site.api.espn.com/apis/site/v2/sports/basketball/nba";
@@ -122,15 +122,6 @@ export async function playerOverview(id: string) {
     return parseOverview(await get(`/athletes/${encodeURIComponent(id)}/overview`, WEB));
   } catch {
     return null;
-  }
-}
-
-// League news feed.
-export async function leagueNews() {
-  try {
-    return parseNews(await get("/news?limit=50"));
-  } catch {
-    return [];
   }
 }
 
