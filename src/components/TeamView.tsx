@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getSettings, type TeamSummary } from "@/lib/league";
-import { boxLines, gamesBetween, teamAbbrs, type BoxLine, type Game } from "@/lib/nba";
+import { boxLines, gamesBetween, teamAbbrs, type BoxLine } from "@/lib/nba";
+import { GameStatus, oppLabel } from "./GameInfo";
 import { rosters, type RosterPlayer } from "@/lib/roster";
 import { lineupFor } from "@/lib/lineup-store";
 import { canPlay, isStarter, slotLabel } from "@/lib/lineup";
@@ -8,6 +9,7 @@ import { addDays, isDay, longDate, monthDay, today, weekday } from "@/lib/dates"
 import { viewKey, views } from "@/lib/team-views";
 import type { SeasonLine } from "@/lib/espn-parse";
 import Slide, { BACK, FORWARD } from "./Slide";
+import DatePicker from "./DatePicker";
 import { money } from "@/lib/rules";
 import { moveSlot } from "@/app/team/actions";
 
@@ -56,7 +58,6 @@ export default async function TeamView({ team, editable, base, sp }: { team: Tea
   };
   const moving = move ? players.get(move) : undefined;
   const movingFrom = rows.find((r) => r.playerId === move)?.slot;
-  const starterPts = rows.filter((r) => r.playerId && isStarter(r.slot)).reduce((s, r) => s + agg(r.playerId!).fpts, 0);
   const periodName = views(day, season).find((v) => v.key === period)!.label;
   const dayName = `${weekday(day).charAt(0)}${weekday(day).slice(1).toLowerCase()}, ${monthDay(day)}`;
   const viewsHref = `/team/views?${new URLSearchParams({ back: base, d: day, stat: period })}`;
@@ -66,31 +67,33 @@ export default async function TeamView({ team, editable, base, sp }: { team: Tea
     <div className="space-y-4">
       <div className="flex flex-wrap items-end gap-x-6 gap-y-2">
         <div>
-          <h1 className="text-2xl font-semibold">{team.name}</h1>
+          <h1 className="text-xl font-semibold">{team.name}</h1>
           <p className="text-muted text-sm">
             {team.manager_name ?? team.manager_email} · {team.state.rosterCount}/{rules.rosterMax} players · {money(team.state.salary)} salary ·{" "}
             <span className={team.capSpace < 0 ? "text-bad" : ""}>{money(team.capSpace)} cap space</span>
           </p>
         </div>
-        {editable && <Link href="/players" className="btn-ghost ml-auto">+ Add</Link>}
       </div>
 
-      <div className="flex items-center border-y border-line -mx-4 px-2 sm:mx-0 sm:rounded-xl sm:border sm:bg-card">
-        <Link href={href({ d: addDays(day, -1) })} transitionTypes={BACK} className="px-4 py-3 text-2xl text-muted hover:text-fg" aria-label="Previous day">‹</Link>
+      <div className="flex items-center border-y border-line -mx-4 sm:mx-0 sm:rounded-xl sm:border sm:bg-card">
+        <Link href={href({ d: addDays(day, -1) })} transitionTypes={BACK} className="px-4 py-2 text-xl text-muted hover:text-fg" aria-label="Previous day">‹</Link>
         <div className="flex-1 text-center leading-tight">
-          <div className="text-lg font-semibold text-accent">{dayName}</div>
+          <DatePicker
+            day={day} today={now} label={dayName} path={base}
+            params={{ stat: period }} from={`${season}-10-01`} to={`${season + 1}-06-30`}
+          />
           {day === now ? (
-            <div className="text-[11px] uppercase tracking-wide text-muted">Today</div>
+            <div className="text-[10px] uppercase tracking-wide text-muted">Today</div>
           ) : (
-            <Link href={href({ d: now })} transitionTypes={day < now ? FORWARD : BACK} className="text-[11px] uppercase tracking-wide text-muted hover:text-fg">Back to today</Link>
+            <Link href={href({ d: now })} transitionTypes={day < now ? FORWARD : BACK} className="text-[10px] uppercase tracking-wide text-muted hover:text-fg">Back to today</Link>
           )}
         </div>
-        <Link href={href({ d: addDays(day, 1) })} transitionTypes={FORWARD} className="px-4 py-3 text-2xl text-muted hover:text-fg" aria-label="Next day">›</Link>
+        <Link href={href({ d: addDays(day, 1) })} transitionTypes={FORWARD} className="px-4 py-2 text-xl text-muted hover:text-fg" aria-label="Next day">›</Link>
       </div>
 
-      <Link href={viewsHref} transitionTypes={FORWARD} className="flex items-center justify-center gap-2 rounded-full border-2 border-accent py-2.5 font-semibold text-accent hover:bg-accent/10">
+      <Link href={viewsHref} transitionTypes={FORWARD} className="flex items-center justify-center gap-1.5 rounded-full border-[1.5px] border-accent py-2 text-sm font-semibold text-accent hover:bg-accent/10">
         {periodName}
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="m6 9 6 6 6-6" /></svg>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="m6 9 6 6 6-6" /></svg>
       </Link>
 
       <Slide key={day}>
@@ -98,19 +101,20 @@ export default async function TeamView({ team, editable, base, sp }: { team: Tea
       {str("err") && <p className="card text-bad text-sm">{str("err")}</p>}
       {move && moving && <p className="text-sm text-accent">Moving {moving.name}: tap a lit slot to put him there, or his own slot to cancel.</p>}
 
-      <div className="card p-0 overflow-x-auto">
-        <table className="t whitespace-nowrap">
+      <div className="-mx-4 overflow-x-auto border-y border-line bg-card sm:mx-0 sm:rounded-xl sm:border">
+        <table className="t whitespace-nowrap text-[13px] [&_td]:py-1.5 [&_th]:py-2">
           <thead>
-            <tr className="[&>th]:text-center [&>th]:border-r [&>th]:border-line">
+            <tr className="hidden sm:table-row [&>th]:text-center [&>th]:border-r [&>th]:border-line">
               <th colSpan={2}>Starters</th>
+              <th colSpan={2}>Fantasy pts</th>
               <th colSpan={2}>{longDate(day)}</th>
-              <th colSpan={STATS.length}>{periodName}{period !== "day" ? " · per game" : ""}</th>
-              <th colSpan={2} className="!border-r-0">Fantasy pts</th>
+              <th colSpan={STATS.length} className="!border-r-0">{periodName}{period !== "day" ? " · per game" : ""}</th>
             </tr>
             <tr>
-              <th>Slot</th><th>Player</th><th>Opp</th><th>Status</th>
+              <th colSpan={2}>Starters</th>
+              <th className="text-right">{period === "day" ? "Score" : "Pts"}</th><th className="text-right">Avg</th>
+              <th>Opp</th><th>Status</th>
               {STATS.map(([k, label]) => <th key={k} className="text-right">{label}</th>)}
-              <th className="text-right">Tot</th><th className="text-right">Avg</th>
             </tr>
           </thead>
           <tbody>
@@ -142,11 +146,11 @@ export default async function TeamView({ team, editable, base, sp }: { team: Tea
                   </td>
                   <td>
                     <div className="flex items-center gap-2">
-                      {p?.headshot ? <img src={p.headshot} alt="" className="h-8 w-8 rounded-full object-cover bg-line" /> : <span className="h-8 w-8 rounded-full bg-line inline-block" />}
+                      {p?.headshot ? <img src={p.headshot} alt="" className="h-7 w-7 rounded-full object-cover bg-line" /> : <span className="h-7 w-7 rounded-full bg-line inline-block" />}
                       {p ? (
                         <div className="leading-tight">
                           <Link href={`/players/${p.id}`} className="font-medium hover:underline">{p.name}</Link>
-                          <div className="text-xs text-muted">
+                          <div className="text-[11px] text-muted">
                             {p.nba_team} · {p.position}
                             {p.injury_status && <span className="text-bad" title={p.injury_note ?? ""}> · {p.injury_status}</span>}
                           </div>
@@ -156,19 +160,14 @@ export default async function TeamView({ team, editable, base, sp }: { team: Tea
                       )}
                     </div>
                   </td>
-                  <td>{g && p ? opp(g, p.nba_team_id!, abbr) : <span className="text-muted">--</span>}</td>
-                  <td className="text-xs">{g && p ? status(g, p.nba_team_id!) : <span className="text-muted">--</span>}</td>
-                  {STATS.map(([k]) => <td key={k} className={`num text-right ${val(k) === "--" ? "text-muted" : ""}`}>{val(k)}</td>)}
-                  <td className="num text-right">{a?.gp ? round(a.fpts) : <span className="text-muted">--</span>}</td>
+                  <td className="num text-right font-semibold">{a?.gp ? round(a.fpts) : <span className="text-muted">--</span>}</td>
                   <td className="num text-right">{a?.gp ? (a.fpts / a.gp).toFixed(1) : <span className="text-muted">--</span>}</td>
+                  <td>{g && p ? oppLabel(g, p.nba_team_id!, abbr) : <span className="text-muted">--</span>}</td>
+                  <td className="text-xs">{g && p ? <GameStatus g={g} teamId={p.nba_team_id!} /> : <span className="text-muted">--</span>}</td>
+                  {STATS.map(([k]) => <td key={k} className={`num text-right ${val(k) === "--" ? "text-muted" : ""}`}>{val(k)}</td>)}
                 </tr>
               );
             })}
-            <tr className="font-medium">
-              <td colSpan={4 + STATS.length} className="text-right text-muted text-xs uppercase">Starters total</td>
-              <td className="num text-right">{round(starterPts)}</td>
-              <td />
-            </tr>
           </tbody>
         </table>
       </div>
@@ -186,7 +185,7 @@ function SlotButton({ label, state, href, form }: {
   label: string; state: "off" | "tap" | "moving" | "target" | "locked"; href: string;
   form?: { back: string; day: string; player: string; to: string };
 }) {
-  const pill = "inline-flex h-8 min-w-14 px-3 items-center justify-center rounded-full border-2 text-xs font-bold whitespace-nowrap";
+  const pill = "inline-flex h-7 min-w-12 px-2.5 items-center justify-center rounded-full border-[1.5px] text-[11px] font-bold whitespace-nowrap";
   if (state === "target" && form) {
     return (
       <form action={moveSlot}>
@@ -208,16 +207,3 @@ function SlotButton({ label, state, href, form }: {
 }
 
 const round = (n: number) => String(Math.round(n * 10) / 10);
-
-function opp(g: Game, teamId: string, abbr: Map<string, string>) {
-  return g.home_team_id === teamId ? abbr.get(g.away_team_id) ?? "?" : `@${abbr.get(g.home_team_id) ?? "?"}`;
-}
-
-function status(g: Game, teamId: string) {
-  if (g.state === "pre") return new Date(g.start).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/New_York" }) + " ET";
-  const home = g.home_team_id === teamId;
-  const us = (home ? g.home_score : g.away_score) ?? 0;
-  const them = (home ? g.away_score : g.home_score) ?? 0;
-  if (g.state === "in") return <span className="text-accent">Live {us}-{them}</span>;
-  return <span className={us > them ? "text-good" : "text-bad"}>{us > them ? "W" : "L"} {us}-{them}</span>;
-}
