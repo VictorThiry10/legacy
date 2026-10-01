@@ -1,5 +1,6 @@
 "use server";
 import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
 import { db } from "@/lib/supabase/server";
 import { requireCommish } from "@/lib/auth";
 import { guard } from "@/lib/guard";
@@ -7,6 +8,7 @@ import { SCORING, type Scoring } from "@/lib/rules";
 import { releaseContract, signPlayer, trade } from "@/lib/roster";
 import { createSchedule, rescoreEverything } from "@/lib/season";
 import { isDay } from "@/lib/dates";
+import { deliver, emailHtml } from "@/lib/mail";
 
 // Commissioner actions. Each checks the caller is the commissioner, then refreshes every page.
 
@@ -94,5 +96,23 @@ export async function buildSeason(f: FormData) {
     const first = str(f, "first_day");
     if (!isDay(first)) throw new Error("Pick opening night.");
     return createSchedule(first);
+  });
+}
+
+// Emails the commissioner a sample trade offer, to check the Gmail setup end to end.
+export async function sendTestEmail() {
+  return guard(async () => {
+    const me = await requireCommish();
+    const h = await headers();
+    await deliver({
+      to: me.manager_email,
+      subject: "Trade offer from Brunson Bhenchodes (test)",
+      html: emailHtml({
+        title: "Brunson Bhenchodes wants to trade",
+        lines: ["<b>You get:</b> Jalen Brunson ($24.9m)", "<b>You give:</b> Naz Reid ($14.9m)", "<i>This is a test. Nothing was offered.</i>"],
+        button: { label: "Review trade", href: h.get("origin") ?? `https://${h.get("host")}` },
+      }),
+    });
+    return `Sent to ${me.manager_email}.`;
   });
 }

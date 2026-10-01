@@ -2,7 +2,7 @@ import { getSettings } from "@/lib/league";
 import { SCORING, type Scoring } from "@/lib/rules";
 import ActionForm from "@/components/ActionForm";
 import Field from "@/components/Field";
-import { saveScoring, saveSettings } from "./actions";
+import { saveScoring, saveSettings, sendTestEmail } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -36,6 +36,12 @@ export default async function LeagueSettings() {
           <div className="col-span-full flex items-center gap-3">
             <button className="btn">Save</button>
           </div>
+        </ActionForm>
+      </section>
+      <section className="space-y-2">
+        <h2 className="font-semibold">Email</h2>
+        <ActionForm action={sendTestEmail} className="card flex flex-wrap items-center gap-3">
+          <button className="btn">Send test email</button>
         </ActionForm>
       </section>
     </div>
