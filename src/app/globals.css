@@ -10,6 +10,7 @@
   --crimson: #b4122d;
   --blue: #1d5bd8;
   --good: #15803d;
+  --orange: #ea580c; /* players on waivers */
   --bad: #b91c1c;
 }
 @media (prefers-color-scheme: dark) {
@@ -23,6 +24,7 @@
     --crimson: #e8475f;
     --blue: #4c8dff;
     --good: #4ade80;
+    --orange: #fb923c;
     --bad: #f87171;
   }
 }
@@ -36,6 +38,7 @@
   --color-crimson: var(--crimson);
   --color-blue: var(--blue);
   --color-good: var(--good);
+  --color-orange: var(--orange);
   --color-bad: var(--bad);
 }
 body {
