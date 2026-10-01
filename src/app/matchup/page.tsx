@@ -76,7 +76,7 @@ export default async function MatchupPage({ searchParams }: PageProps<"/matchup"
   const row = ({ slot, l, r: rr }: { slot: string; l?: LineupRow; r?: LineupRow }, key: string) => {
     const pl = l?.playerId ? players.get(l.playerId) : undefined, pr = rr?.playerId ? players.get(rr.playerId) : undefined;
     return (
-      <div key={key} className="grid grid-cols-[minmax(0,1fr)_2.5rem_2.75rem_2.5rem_minmax(0,1fr)] border-b-4 border-bg bg-card">
+      <div key={key} className="grid grid-cols-[minmax(0,1fr)_2.5rem_2.75rem_2.5rem_minmax(0,1fr)] border-b border-line/60 bg-card">
         <PlayerCell p={pl} g={gameOf(pl)} abbr={abbr} />
         <div className="flex items-center justify-end pr-2 text-sm num">{fmt(dayPts(l))}</div>
         <div className="flex items-center justify-center bg-line/70 text-[11px] font-bold text-muted">{slotLabel(slot) === "Bench" ? "BE" : slotLabel(slot) === "UTIL" ? "UTL" : slotLabel(slot)}</div>
@@ -92,7 +92,7 @@ export default async function MatchupPage({ searchParams }: PageProps<"/matchup"
         {live && <AutoRefresh seconds={60} />}
 
         {/* swipe through this week's matchups */}
-        <div className="flex snap-x gap-2 overflow-x-auto border-b border-line bg-card px-3 py-2.5 [scrollbar-width:none]">
+        <div className="flex snap-x gap-2 overflow-x-auto bg-card px-3 pb-1 pt-2.5 [scrollbar-width:none]">
           <span className="flex shrink-0 snap-start items-center gap-1 rounded-full bg-line/70 px-2 text-xs font-semibold text-muted">
             {wi > 0 ? <Link href={href({ week: weeks[wi - 1] })} transitionTypes={BACK} className="px-1.5 py-2 text-base" aria-label="Previous week">‹</Link> : <span className="px-1.5 text-base opacity-30">‹</span>}
             {m.round === "semi" ? "Semis" : m.round === "final" ? "Final" : `Wk ${m.week}`}
@@ -119,16 +119,16 @@ export default async function MatchupPage({ searchParams }: PageProps<"/matchup"
         </div>
 
         {/* score, pinned under the tabs while scrolling */}
-        <div className="sticky top-11 z-20 grid grid-cols-2 items-center bg-card px-4 py-3 shadow-[0_1px_2px_rgba(0,0,0,0.12)]">
+        <div className="sticky top-11 z-20 grid grid-cols-2 items-center bg-card px-4 py-3">
           <div className="flex items-center gap-3"><Avatar t={team(L)} /><span className="num text-4xl font-black leading-none">{scoreOf(m, L).toFixed(1)}</span></div>
           <div className="flex items-center justify-end gap-3"><span className="num text-4xl font-black leading-none">{scoreOf(m, R).toFixed(1)}</span><Avatar t={team(R)} /></div>
         </div>
-        <div className="grid grid-cols-2 gap-4 border-b border-line bg-card px-4 pb-3">
+        <div className="grid grid-cols-2 gap-4 bg-card px-4 pb-4">
           <TeamName t={team(L)} rec={table.find((x) => x.teamId === L)} />
           <TeamName t={team(R)} rec={table.find((x) => x.teamId === R)} right />
         </div>
 
-        <div className="flex items-center border-b border-line bg-card">
+        <div className="flex items-center border-y border-line bg-card">
           {day > m.starts
             ? <Link href={href({ m: m.id, d: addDays(day, -1) })} transitionTypes={BACK} className="px-6 py-2.5 text-xl text-muted hover:text-fg" aria-label="Previous day">‹</Link>
             : <span className="px-6 py-2.5 text-xl text-line">‹</span>}
@@ -139,9 +139,9 @@ export default async function MatchupPage({ searchParams }: PageProps<"/matchup"
         </div>
 
         <Slide key={`${m.id}-${day}`}>
-          <div className="bg-bg pt-1">
+          <div className="bg-card">
             {starters.map((x, k) => row(x, `${x.slot}-${k}`))}
-            <div className="grid grid-cols-[1fr_auto_1fr] items-center border-b-4 border-bg bg-card px-4 py-3">
+            <div className="grid grid-cols-[1fr_auto_1fr] items-center border-y-4 border-bg bg-card px-4 py-3">
               <span className="num text-2xl font-bold">{dayTotal("l").toFixed(1)}</span>
               <span className="font-semibold">Daily Total</span>
               <span className="num text-right text-2xl font-bold">{dayTotal("r").toFixed(1)}</span>
