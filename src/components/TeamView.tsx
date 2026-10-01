@@ -10,6 +10,7 @@ import { viewKey, views } from "@/lib/team-views";
 import type { SeasonLine } from "@/lib/espn-parse";
 import Slide, { BACK, FORWARD } from "./Slide";
 import DatePicker from "./DatePicker";
+import TradeOffers from "./TradeOffers";
 import { money } from "@/lib/rules";
 import { moveSlot } from "@/app/team/actions";
 
@@ -75,6 +76,8 @@ export default async function TeamView({ team, editable, base, sp }: { team: Tea
         </div>
       </div>
 
+      {editable && <TradeOffers teamId={team.id} />}
+
       <div className="flex items-center border-y border-line -mx-4 sm:mx-0 sm:rounded-xl sm:border sm:bg-card">
         <Link href={href({ d: addDays(day, -1) })} transitionTypes={BACK} className="px-4 py-2 text-xl text-muted hover:text-fg" aria-label="Previous day">‹</Link>
         <div className="flex-1 text-center leading-tight">
@@ -109,7 +112,7 @@ export default async function TeamView({ team, editable, base, sp }: { team: Tea
               <th colSpan={STATS.length} className="!border-r-0">{periodName}{period !== "day" ? " · per game" : ""}</th>
             </tr>
             <tr>
-              <th colSpan={2}>Starters</th>
+              <th className="sticky left-0 z-10 [transform:translateZ(0)] shadow-[2px_0_3px_-2px_rgba(0,0,0,0.25)] bg-card">Starters</th><th />
               <th className="text-right">{period === "day" ? "Score" : "Pts"}</th><th className="text-right">Avg</th>
               <th>Opp</th><th>Status</th>
               {STATS.map(([k, label]) => <th key={k} className="text-right">{label}</th>)}
@@ -127,7 +130,9 @@ export default async function TeamView({ team, editable, base, sp }: { team: Tea
               const firstBench = !isStarter(r.slot) && (i === 0 || isStarter(rows[i - 1].slot));
               return (
                 <tr key={`${r.slot}-${i}`} className={`${firstBench ? "[&>td]:border-t-2" : ""} ${r.playerId && r.playerId === move ? "bg-line/50" : ""}`}>
-                  <td>
+                  {/* slot button and photo stay put when the table scrolls sideways */}
+                  <td className={`sticky left-0 z-10 [transform:translateZ(0)] shadow-[2px_0_3px_-2px_rgba(0,0,0,0.25)] ${r.playerId && r.playerId === move ? "bg-line" : "bg-card"}`}>
+                    <div className="flex items-center gap-2">
                     <SlotButton
                       label={slotLabel(r.slot)}
                       state={
@@ -141,10 +146,11 @@ export default async function TeamView({ team, editable, base, sp }: { team: Tea
                       href={r.playerId === move ? href({ move: "" }) : p ? href({ move: p.id }) : ""}
                       form={here ? { back: href({ move: "" }), day, player: move, to: r.slot } : undefined}
                     />
+                      {p?.headshot ? <img src={p.headshot} alt="" className="block h-7 w-7 max-w-none shrink-0 rounded-full object-cover bg-line" /> : <span className="block h-7 w-7 shrink-0 rounded-full bg-line" />}
+                    </div>
                   </td>
                   <td>
                     <div className="flex items-center gap-2">
-                      {p?.headshot ? <img src={p.headshot} alt="" className="h-7 w-7 rounded-full object-cover bg-line" /> : <span className="h-7 w-7 rounded-full bg-line inline-block" />}
                       {p ? (
                         <div className="leading-tight">
                           <Link href={`/players/${p.id}`} className="font-medium hover:underline">{p.name}</Link>

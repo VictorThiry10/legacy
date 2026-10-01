@@ -22,7 +22,7 @@ export default async function PlayerPage({ params, searchParams }: PageProps<"/p
   const d = db();
   const [{ data: player }, { data: contract }, { data: logs }, { data: moves }, overview, me, { season }] = await Promise.all([
     d.from("players").select("*").eq("id", id).maybeSingle(),
-    d.from("contracts").select("salary, years, season_signed, team:teams(id, name)").eq("player_id", id).eq("active", true).maybeSingle(),
+    d.from("contracts").select("id, salary, years, season_signed, team:teams(id, name)").eq("player_id", id).eq("active", true).maybeSingle(),
     d.from("player_games").select("*, game:games(start, home_team_id, away_team_id, home_score, away_score)").eq("player_id", id).eq("played", true),
     d.from("transactions").select("kind, created_at, salary, years, note, team:teams!transactions_team_id_fkey(name), other:teams!transactions_other_team_id_fkey(name)").eq("player_id", id).order("created_at", { ascending: false }),
     playerOverview(id),
@@ -31,7 +31,7 @@ export default async function PlayerPage({ params, searchParams }: PageProps<"/p
   ]);
   if (!player) notFound();
   const p = player as unknown as Player & { injury_note: string | null };
-  const c = contract as unknown as { salary: number; years: number; season_signed: number; team: { id: string; name: string } } | null;
+  const c = contract as unknown as { id: string; salary: number; years: number; season_signed: number; team: { id: string; name: string } } | null;
 
   // This season so far (our box scores), and last season (ESPN totals).
   type Log = { pts: number; reb: number; ast: number; stl: number; blk: number; tov: number; min: number; fpts: number; game: { start: string } };
@@ -74,6 +74,9 @@ export default async function PlayerPage({ params, searchParams }: PageProps<"/p
                 <Link href={`/players/${p.id}/add`} transitionTypes={FORWARD} className="rounded-full border-[1.5px] border-accent bg-card px-5 py-1.5 text-sm font-semibold text-accent hover:bg-accent/10">+ Add</Link>
               )}
               {c && me?.team?.id === c.team.id && <span className="rounded-full bg-line px-3 py-1.5 text-xs font-semibold">On your team</span>}
+              {c && me?.team && me.team.id !== c.team.id && (
+                <Link href={`/trade/${c.team.id}?get=${c.id}`} transitionTypes={FORWARD} className="rounded-full bg-blue px-5 py-1.5 text-sm font-semibold text-white">Trade</Link>
+              )}
               <span className={`rounded-full px-3 py-1.5 text-xs font-semibold ${p.injury_status ? "bg-bad/15 text-bad" : "bg-good/15 text-good"}`} title={p.injury_note ?? ""}>
                 {p.injury_status ?? "Healthy"}
               </span>

@@ -20,11 +20,11 @@ export async function rosters(teamIds: string[]): Promise<RosterPlayer[]> {
   return rows.map(({ player, id, ...c }) => ({ ...(player as Player), ...c, contract_id: id, salary: Number(c.salary) }));
 }
 
-type Change = { teamId: string; add: { player_id?: string; salary: number; years: number; season_signed: number }[]; remove: string[] };
+export type Change = { teamId: string; add: { player_id?: string; salary: number; years: number; season_signed: number }[]; remove: string[] };
 
-// Would these teams still be legal with these contract changes? Throws with every problem, unless overridden.
-// Trades only need every team under the cap (capOnly); signings also check roster spots and contract slots.
-async function check(changes: Change[], override: boolean, capOnly = false, commish = true) {
+// What would break if these contract changes happened? Trades only need every team under the cap (capOnly);
+// signings also check roster spots and contract slots.
+export async function problemsFor(changes: Change[], capOnly = false): Promise<string[]> {
   const { season, rules } = await getSettings();
   const ids = changes.map((c) => c.teamId);
   const [{ data: contracts }, { data: adj }, { data: teams }] = await Promise.all([
@@ -43,6 +43,13 @@ async function check(changes: Change[], override: boolean, capOnly = false, comm
     const found = capOnly ? (state.salary > rules.cap ? [`over the ${money(rules.cap)} cap by ${money(state.salary - rules.cap)}`] : []) : rosterProblems(state, rules);
     problems.push(...found.map((p) => `${name}: ${p}`));
   }
+  return problems;
+}
+
+// Same, but throws with every problem unless overridden.
+async function check(changes: Change[], override: boolean, capOnly = false, commish = true) {
+  const { season } = await getSettings();
+  const problems = await problemsFor(changes, capOnly);
   if (problems.length && !override) throw new Error(`Not allowed: ${problems.join("; ")}.${commish ? ' Tick "override" to do it anyway.' : ""}`);
   return { season, note: problems.length ? `Rules overridden (${problems.join("; ")})` : "" };
 }
