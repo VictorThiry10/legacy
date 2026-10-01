@@ -5,7 +5,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { db } from "./supabase/server";
 import { fail, rpc } from "./db";
 import { getSettings, teamSummaries, type Team } from "./league";
-import { maxBid, money, revealRound, RENOUNCE_RIGHTS, ROUND_SECONDS, type Bid, type RevealItem } from "./rules";
+import { BID_STEP, maxBid, money, revealRound, RENOUNCE_RIGHTS, ROUND_SECONDS, type Bid, type RevealItem } from "./rules";
 import type { Row } from "./supabase/types";
 import type { SeasonLine } from "./espn-parse";
 
@@ -127,7 +127,7 @@ export async function room(team: Team): Promise<Room> {
   const bidders = new Set(bids.map((b) => b.teamId));
 
   const teams: RoomTeam[] = summaries.map((t) => ({
-    id: t.id, name: t.name, manager: t.manager_name, capSpace: t.capSpace, maxBid: maxBid(t.state, rules), roster: t.state.rosterCount,
+    id: t.id, name: t.name, manager: t.manager_name, capSpace: t.capSpace, maxBid: Math.floor(maxBid(t.state, rules) / BID_STEP) * BID_STEP, roster: t.state.rosterCount,
     renouncesLeft: RENOUNCE_RIGHTS - (used.get(t.id) ?? 0), hasBid: phase === "bidding" && bidders.has(t.id),
   }));
   const players = phase === "waiting" ? [] : (rp?.data ?? []).map((x) => one(x.player)).filter((p) => !!p).map(cardOf);
@@ -180,7 +180,7 @@ export async function placeBid(team: Team, roundId: string, playerId: string, am
   if (amount !== null) {
     const { rules } = await getSettings();
     if (!Number.isFinite(amount) || amount < rules.minSalary) throw new Error(`Bids start at ${money(rules.minSalary)}.`);
-    if (amount % 100_000) throw new Error("Bids go up in steps of $0.1m.");
+    if (amount % BID_STEP) throw new Error("Bids are in whole millions.");
     const me = (await teamSummaries()).find((t) => t.id === team.id);
     const max = me ? maxBid(me.state, rules) : 0;
     if (amount > max) throw new Error(max ? `Your max bid is ${money(max)}.` : "Your roster is full.");

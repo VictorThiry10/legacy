@@ -2,11 +2,10 @@
 import { useState, useTransition } from "react";
 import { motion, useDragControls } from "motion/react";
 import type { CardPlayer } from "@/lib/bidding";
-import { money } from "@/lib/rules";
+import { BID_STEP, money } from "@/lib/rules";
 import * as A from "@/app/bidding/actions";
 
-const STEP = 100_000; // bids go in $0.1m
-const NUDGE = 500_000; // the − and + buttons
+const STEP = BID_STEP; // whole millions
 
 // Slides up from the bottom: the amount (type it, slide it or nudge it), then place or take back the bid.
 export default function BidSheet({ player, roundId, current, max, min, onClose }: {
@@ -20,7 +19,7 @@ export default function BidSheet({ player, roundId, current, max, min, onClose }
   const drag = useDragControls();
   const canBid = max >= min;
   const value = text !== null ? clamp(Number(text) * 1e6 || min) : amt;
-  const shown = text ?? (amt / 1e6).toFixed(1);
+  const shown = text ?? String(amt / 1e6);
 
   const set = (v: number) => {
     setText(null);
@@ -68,23 +67,23 @@ export default function BidSheet({ player, roundId, current, max, min, onClose }
         {canBid ? (
           <>
             <div className="mt-8 flex items-center justify-between">
-              <Nudge label="−" onClick={() => set(value - NUDGE)} />
+              <Nudge label="−" onClick={() => set(value - STEP)} />
               <label className="flex items-baseline whitespace-nowrap text-[var(--gold)]">
                 <span className="sr-only">Bid in millions</span>
                 <span className="font-display text-7xl leading-none">$</span>
                 <input
                   value={shown}
-                  inputMode="decimal"
+                  inputMode="numeric"
                   onFocus={(e) => e.currentTarget.select()}
-                  onChange={(e) => setText(e.target.value.replace(/[^0-9.]/g, ""))}
+                  onChange={(e) => setText(e.target.value.replace(/[^0-9]/g, ""))}
                   onBlur={() => text !== null && set(Number(text) * 1e6 || min)}
                   onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
-                  style={{ width: `${Math.max(1.2, [...shown].reduce((w, c) => w + (c === "." ? 0.17 : 0.39), 0.04))}em` }}
+                  style={{ width: `${Math.max(0.8, shown.length * 0.39 + 0.04)}em` }}
                   className="font-display bg-transparent text-center text-7xl leading-none outline-none"
                 />
                 <span className="font-display text-7xl leading-none">M</span>
               </label>
-              <Nudge label="+" onClick={() => set(value + NUDGE)} />
+              <Nudge label="+" onClick={() => set(value + STEP)} />
             </div>
             <input
               type="range" min={min} max={max} step={STEP} value={amt}
@@ -117,7 +116,7 @@ export default function BidSheet({ player, roundId, current, max, min, onClose }
 
 function Nudge({ label, onClick }: { label: string; onClick: () => void }) {
   return (
-    <button type="button" onClick={onClick} aria-label={label === "+" ? "Up $0.5m" : "Down $0.5m"} className="grid h-12 w-12 place-items-center rounded-full bg-white/[0.06] text-2xl font-light text-white/80 transition active:scale-90 active:bg-white/15">
+    <button type="button" onClick={onClick} aria-label={label === "+" ? "Up $1m" : "Down $1m"} className="grid h-12 w-12 place-items-center rounded-full bg-white/[0.06] text-2xl font-light text-white/80 transition active:scale-90 active:bg-white/15">
       {label}
     </button>
   );

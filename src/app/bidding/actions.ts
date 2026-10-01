@@ -29,9 +29,9 @@ export async function signOut() {
   redirect("/bidding");
 }
 
-// amount in $m (one decimal), or null to take the bid back
+// amount in $m (whole millions), or null to take the bid back
 export async function bid(roundId: string, playerId: string, amountM: number | null) {
-  return run(async () => B.placeBid(await me(), roundId, playerId, amountM === null ? null : Math.round(amountM * 10) * 100_000));
+  return run(async () => B.placeBid(await me(), roundId, playerId, amountM === null ? null : Math.round(amountM * 1_000_000)));
 }
 
 export async function renounce(bidId: string) {
