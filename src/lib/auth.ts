@@ -1,17 +1,18 @@
 import "server-only";
+import { cache } from "react";
 import { redirect } from "next/navigation";
 import { authClient, db } from "./supabase/server";
 import type { Team } from "./league";
 
-// Who is using the app right now? Their email, and their team if they have one.
-export async function getMe(): Promise<{ email: string; team: Team | null } | null> {
+// Who is using the app right now? Their email, and their team if they have one. Checked once per page (cache).
+export const getMe = cache(async (): Promise<{ email: string; team: Team | null } | null> => {
   const user = (await testUser()) ?? (await (await authClient()).auth.getUser()).data.user;
   if (!user?.email) return null;
   const email = user.email.toLowerCase();
   const { data: team } = await db().from("teams").select("*").ilike("manager_email", email).maybeSingle();
   if (team && !team.user_id) await db().from("teams").update({ user_id: user.id }).eq("id", team.id);
   return { email, team: team ?? null };
-}
+});
 
 // Local testing only: pretend to be someone without email login. Never active on a real deployment.
 export function testMode() {
