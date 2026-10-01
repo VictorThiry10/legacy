@@ -46,8 +46,8 @@ body {
 .input { @apply rounded-lg border border-line bg-card px-3 py-2 text-sm w-full; }
 .label { @apply text-xs uppercase tracking-wide text-muted; }
 table.t { @apply w-full text-sm; }
-table.t th { @apply text-left font-medium text-muted text-xs uppercase tracking-wide py-2 px-2 border-b border-line; }
-table.t td { @apply py-2 px-2 border-b border-line; }
+:where(table.t) th { @apply text-left font-medium text-muted text-xs uppercase tracking-wide py-2 px-2 border-b border-line; }
+:where(table.t) td { @apply py-2 px-2 border-b border-line; }
 .num { font-variant-numeric: tabular-nums; }
 
 /* ---------- page slides (React ViewTransition, see components/Slide.tsx) ---------- */
