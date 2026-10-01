@@ -5,6 +5,7 @@ import { STAT_COLS, fmt, seasonLabel, stat, type StatKey } from "@/lib/player-st
 import LocalTime from "@/components/LocalTime";
 import SearchBar from "@/components/SearchBar";
 import { initials } from "@/lib/names";
+import { openWaivers } from "@/lib/waivers";
 
 export const dynamic = "force-dynamic";
 
@@ -38,10 +39,11 @@ async function StatsTable({ sp }: { sp: Params }) {
   const d = db();
   const { season } = await getSettings();
 
-  const [{ data: rows }, { data: owned }, { data: games }] = await Promise.all([
+  const [{ data: rows }, { data: owned }, { data: games }, waivers] = await Promise.all([
     d.from("players").select("id, name, position, nba_team, nba_team_id, headshot, injury_status, injury_note, last_season").limit(2000),
     d.from("contracts").select("player_id, team:teams(id, name)").eq("active", true),
     d.from("games").select("id, start, home_team_id, away_team_id").gte("start", threeHoursAgo()).neq("state", "post").order("start").limit(200),
+    openWaivers(),
   ]);
   const players = (rows ?? []) as Player[];
   const owner = new Map(((owned ?? []) as unknown as { player_id: string; team: { id: string; name: string } }[]).map((o) => [o.player_id, o.team]));
@@ -55,7 +57,7 @@ async function StatsTable({ sp }: { sp: Params }) {
   const list = players
     .filter((p) => !q || p.name.toLowerCase().includes(q))
     .filter((p) => !sp.pos || fits(p.position, sp.pos))
-    .filter((p) => (show === "fa" ? !owner.has(p.id) : show === "owned" ? owner.has(p.id) : true))
+    .filter((p) => (show === "fa" ? !owner.has(p.id) : show === "wa" ? waivers.has(p.id) : show === "owned" ? owner.has(p.id) : true))
     .map((p) => ({ p, v: stat(p.last_season, sort, perGame) }))
     .sort((a, b) => (a.v == null ? 1 : b.v == null ? -1 : asc ? a.v - b.v : b.v - a.v) || a.p.name.localeCompare(b.p.name));
   const shown = sp.all ? list : list.slice(0, 100);
@@ -106,7 +108,11 @@ async function StatsTable({ sp }: { sp: Params }) {
                       <span className="block text-xs text-muted">{p.nba_team} · {p.position}</span>
                     </Link>
                   </td>
-                  <td className="text-center text-xs font-semibold">{o ? <Link href={`/teams/${o.id}`} title={o.name} className="hover:underline">{initials(o.name)}</Link> : <Link href={`/players/${p.id}/add`} transitionTypes={["nav-forward"]} className="inline-flex h-6 w-6 items-center justify-center rounded-full border-[1.5px] border-accent text-accent font-bold" aria-label={`Add ${p.name}`}>+</Link>}</td>
+                  <td className="text-center text-xs font-semibold">
+                    {o ? <Link href={`/teams/${o.id}`} title={o.name} className="hover:underline">{initials(o.name)}</Link>
+                      : waivers.has(p.id) ? <Link href={`/players/${p.id}/add`} transitionTypes={["nav-forward"]} className="inline-flex h-6 items-center justify-center rounded-full bg-accent px-1.5 text-[10px] font-bold text-bg" title="On waivers: sealed bids" aria-label={`Bid on ${p.name}`}>WA</Link>
+                      : <Link href={`/players/${p.id}/add`} transitionTypes={["nav-forward"]} className="inline-flex h-6 w-6 items-center justify-center rounded-full border-[1.5px] border-accent text-accent font-bold" aria-label={`Add ${p.name}`}>+</Link>}
+                  </td>
                   <td className="border-l border-line text-accent">{g?.opp ?? <span className="text-muted">–</span>}</td>
                   <td className="text-xs text-muted">{g ? <><LocalTime iso={g.start} mode="day" /> <LocalTime iso={g.start} /></> : "–"}</td>
                   {STAT_COLS.map((c, i) => (
@@ -167,7 +173,7 @@ function FilterBar({ sp, show, perGame }: { sp: Params; show: string; perGame: b
       <details className="shrink-0">
         <summary className={`${chip(filtered)} list-none cursor-pointer`} aria-label="Filters"><FilterIcon /></summary>
         <div className="absolute left-0 top-full z-20 mt-1 card p-3 shadow-lg space-y-3 text-sm">
-          <Options sp={sp} name="show" value={show} options={[["all", "All players"], ["fa", "Free agents"], ["owned", "Rostered"]]} />
+          <Options sp={sp} name="show" value={show} options={[["all", "All players"], ["fa", "Free agents"], ["wa", "Waivers"], ["owned", "Rostered"]]} />
           <Options sp={sp} name="view" value={perGame ? "" : "tot"} options={[["", "Averages"], ["tot", "Totals"]]} />
         </div>
       </details>

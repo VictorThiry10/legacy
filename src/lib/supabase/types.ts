@@ -80,8 +80,8 @@ export type Database = {
         { closes_at?: string | null; created_at?: string; id?: string; number: number; season: number; status?: string }
       >;
       settings: Table<
-        { cap: number; id: number; league_name: string; league_size: number; min_salary: number; roster_max: number; scoring: Json; season: number },
-        { cap?: number; id?: number; league_name?: string; league_size?: number; min_salary?: number; roster_max?: number; scoring?: Json; season?: number }
+        { cap: number; id: number; league_name: string; league_size: number; min_salary: number; roster_max: number; scoring: Json; season: number; waiver_hours: number },
+        { cap?: number; id?: number; league_name?: string; league_size?: number; min_salary?: number; roster_max?: number; scoring?: Json; season?: number; waiver_hours?: number }
       >;
       sync_log: Table<{ last_run: string; name: string }, { last_run: string; name: string }>;
       teams: Table<
@@ -110,6 +110,22 @@ export type Database = {
         },
         [FK<"transactions_contract_id_fkey", "contract_id", "contracts">, FK<"transactions_other_team_id_fkey", "other_team_id", "teams">, FK<"transactions_player_id_fkey", "player_id", "players">, FK<"transactions_team_id_fkey", "team_id", "teams">]
       >;
+      waiver_bids: Table<
+        { amount: number; created_at: string; drop_contract: string | null; id: string; team_id: string; waiver_id: string },
+        { amount: number; created_at?: string; drop_contract?: string | null; id?: string; team_id: string; waiver_id: string },
+        [FK<"waiver_bids_drop_contract_fkey", "drop_contract", "contracts">, FK<"waiver_bids_team_id_fkey", "team_id", "teams">, FK<"waiver_bids_waiver_id_fkey", "waiver_id", "waivers">]
+      >;
+      waivers: Table<
+        {
+          closed_at: string | null; closes_at: string; contract_id: string | null; created_at: string; dropped_by: string | null; id: string;
+          note: string | null; player_id: string; season: number; status: string;
+        },
+        {
+          closed_at?: string | null; closes_at: string; contract_id?: string | null; created_at?: string; dropped_by?: string | null; id?: string;
+          note?: string | null; player_id: string; season: number; status?: string;
+        },
+        [FK<"waivers_contract_id_fkey", "contract_id", "contracts">, FK<"waivers_dropped_by_fkey", "dropped_by", "teams">, FK<"waivers_player_id_fkey", "player_id", "players">]
+      >;
     };
     Views: {
       nba_teams: { Row: { abbr: string | null; id: string | null }; Relationships: [] };
@@ -134,6 +150,8 @@ export type Database = {
       save_lineup: { Args: { p_day: string; p_rows: Json; p_team: string }; Returns: undefined };
       score_lineup_points: { Args: { p_from: string; p_to: string }; Returns: undefined };
       snapshot_lineups: { Args: { p_day: string; p_rows: Json }; Returns: undefined };
+      waiver_bid: { Args: { p_amount: number | null; p_drop: string | null; p_team: string; p_waiver: string }; Returns: undefined };
+      waiver_settle: { Args: { p_bid: string | null; p_bids: number; p_note: string; p_season: number; p_waiver: string }; Returns: undefined };
     };
     Enums: { [_ in never]: never };
     CompositeTypes: { [_ in never]: never };

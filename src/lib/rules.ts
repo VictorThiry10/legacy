@@ -229,3 +229,13 @@ export function money(n: number) {
   const m = n / 1_000_000;
   return `$${Number.isInteger(m) ? m : m.toFixed(1)}m`;
 }
+
+// Waivers: a dropped player's sealed bids, best first. Highest amount wins; a tie goes to the team with more
+// cap space, then to the earlier bid. Bids under the minimum salary don't count.
+export type WaiverBid = { id: string; teamId: string; amount: number; createdAt: string };
+
+export function rankWaiverBids<B extends WaiverBid>(bids: B[], capSpace: (teamId: string) => number, minSalary: number): B[] {
+  return bids
+    .filter((b) => b.amount >= minSalary)
+    .sort((a, b) => b.amount - a.amount || capSpace(b.teamId) - capSpace(a.teamId) || a.createdAt.localeCompare(b.createdAt));
+}
