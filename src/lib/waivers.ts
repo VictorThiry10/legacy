@@ -2,7 +2,7 @@ import "server-only";
 import { db } from "./supabase/server";
 import { fail, rpc } from "./db";
 import { getSettings } from "./league";
-import { capSpaces, problemsFor, rosters } from "./roster";
+import { capSpaces, lockedToday, problemsFor, rosters } from "./roster";
 import { onIR } from "./lineup-store";
 import { money, rankWaiverBids } from "./rules";
 import type { Row } from "./supabase/types";
@@ -76,7 +76,7 @@ export async function withdrawBid(o: { teamId: string; playerId: string }) {
 }
 
 // One waiver whose time is up: the best bid that keeps its team legal wins, checked against rosters as they are now.
-async function settle(w: Waiver): Promise<"claimed" | "unclaimed"> {
+async function settle(w: Waiver): Promise<"claimed" | "unclaimed" | "postponed"> {
   const { season, rules } = await getSettings();
   const { data, error } = await db().from("waiver_bids").select("*").eq("waiver_id", w.id);
   if (error) fail(error);
@@ -94,6 +94,9 @@ async function settle(w: Waiver): Promise<"claimed" | "unclaimed"> {
       break;
     }
   }
+  // The winner gives up a player who has played today: wait until tomorrow, so today's points stay as they are.
+  const leaving = winner?.drop_contract ? (await rosters([winner.teamId])).find((p) => p.contract_id === winner.drop_contract) : undefined;
+  if (leaving && (await lockedToday(leaving))) return "postponed";
   const count = `${bids.length} sealed bid${bids.length === 1 ? "" : "s"}`;
   const note = winner ? `Waiver claim, ${count}` : bids.length ? `Cleared waivers, no bid fit under the rules (${count})` : "Cleared waivers, no bids";
   await rpc("waiver_settle", { p_waiver: w.id, p_bid: winner?.id ?? null, p_bids: bids.length, p_season: season, p_note: note });
@@ -102,10 +105,10 @@ async function settle(w: Waiver): Promise<"claimed" | "unclaimed"> {
 
 // Settle every waiver whose time is up, oldest first (an earlier claim counts against the cap for a later one).
 // Safe to call from anywhere, any number of times at once: each waiver settles once and the others skip it.
-export async function settleWaivers(): Promise<{ claimed: number; unclaimed: number }> {
+export async function settleWaivers(): Promise<{ claimed: number; unclaimed: number; postponed: number }> {
   const { data: due, error } = await db().from("waivers").select("*").eq("status", "open").lte("closes_at", new Date().toISOString()).order("closes_at");
   if (error) fail(error);
-  const out = { claimed: 0, unclaimed: 0 };
+  const out = { claimed: 0, unclaimed: 0, postponed: 0 };
   for (const w of due ?? []) {
     try {
       out[await settle(w)]++;

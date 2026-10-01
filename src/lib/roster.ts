@@ -4,6 +4,8 @@ import { all, rpc } from "./db";
 import { getSettings, type Player } from "./league";
 import { money, rosterProblems, teamState } from "./rules";
 import { onIR } from "./lineup-store";
+import { gamesBetween } from "./nba";
+import { today } from "./dates";
 
 // Rosters and every way they change. All roster moves go through here: each one is checked against the
 // league rules, then written in one step together with its line in the transactions log.
@@ -100,6 +102,8 @@ export async function pickUp(o: { teamId: string; playerId: string; dropContract
   const onRoster = mine.filter((p) => !ir.has(p.id)).length;
   if (o.dropContractId && !mine.some((p) => p.contract_id === o.dropContractId)) throw new Error("That player is no longer on your team.");
   if (!o.dropContractId && onRoster >= rules.rosterMax) throw new Error(`Your roster is full (${rules.rosterMax}). Pick a player to drop.`);
+  const leaving = mine.find((p) => p.contract_id === o.dropContractId);
+  if (leaving && (await lockedToday(leaving))) throw new Error(lockedMessage(leaving.name));
   await check([{ teamId: o.teamId, add: [{ player_id: o.playerId, salary: rules.minSalary, years: 1, season_signed: season }], remove: o.dropContractId ? [o.dropContractId] : [] }], false, false, false);
   const { data: who } = await db().from("players").select("name").eq("id", o.playerId).single();
   const dropped = mine.find((p) => p.contract_id === o.dropContractId);
@@ -114,6 +118,24 @@ export async function pickUp(o: { teamId: string; playerId: string; dropContract
     throw e;
   }
   return `${who?.name ?? "Player"} added${dropped ? `, ${dropped.name} dropped to waivers` : ""}.`;
+}
+
+// Has his NBA game today started (or finished)? Today's lineups are re-frozen from the rosters every 10 minutes,
+// so dropping him now would take his points out of today's score. He can go tomorrow.
+export async function lockedToday(p: { nba_team_id?: string | null }) {
+  if (!p.nba_team_id) return false;
+  const day = today();
+  return (await gamesBetween(day, day)).some((g) => (g.home_team_id === p.nba_team_id || g.away_team_id === p.nba_team_id) && new Date(g.start) <= new Date());
+}
+export const lockedMessage = (name: string) => `Locked: ${name}'s game today has started. You can drop him tomorrow.`;
+
+// A GM drops one of their players. He goes on waivers (lib/waivers.ts) and his salary comes off the cap.
+export async function dropPlayer(o: { teamId: string; contractId: string }) {
+  const p = (await rosters([o.teamId])).find((r) => r.contract_id === o.contractId);
+  if (!p) throw new Error("That player is no longer on your team.");
+  if (await lockedToday(p)) throw new Error(lockedMessage(p.name));
+  await releaseContract(o.contractId, "Dropped");
+  return `${p.name} dropped. He's on waivers now.`;
 }
 
 export async function releaseContract(contractId: string, note?: string) {

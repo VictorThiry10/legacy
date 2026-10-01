@@ -79,13 +79,19 @@ export default async function PlayerPage({ params, searchParams }: PageProps<"/p
             </div>
             <div className="flex flex-wrap items-center gap-2 pt-1">
               {!c && me?.team && (w ? (
+                w.waiver.dropped_by === me.team.id ? (
+                  <span className="rounded-full bg-line px-3 py-1.5 text-xs font-semibold">You dropped him</span>
+                ) : (
                 <Link href={`/players/${p.id}/add`} transitionTypes={FORWARD} className="rounded-full bg-accent px-5 py-1.5 text-sm font-semibold text-bg">
                   {w.myBid ? `Your bid ${money(Number(w.myBid.amount))}` : "Bid"}
                 </Link>
+                )
               ) : (
                 <Link href={`/players/${p.id}/add`} transitionTypes={FORWARD} className="rounded-full border-[1.5px] border-accent bg-card px-5 py-1.5 text-sm font-semibold text-accent hover:bg-accent/10">+ Add</Link>
               ))}
-              {c && me?.team?.id === c.team.id && <span className="rounded-full bg-line px-3 py-1.5 text-xs font-semibold">On your team</span>}
+              {c && me?.team?.id === c.team.id && (
+                <Link href={`/players/${p.id}/drop`} transitionTypes={FORWARD} className="rounded-full bg-bad px-5 py-1.5 text-sm font-semibold text-white">Drop</Link>
+              )}
               {c && me?.team && me.team.id !== c.team.id && (
                 <Link href={`/trade/${c.team.id}?get=${c.id}`} transitionTypes={FORWARD} className="rounded-full bg-blue px-5 py-1.5 text-sm font-semibold text-white">Trade</Link>
               )}

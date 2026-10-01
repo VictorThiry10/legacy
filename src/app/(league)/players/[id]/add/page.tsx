@@ -74,6 +74,8 @@ export default async function AddPlayer({ params, searchParams }: PageProps<"/pl
           <p className="card text-sm">Already on {owned.team?.name ?? "another team"}.</p>
         ) : w && w.dropped_by === me.id ? (
           <p className="card text-sm">You dropped him, so you can&apos;t bid on him until he clears waivers.</p>
+        ) : w && new Date(w.closes_at) <= new Date() ? (
+          <p className="card text-sm">Bidding has closed. He signs with the best bid as soon as it settles.</p>
         ) : w ? (
           <>
             <div className="card space-y-1 text-sm">
