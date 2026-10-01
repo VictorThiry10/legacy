@@ -1,10 +1,18 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import Link from "next/link";
 import Nav from "@/components/Nav";
 import "./globals.css";
 import { getMe } from "@/lib/auth";
 
-export const metadata: Metadata = { title: "Legacy League", description: "Our dynasty basketball league" };
+export const metadata: Metadata = {
+  title: "Legacy League",
+  description: "Our dynasty basketball league",
+  applicationName: "Legacy",
+  // Opens full screen (no Safari bar) when launched from the home screen.
+  appleWebApp: { capable: true, title: "Legacy", statusBarStyle: "default" },
+};
+
+export const viewport: Viewport = { themeColor: "#1c1917" };
 
 export default async function RootLayout({ children }: LayoutProps<"/">) {
   const me = await getMe().catch(() => null);
