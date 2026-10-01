@@ -36,7 +36,7 @@ export type Award = {
   amount: number;
   years: number;
   bidId: string;
-  tie?: boolean; // true when amount AND cap space were tied: settle by rock paper scissors
+  tie?: "cap" | "random"; // how a tied top bid was settled: more cap space, or (also tied on space) by the computer
 };
 
 export type Resolution = {
@@ -63,12 +63,31 @@ function feasible(t: TeamState, extra: Award[], s: Settings): string | null {
   return null;
 }
 
+// The most a team can bid on one player: its cap space, keeping the minimum salary for every roster spot
+// still empty after this signing. A full roster can't bid.
+export function maxBid(t: TeamState, s: Settings) {
+  if (t.rosterCount >= s.rosterMax) return 0;
+  return Math.max(0, s.cap - t.salary - (s.rosterMax - t.rosterCount - 1) * s.minSalary);
+}
+
+// FNV-1a: a stable "random" number from a string, so a computer pick is the same on every screen and every reload.
+const hash = (str: string) => {
+  let h = 2166136261;
+  for (let i = 0; i < str.length; i++) h = Math.imul(h ^ str.charCodeAt(i), 16777619);
+  return h >>> 0;
+};
+
+// Best bid first: highest amount, then most cap space, then the computer's random pick (seeded by the round).
+export function rankBids(bids: Bid[], space: (teamId: string) => number, seed = ""): Bid[] {
+  return [...bids].sort((a, b) => b.amount - a.amount || space(b.teamId) - space(a.teamId) || hash(seed + a.id) - hash(seed + b.id));
+}
+
 /**
  * Resolve a sealed bid round.
- * 1. Each player goes to the highest bid. Ties: most cap space wins; if still tied, flag for rock paper scissors.
+ * 1. Each player goes to the highest bid. Ties: most cap space wins; if still tied, the computer picks at random.
  * 2. If a team ends up illegal (over cap, roster full, no contract slot), its most recent winning bid
  *    is voided and that player goes to the next highest bidder. Repeat until everyone is legal.
- * `excluded` holds bid ids to ignore (renounced bids).
+ * `excluded` holds bid ids to ignore (renounced bids). `seed` (the round id) fixes the random picks.
  */
 export function resolveRound(
   playerIds: string[],
@@ -76,21 +95,15 @@ export function resolveRound(
   teams: TeamState[],
   s: Settings = DEFAULT_SETTINGS,
   excluded: Set<string> = new Set(),
+  seed = "",
 ): Resolution {
   const teamById = new Map(teams.map((t) => [t.id, t]));
   const voided: Resolution["voided"] = [];
   const dead = new Set(excluded);
+  const space = (id: string) => capSpace(teamById.get(id)!, s);
 
   const ranked = (pid: string) =>
-    bids
-      .filter((b) => b.playerId === pid && !dead.has(b.id) && teamById.has(b.teamId) && b.amount >= s.minSalary)
-      .sort((a, b) => {
-        if (b.amount !== a.amount) return b.amount - a.amount;
-        const sa = capSpace(teamById.get(a.teamId)!, s);
-        const sb = capSpace(teamById.get(b.teamId)!, s);
-        if (sb !== sa) return sb - sa;
-        return a.createdAt.localeCompare(b.createdAt);
-      });
+    rankBids(bids.filter((b) => b.playerId === pid && !dead.has(b.id) && teamById.has(b.teamId) && b.amount >= s.minSalary), space, seed);
 
   for (let guard = 0; guard < 1000; guard++) {
     // tentative awards
@@ -98,13 +111,9 @@ export function resolveRound(
     for (const pid of playerIds) {
       const list = ranked(pid);
       if (!list.length) continue;
-      const top = list[0];
-      const second = list[1];
-      const tie =
-        !!second &&
-        second.amount === top.amount &&
-        capSpace(teamById.get(second.teamId)!, s) === capSpace(teamById.get(top.teamId)!, s);
-      awards.push({ playerId: pid, teamId: top.teamId, amount: top.amount, years: top.years, bidId: top.id, tie });
+      const [top, second] = list;
+      const tie = second?.amount === top.amount ? (space(second.teamId) === space(top.teamId) ? "random" : "cap") : undefined;
+      awards.push({ playerId: pid, teamId: top.teamId, amount: top.amount, years: top.years, bidId: top.id, ...(tie && { tie }) });
     }
 
     // find the first illegal team, void its most recent winning bid
@@ -129,14 +138,49 @@ export function resolveRound(
   throw new Error("resolveRound did not settle");
 }
 
-// Renounce Rights: 3 per season, one per block of 4 rounds (rounds 1-4, 5-8, 9-12).
-export function renounceBlock(roundNumber: number) {
-  return Math.min(2, Math.floor((Math.max(1, roundNumber) - 1) / 4));
+// Free agency rounds: 3 minutes of sealed bids each.
+export const ROUND_SECONDS = 180;
+
+// Renounce Rights: each GM can give up 3 signings per season, in any rounds. The player goes to the next bidder.
+export const RENOUNCE_RIGHTS = 3;
+
+export type BidStatus = "won" | "lost" | "voided" | "renounced";
+export type RevealItem = {
+  playerId: string;
+  winner: Award | null;
+  bids: { bidId: string; teamId: string; amount: number; status: BidStatus; reason?: string }[]; // best first
+};
+
+// The round as everyone sees it after bidding closes: for each player, who signed him and every other bid.
+export function revealRound(
+  playerIds: string[],
+  bids: Bid[],
+  teams: TeamState[],
+  s: Settings,
+  renounced: Set<string>,
+  seed: string,
+): { items: RevealItem[]; awards: Award[] } {
+  const r = resolveRound(playerIds, bids, teams, s, renounced, seed);
+  const teamById = new Map(teams.map((t) => [t.id, t]));
+  const space = (id: string) => (teamById.has(id) ? capSpace(teamById.get(id)!, s) : 0);
+  const won = new Map(r.awards.map((a) => [a.playerId, a]));
+  const voided = new Map(r.voided.map((v) => [v.bidId, v.reason]));
+  const items = playerIds.map((pid) => ({
+    playerId: pid,
+    winner: won.get(pid) ?? null,
+    bids: rankBids(bids.filter((b) => b.playerId === pid), space, seed).map((b) => ({
+      bidId: b.id,
+      teamId: b.teamId,
+      amount: b.amount,
+      status: (won.get(pid)?.bidId === b.id ? "won" : renounced.has(b.id) ? "renounced" : voided.has(b.id) ? "voided" : "lost") as BidStatus,
+      ...(voided.has(b.id) && { reason: voided.get(b.id) }),
+    })),
+  }));
+  return { items, awards: r.awards };
 }
 
-export function canRenounce(roundNumber: number, usedBlocks: number[]) {
-  return !usedBlocks.includes(renounceBlock(roundNumber));
-}
+// Seasons left on a contract, counting this one: signed in 2025 for 4 years is 3 left in 2026.
+export const yearsLeft = (c: { season_signed: number; years: number }, season: number) => Math.max(0, c.season_signed + c.years - season);
 
 // Rookie lottery odds for the #1 pick. Input: team ids ordered worst to best.
 export function lotteryOdds(worstToBest: string[]): Record<string, number> {

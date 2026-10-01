@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { resolveRound, DEFAULT_SETTINGS as S, drawLottery, lotteryOdds, fantasyPoints, canRenounce, rosterProblems, teamState, type TeamState, type Bid } from "./rules";
+import { resolveRound, revealRound, maxBid, yearsLeft, DEFAULT_SETTINGS as S, drawLottery, lotteryOdds, fantasyPoints, rosterProblems, teamState, type TeamState, type Bid } from "./rules";
 
 const M = 1_000_000;
 const team = (id: string, salary = 0, rosterCount = 0): TeamState => ({ id, salary, rosterCount, slotsUsed: {} });
@@ -18,12 +18,19 @@ test("highest bid wins", () => {
 test("tie goes to most cap space", () => {
   const r = resolveRound(["p1"], [bid("A", "p1", 10), bid("B", "p1", 10)], [team("A", 20 * M), team("B", 5 * M)]);
   assert.equal(r.awards[0].teamId, "B");
-  assert.equal(r.awards[0].tie, false);
+  assert.equal(r.awards[0].tie, "cap");
 });
 
-test("double tie is flagged for rock paper scissors", () => {
-  const r = resolveRound(["p1"], [bid("A", "p1", 10), bid("B", "p1", 10)], [team("A"), team("B")]);
-  assert.equal(r.awards[0].tie, true);
+test("double tie: the computer picks, the same way every time for a round", () => {
+  const bids = [bid("A", "p1", 10), bid("B", "p1", 10)];
+  const winners = new Set<string>();
+  for (const seed of ["r1", "r2", "r3", "r4", "r5", "r6", "r7", "r8"]) {
+    const r = resolveRound(["p1"], bids, [team("A"), team("B")], S, new Set(), seed);
+    assert.equal(r.awards[0].tie, "random");
+    assert.equal(resolveRound(["p1"], bids, [team("A"), team("B")], S, new Set(), seed).awards[0].teamId, r.awards[0].teamId);
+    winners.add(r.awards[0].teamId);
+  }
+  assert.equal(winners.size, 2); // both teams win some seeds
 });
 
 test("over cap: most recent win goes to second highest bidder", () => {
@@ -56,11 +63,23 @@ test("renounced bid passes player to next bidder", () => {
   assert.equal(r.awards[0].teamId, "B");
 });
 
-test("renounce: one per block of 4 rounds", () => {
-  assert.equal(canRenounce(3, [0]), false);
-  assert.equal(canRenounce(5, [0]), true);
-  assert.equal(canRenounce(12, [0, 1]), true);
-  assert.equal(canRenounce(12, [0, 1, 2]), false);
+test("max bid keeps $1m per empty roster spot, zero when the roster is full", () => {
+  assert.equal(maxBid(team("A", 100 * M, 5), S), 150 * M - 100 * M - 7 * M);
+  assert.equal(maxBid(team("A", 0, 12), S), 150 * M);
+  assert.equal(maxBid(team("A", 0, 13), S), 0);
+});
+
+test("reveal lists every bid with what happened to it", () => {
+  const b1 = bid("A", "p1", 12), b2 = bid("B", "p1", 10), b3 = bid("C", "p1", 8);
+  const { items, awards } = revealRound(["p1", "p2"], [b1, b2, b3], [team("A"), team("B"), team("C")], S, new Set([b1.id]), "r");
+  assert.deepEqual(items[0].bids.map((b) => b.status), ["renounced", "won", "lost"]);
+  assert.equal(awards[0].teamId, "B");
+  assert.equal(items[1].winner, null);
+});
+
+test("years left on a contract", () => {
+  assert.equal(yearsLeft({ season_signed: 2025, years: 4 }, 2026), 3);
+  assert.equal(yearsLeft({ season_signed: 2026, years: 1 }, 2026), 1);
 });
 
 test("lottery odds match the deck and sum to 100", () => {
