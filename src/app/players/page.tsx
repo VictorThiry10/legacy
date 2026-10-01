@@ -3,6 +3,7 @@ import { db } from "@/lib/supabase/server";
 import { getSettings, type Player } from "@/lib/league";
 import { STAT_COLS, fmt, seasonLabel, stat, type StatKey } from "@/lib/player-stats";
 import LocalTime from "@/components/LocalTime";
+import SearchBar from "@/components/SearchBar";
 
 export const dynamic = "force-dynamic";
 
@@ -156,22 +157,18 @@ function SortTh({ sp, sort, asc, k, label, title, className = "" }: { sp: Params
 const pill = "h-10 min-w-12 px-4 inline-flex items-center justify-center rounded-full text-sm font-semibold whitespace-nowrap";
 const chip = (on: boolean) => `${pill} ${on ? "border-2 border-fg text-fg bg-card" : "bg-line/70 text-muted hover:text-fg"}`;
 
-// ESPN style filter row: search and filter buttons, then position chips. Works without JavaScript (details/summary).
+// ESPN style filter row: search and filter buttons, then position chips. Search opens a full width box instead.
 function FilterBar({ sp, show, perGame }: { sp: Params; show: string; perGame: boolean }) {
   const filtered = show !== "all" || !perGame;
+  if (sp.search || sp.q) {
+    const keep = Object.fromEntries(Object.entries(sp).filter(([k, v]) => v && k !== "q" && k !== "search")) as Record<string, string>;
+    return <SearchBar path="/players" params={keep} initial={sp.q ?? ""} cancelHref={href(sp, { q: undefined, search: undefined })} />;
+  }
   return (
     // Dropdowns are placed against the outer box, so the sideways-scrolling chip row doesn't clip them.
     <div className="relative">
     <div className="flex items-center gap-2 overflow-x-auto pb-1 -mx-4 px-4 sm:mx-0 sm:px-0">
-      <details className="shrink-0" open={!!sp.q}>
-        <summary className={`${chip(!!sp.q)} list-none cursor-pointer`} aria-label="Search"><SearchIcon /></summary>
-        <form className="absolute left-0 top-full z-20 mt-1 flex gap-2 card p-2 shadow-lg">
-          {Object.entries(sp).filter(([k, v]) => v && k !== "q").map(([k, v]) => <input key={k} type="hidden" name={k} value={v} />)}
-          <input name="q" defaultValue={sp.q ?? ""} placeholder="Search players" className="input w-56" autoFocus />
-          <button className="btn">Go</button>
-          {sp.q && <Link href={href(sp, { q: undefined })} className="btn-ghost">Clear</Link>}
-        </form>
-      </details>
+      <Link href={href(sp, { search: "1" })} className={`${chip(false)} shrink-0`} aria-label="Search"><SearchIcon /></Link>
       <details className="shrink-0">
         <summary className={`${chip(filtered)} list-none cursor-pointer`} aria-label="Filters"><FilterIcon /></summary>
         <div className="absolute left-0 top-full z-20 mt-1 card p-3 shadow-lg space-y-3 text-sm">
