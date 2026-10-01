@@ -105,6 +105,10 @@ export type Database = {
     };
     Functions: {
       rescore_all: { Args: { w: Json }; Returns: undefined };
+      roster_pickup: {
+        Args: { p_team: string; p_player: string; p_salary: number; p_season: number; p_drop: string | null; p_note: string };
+        Returns: string;
+      };
       roster_release: { Args: { p_contract: string; p_note: string; p_season: number }; Returns: undefined };
       roster_sign: {
         Args: { p_note: string; p_player: string; p_salary: number; p_season: number; p_season_signed: number; p_team: string; p_via: string; p_years: number };
