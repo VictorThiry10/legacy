@@ -3,10 +3,9 @@ import { useState, useTransition } from "react";
 import { motion } from "motion/react";
 import type { Room } from "@/lib/bidding";
 import { money } from "@/lib/rules";
-import TeamAvatar from "@/components/TeamAvatar";
 import * as A from "@/app/bidding/actions";
 import PlayerCard from "./PlayerCard";
-import { ease, Kicker } from "./ui";
+import { ease, Gm, Kicker, Label } from "./ui";
 
 const LENGTHS = [1, 2, 3, 4];
 
@@ -36,11 +35,11 @@ export default function Contracts({ data }: { data: Room }) {
 
       {!locked && mine.length > 0 && (
         <>
-          <div className="mt-5 flex flex-wrap gap-2">
+          <div className="mt-5 flex gap-6">
             {[4, 3, 2].map((n) => (
-              <div key={n} className={`rounded-full border px-3.5 py-1.5 ${count(n) >= (data.limits[n] ?? 0) ? "border-[var(--gold)]/50 bg-[var(--gold)]/10" : "border-white/10 bg-white/[0.04]"}`}>
-                <span className="font-display text-lg leading-none">{n} yr</span>
-                <span className="ml-2 text-sm tabular-nums text-white/60">{count(n)}/{data.limits[n] ?? 0}</span>
+              <div key={n}>
+                <Label>{n} years</Label>
+                <div className="font-display mt-1 text-2xl leading-none">{count(n)}<span className="text-white/30">/{data.limits[n] ?? 0}</span></div>
               </div>
             ))}
           </div>
@@ -53,14 +52,14 @@ export default function Contracts({ data }: { data: Room }) {
                   initial={{ opacity: 0, y: 14 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: i * 0.04, ease }}
-                  className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-2.5"
+                  className="flex items-center gap-3 rounded-2xl bg-white/[0.025] p-2.5"
                 >
                   <div className="w-14 shrink-0"><PlayerCard p={s.player} /></div>
                   <div className="min-w-0 flex-1">
                     <div className="truncate font-semibold">{s.player.name}</div>
-                    <div className="font-display text-2xl leading-none text-[var(--gold)]">{money(s.salary)}</div>
+                    <div className="font-display mt-0.5 text-2xl leading-none text-[var(--gold)]">{money(s.salary)}</div>
                   </div>
-                  <div className="flex rounded-full bg-white/5 p-1">
+                  <div className="flex rounded-full bg-white/[0.05] p-1">
                     {LENGTHS.map((n) => {
                       const full = n > 1 && cur !== n && count(n) >= (data.limits[n] ?? 0);
                       return (
@@ -73,7 +72,7 @@ export default function Contracts({ data }: { data: Room }) {
                           }}
                           className="relative h-9 w-9 rounded-full text-sm font-semibold disabled:opacity-25"
                         >
-                          {cur === n && <motion.span layoutId={`len-${s.contractId}`} className="absolute inset-0 rounded-full bg-[var(--gold)]" transition={{ type: "spring", stiffness: 400, damping: 30 }} />}
+                          {cur === n && <motion.span layoutId={`len-${s.contractId}`} className="absolute inset-0 rounded-full bg-white" transition={{ type: "spring", stiffness: 400, damping: 30 }} />}
                           <span className={`relative ${cur === n ? "text-black" : ""}`}>{n}y</span>
                         </button>
                       );
@@ -84,7 +83,7 @@ export default function Contracts({ data }: { data: Room }) {
             })}
           </div>
           <div className="mt-4 flex items-center gap-3">
-            <button disabled={pending || !dirty} onClick={save} className="gold-btn h-12 rounded-2xl px-8 font-bold transition active:scale-[0.98] disabled:opacity-40">
+            <button disabled={pending || !dirty} onClick={save} className="btn-primary h-12 rounded-2xl px-8 font-semibold transition active:scale-[0.98] disabled:opacity-30">
               {pending ? "Saving…" : "Save"}
             </button>
             {msg && <span className={`text-sm ${msg === "Saved" ? "text-[var(--good)]" : "text-[var(--bad)]"}`}>{msg}</span>}
@@ -92,13 +91,13 @@ export default function Contracts({ data }: { data: Room }) {
         </>
       )}
 
-      <Kicker className="mt-10">Every signing</Kicker>
+      <Label className="mt-10">Every signing</Label>
       {!teams.length && <p className="mt-3 text-sm text-white/50">Nobody signed anyone.</p>}
       <div className="mt-3 grid gap-3 sm:grid-cols-2">
         {teams.map(({ t, list }) => (
-          <div key={t.id} className={`rounded-2xl border p-4 ${t.id === data.meId ? "border-[var(--gold)]/40" : "border-white/10"} bg-white/[0.03]`}>
+          <div key={t.id} className={`rounded-2xl p-4 ${t.id === data.meId ? "bg-white/[0.06] ring-1 ring-inset ring-white/15" : "bg-white/[0.025]"}`}>
             <div className="flex items-center gap-3">
-              <TeamAvatar name={t.name} />
+              <Gm name={t.name} />
               <div className="min-w-0 flex-1">
                 <div className="truncate font-semibold">{t.name}</div>
                 <div className="text-xs text-white/45">{money(list.reduce((a, s) => a + s.salary, 0))} on {list.length} {list.length === 1 ? "player" : "players"}</div>
@@ -108,7 +107,7 @@ export default function Contracts({ data }: { data: Room }) {
               {list.map((s) => (
                 <li key={s.contractId} className="flex items-baseline justify-between gap-3">
                   <span className="truncate text-white/80">{s.player.name}</span>
-                  <span className="shrink-0 tabular-nums text-white/55">{money(s.salary)} · {s.years}y</span>
+                  <span className="shrink-0 tabular-nums text-white/50">{money(s.salary)} · {s.years}y</span>
                 </li>
               ))}
             </ul>

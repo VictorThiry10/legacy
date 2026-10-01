@@ -4,9 +4,8 @@ import { bidTeam, PER_ROUND, searchFreeAgents, setupRounds } from "@/lib/bidding
 import { getSettings, teamSummaries } from "@/lib/league";
 import { money } from "@/lib/rules";
 import ActionForm from "@/components/ActionForm";
-import TeamAvatar from "@/components/TeamAvatar";
 import PlayerCard from "@/components/bidding/PlayerCard";
-import { Kicker } from "@/components/bidding/ui";
+import { Gm, Label } from "@/components/bidding/ui";
 import * as A from "../actions";
 
 export const dynamic = "force-dynamic";
@@ -29,22 +28,22 @@ export default async function Setup({ searchParams }: PageProps<"/bidding/setup"
 
       <div className="mt-5 flex flex-wrap gap-2">
         <ActionForm action={A.autoFill} confirm="Fill every empty spot with the best free agents left (last season's fantasy points per game)?">
-          <button className={`${btn} gold-btn`}>Auto fill</button>
+          <button className={`${btn} btn-primary`}>Auto fill</button>
         </ActionForm>
         <ActionForm action={A.restart} confirm="Restart free agency? Every bid and free agency signing is deleted. The player lists stay.">
-          <button className={`${btn} border border-[var(--crimson)]/50 text-[var(--crimson)]`}>Restart</button>
+          <button className={`${btn} text-red-400 hover:bg-white/[0.05]`}>Restart</button>
         </ActionForm>
       </div>
 
       <form className="mt-6 flex gap-2">
-        <input name="q" defaultValue={q} placeholder="Find a free agent" className="h-12 min-w-0 flex-1 rounded-2xl border border-white/10 bg-white/5 px-4 outline-none focus:border-[var(--gold)]/60" />
-        <button className={`${btn} border border-white/15`}>Search</button>
+        <input name="q" defaultValue={q} placeholder="Find a free agent" className="h-12 min-w-0 flex-1 rounded-2xl bg-white/[0.06] px-4 outline-none ring-1 ring-inset ring-white/10 focus:ring-white/30" />
+        <button className={`${btn} bg-white/[0.06]`}>Search</button>
       </form>
       {q && !results.length && <p className="mt-3 text-sm text-white/50">No free agent matches.</p>}
       {results.length > 0 && (
         <div className="mt-3 space-y-2">
           {results.map((p) => (
-            <div key={p.id} className="flex flex-wrap items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-2.5">
+            <div key={p.id} className="flex flex-wrap items-center gap-3 rounded-2xl bg-white/[0.025] p-2.5">
               <div className="w-12 shrink-0"><PlayerCard p={p} /></div>
               <div className="min-w-0 flex-1">
                 <div className="truncate font-semibold">{p.name}</div>
@@ -55,7 +54,7 @@ export default async function Setup({ searchParams }: PageProps<"/bidding/setup"
                   <ActionForm key={r.number} action={A.addToRound}>
                     <input type="hidden" name="round" value={r.number} />
                     <input type="hidden" name="player" value={p.id} />
-                    <button disabled={!canAdd(r.number)} className="h-9 w-9 rounded-full border border-white/15 text-sm font-semibold hover:border-[var(--gold)] hover:text-[var(--gold)] disabled:opacity-25">
+                    <button disabled={!canAdd(r.number)} className="h-9 w-9 rounded-full bg-white/[0.06] text-sm font-semibold hover:bg-white hover:text-black disabled:opacity-20">
                       {r.number}
                     </button>
                   </ActionForm>
@@ -68,10 +67,10 @@ export default async function Setup({ searchParams }: PageProps<"/bidding/setup"
 
       <div className="mt-8 grid gap-4 sm:grid-cols-2">
         {rounds.map((r) => (
-          <section key={r.number} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+          <section key={r.number} className="rounded-2xl bg-white/[0.025] p-4">
             <div className="flex items-baseline justify-between">
               <h2 className="font-display text-3xl leading-none">Round {r.number}</h2>
-              <span className={`text-xs tabular-nums ${r.players.length === PER_ROUND ? "text-[var(--gold)]" : "text-white/45"}`}>
+              <span className={`text-xs tabular-nums ${r.players.length === PER_ROUND ? "text-white/80" : "text-white/40"}`}>
                 {r.status === "open" ? "Live · " : r.status === "final" ? "Done · " : ""}{r.players.length}/{PER_ROUND}
               </span>
             </div>
@@ -96,11 +95,11 @@ export default async function Setup({ searchParams }: PageProps<"/bidding/setup"
         ))}
       </div>
 
-      <Kicker className="mt-10">GMs · {teams.length}/{leagueSize}</Kicker>
-      <div className="mt-3 overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03]">
+      <Label className="mt-10">GMs · {teams.length}/{leagueSize}</Label>
+      <div className="mt-3 divide-y divide-white/[0.06] border-y border-white/[0.06]">
         {teams.map((t) => (
-          <div key={t.id} className="flex items-center gap-3 border-b border-white/5 px-4 py-3 last:border-0">
-            <TeamAvatar name={t.name} size="sm" />
+          <div key={t.id} className="flex items-center gap-3 py-3">
+            <Gm name={t.name} size="sm" />
             <div className="min-w-0 flex-1 leading-tight">
               <div className="truncate text-sm font-semibold">{t.name}</div>
               <div className="truncate text-xs text-white/45">{t.manager_name ?? ""} · {t.manager_email}</div>
@@ -110,11 +109,11 @@ export default async function Setup({ searchParams }: PageProps<"/bidding/setup"
         ))}
       </div>
       {teams.length < leagueSize && (
-        <ActionForm action={A.addTeam} className="mt-3 grid gap-2 rounded-2xl border border-white/10 bg-white/[0.03] p-4 sm:grid-cols-[1fr_1fr_1.4fr_auto]">
-          <input name="name" required maxLength={40} placeholder="Team name" className="h-11 rounded-xl border border-white/10 bg-white/5 px-3 text-sm outline-none" />
-          <input name="manager" placeholder="GM name" className="h-11 rounded-xl border border-white/10 bg-white/5 px-3 text-sm outline-none" />
-          <input name="email" type="email" required placeholder="Email" className="h-11 rounded-xl border border-white/10 bg-white/5 px-3 text-sm outline-none" />
-          <button className={`${btn} gold-btn`}>Add GM</button>
+        <ActionForm action={A.addTeam} className="mt-4 grid gap-2 sm:grid-cols-[1fr_1fr_1.4fr_auto]">
+          <input name="name" required maxLength={40} placeholder="Team name" className="h-11 rounded-xl bg-white/[0.06] px-3 text-sm outline-none ring-1 ring-inset ring-white/10 focus:ring-white/30" />
+          <input name="manager" placeholder="GM name" className="h-11 rounded-xl bg-white/[0.06] px-3 text-sm outline-none ring-1 ring-inset ring-white/10 focus:ring-white/30" />
+          <input name="email" type="email" required placeholder="Email" className="h-11 rounded-xl bg-white/[0.06] px-3 text-sm outline-none ring-1 ring-inset ring-white/10 focus:ring-white/30" />
+          <button className={`${btn} btn-primary`}>Add GM</button>
         </ActionForm>
       )}
     </div>

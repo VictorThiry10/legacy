@@ -26,14 +26,14 @@ export default function Login() {
         ))}
       </div>
       <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, delay: 0.3, ease }} className="w-full text-center">
-        <h1 className="font-display gold-text text-7xl leading-none">Legacy</h1>
-        <p className="mt-1 text-xs font-semibold uppercase tracking-[0.45em] text-white/50">Free agency</p>
+        <h1 className="font-display silver-text text-7xl leading-none">Legacy</h1>
+        <p className="mt-1 text-xs font-semibold uppercase tracking-[0.45em] text-white/40">Free agency</p>
         <form action={run} className="mt-10 space-y-3">
           <input
             name="email" type="email" required autoComplete="email" inputMode="email" placeholder="Your email"
-            className="h-14 w-full rounded-2xl border border-white/10 bg-white/5 px-5 text-center text-lg outline-none transition focus:border-[#f5c451]/60 focus:bg-white/10"
+            className="h-14 w-full rounded-2xl bg-white/[0.06] px-5 text-center text-lg outline-none ring-1 ring-inset ring-white/10 transition focus:bg-white/10 focus:ring-white/30"
           />
-          <button disabled={pending} className="gold-btn h-14 w-full rounded-2xl text-lg font-bold transition active:scale-[0.98] disabled:opacity-60">
+          <button disabled={pending} className="btn-primary h-14 w-full rounded-2xl text-lg font-semibold transition active:scale-[0.98] disabled:opacity-60">
             {pending ? "Signing in…" : "Sign in"}
           </button>
           {state?.error && <p className="text-sm text-[var(--bad)]">{state.error}</p>}

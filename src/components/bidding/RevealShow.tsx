@@ -3,9 +3,8 @@ import { useEffect, useRef, useState } from "react";
 import { animate, AnimatePresence, motion, useIsPresent, useMotionValue, useTransform } from "motion/react";
 import type { CardPlayer, Room, RoomTeam } from "@/lib/bidding";
 import { money, type RevealItem } from "@/lib/rules";
-import TeamAvatar from "@/components/TeamAvatar";
 import PlayerCard, { CardBack } from "./PlayerCard";
-import { ease, reasonText, roundName } from "./ui";
+import { ease, Gm, reasonText, roundName } from "./ui";
 
 const HOLD = 6500; // ms each player stays on screen unless tapped on
 
@@ -24,7 +23,7 @@ export default function RevealShow({ data, onDone }: { data: Room; onDone: () =>
       animate={{ opacity: 1 }}
       exit={{ opacity: 0, transition: { duration: 0.6 } }}
     >
-      <div className="pointer-events-none absolute inset-0" style={{ background: "radial-gradient(40rem 28rem at 50% 32%, rgba(245,196,81,0.12), transparent 70%)" }} />
+      <div className="pointer-events-none absolute inset-0" style={{ background: "radial-gradient(40rem 28rem at 50% 32%, rgba(255,255,255,0.06), transparent 70%)" }} />
       <div className="absolute inset-x-0 top-0 z-10 flex items-center gap-3 px-5 pt-[max(1rem,env(safe-area-inset-top))]">
         <div className="shrink-0 text-[11px] font-semibold uppercase tracking-[0.3em] text-white/55">{roundName(data.round)}</div>
         <div className="flex flex-1 gap-1">
@@ -91,7 +90,7 @@ function Stage({ item, player, teams, meId, leftovers, onFinish }: {
           <>
             <motion.div
               className="absolute -inset-16 -z-10 rounded-full"
-              style={{ background: "radial-gradient(closest-side, rgba(245,196,81,0.5), transparent)" }}
+              style={{ background: "radial-gradient(closest-side, rgba(233,196,106,0.22), transparent)" }}
               initial={{ opacity: 0, scale: 0.5 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.9, ease }}
@@ -114,7 +113,7 @@ function Stage({ item, player, teams, meId, leftovers, onFinish }: {
                   initial={{ scale: 2.4, opacity: 0, rotate: -24 }}
                   animate={{ scale: 1, opacity: 1, rotate: -14 }}
                   transition={{ type: "spring", stiffness: 300, damping: 15 }}
-                  className="font-display rounded-[3cqw] border-[1.4cqw] border-[var(--crimson)] bg-black/40 px-[5cqw] py-[1cqw] text-[17cqw] leading-none text-[var(--crimson)]"
+                  className="font-display rounded-[3cqw] border-[1cqw] border-white/70 bg-black/50 px-[5cqw] py-[1cqw] text-[17cqw] leading-none text-white/85"
                 >
                   No bids
                 </motion.div>
@@ -145,15 +144,15 @@ function Stage({ item, player, teams, meId, leftovers, onFinish }: {
                 transition={{ delay: 0.15, duration: 0.7, ease }}
                 className="mt-3 flex items-center justify-center gap-3"
               >
-                <TeamAvatar name={team?.name} />
+                <Gm name={team?.name} />
                 <span className="font-display text-balance text-left text-[clamp(2rem,9vw,2.75rem)] leading-[0.9]">{team?.name}</span>
-                {w.teamId === meId && <span className="rounded-full bg-[var(--gold)] px-2 py-0.5 text-[10px] font-bold tracking-widest text-black">YOU</span>}
+                {w.teamId === meId && <span className="text-[10px] font-semibold tracking-[0.25em] text-[var(--gold)]">YOU</span>}
               </motion.div>
               <motion.div
                 initial={{ opacity: 0, scale: 0.7 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ delay: 0.4, type: "spring", stiffness: 220, damping: 14 }}
-                className="font-display gold-text mt-2 text-7xl leading-none"
+                className="font-display mt-2 text-7xl leading-none text-[var(--gold)]"
               >
                 <CountUp to={w.amount} />
               </motion.div>
@@ -177,14 +176,12 @@ function Stage({ item, player, teams, meId, leftovers, onFinish }: {
                 initial={{ opacity: 0, x: -14 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: k * 0.18, duration: 0.45, ease }}
-                className="flex items-center justify-center gap-2 text-sm text-white/55"
+                className="flex items-center justify-center gap-2 text-sm text-white/50"
               >
-                {b.status === "lost" && <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--crimson)]">Rejected</span>}
-                {b.status === "voided" && <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-300">Voided</span>}
-                {b.status === "renounced" && <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/40">Renounced</span>}
-                <span className="truncate text-white/80">{name(b.teamId)}</span>
-                <span className="font-display text-lg leading-none">{money(b.amount)}</span>
-                {b.status === "voided" && <span className="text-xs text-amber-300/80">{reasonText(b.reason)}</span>}
+                <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/30">{b.status === "lost" ? "Rejected" : b.status === "voided" ? "Voided" : "Renounced"}</span>
+                <span className="truncate text-white/70">{name(b.teamId)}</span>
+                <span className="font-display text-lg leading-none text-white/70">{money(b.amount)}</span>
+                {b.status === "voided" && <span className="text-xs text-white/35">{reasonText(b.reason)}</span>}
               </motion.li>
             ))}
           </ul>
@@ -218,14 +215,14 @@ function CountUp({ to }: { to: number }) {
 function Burst() {
   return (
     <div className="pointer-events-none absolute left-1/2 top-1/2 -z-10">
-      {Array.from({ length: 22 }, (_, k) => {
-        const a = (k / 22) * Math.PI * 2;
+      {Array.from({ length: 16 }, (_, k) => {
+        const a = (k / 16) * Math.PI * 2;
         const d = 150 + (k % 4) * 30;
         return (
           <motion.span
             key={k}
-            className={`absolute block rounded-full ${k % 3 ? "bg-[var(--gold)]" : "bg-white"}`}
-            style={{ width: 4 + (k % 3) * 2, height: 4 + (k % 3) * 2 }}
+            className="absolute block rounded-full bg-white/80"
+            style={{ width: 3 + (k % 3), height: 3 + (k % 3) }}
             initial={{ x: 0, y: 0, opacity: 1, scale: 1 }}
             animate={{ x: Math.cos(a) * d, y: Math.sin(a) * d, opacity: 0, scale: 0.3 }}
             transition={{ duration: 1.1 + (k % 5) * 0.12, ease: [0.1, 0.8, 0.3, 1] }}
