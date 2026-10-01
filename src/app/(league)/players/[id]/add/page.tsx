@@ -5,7 +5,7 @@ import { myTeamOrWelcome } from "@/lib/auth";
 import { getSettings, teamSummaries } from "@/lib/league";
 import { rosters } from "@/lib/roster";
 import { onIR } from "@/lib/lineup-store";
-import { waiverFor } from "@/lib/waivers";
+import { lowestBid, waiverFor } from "@/lib/waivers";
 import { money } from "@/lib/rules";
 import Field from "@/components/Field";
 import LocalTime from "@/components/LocalTime";
@@ -92,10 +92,10 @@ export default async function AddPlayer({ params, searchParams }: PageProps<"/pl
             )}
             <form action={bid} className="space-y-3">
               <input type="hidden" name="player_id" value={p.id} />
-              <Field label="Your bid ($m)" note={`At least ${money(rules.minSalary)}. You have ${money(capSpace)} in cap space.`}>
+              <Field label="Your bid ($m)" note={`Whole millions, at least ${money(lowestBid(rules.minSalary))}. You have ${money(capSpace)} in cap space.`}>
                 <input
-                  name="amount" type="number" inputMode="decimal" step="0.1" min={rules.minSalary / 1e6} required className="input"
-                  defaultValue={(myBid ? Number(myBid.amount) : rules.minSalary) / 1e6}
+                  name="amount" type="number" inputMode="numeric" step="1" min={lowestBid(rules.minSalary) / 1e6} required className="input"
+                  defaultValue={(myBid ? Number(myBid.amount) : lowestBid(rules.minSalary)) / 1e6}
                 />
               </Field>
               {full && dropPicker(`Your roster is full (${rules.rosterMax}). Pick a player to drop if you win:`, myBid?.drop_contract)}
