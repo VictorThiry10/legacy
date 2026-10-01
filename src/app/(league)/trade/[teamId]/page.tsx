@@ -9,6 +9,7 @@ import { load } from "@/lib/guard";
 import Slide, { BACK } from "@/components/Slide";
 import { sendOffer } from "../actions";
 import { headshot } from "@/lib/names";
+import SubmitButton from "@/components/SubmitButton";
 
 export const dynamic = "force-dynamic";
 
@@ -135,7 +136,7 @@ function Summary({ review, them, me, get, give, closeHref }: {
         {get.map((g) => <input key={g} type="hidden" name="get" value={g} />)}
         {give.map((g) => <input key={g} type="hidden" name="give" value={g} />)}
         <Link href={closeHref} transitionTypes={BACK} className="flex-1 rounded-full border border-line py-3 text-center font-semibold">Back</Link>
-        <button disabled={!!problems.length} className="flex-1 rounded-full bg-blue py-3 font-semibold text-white disabled:opacity-40">Confirm</button>
+        <SubmitButton disabled={!!problems.length} className="flex-1 rounded-full bg-blue py-3 font-semibold text-white">Confirm</SubmitButton>
       </form>
       <p className="text-center text-xs text-muted">{them.name} gets the offer to accept or decline.</p>
     </Modal>

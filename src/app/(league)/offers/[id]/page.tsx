@@ -6,6 +6,7 @@ import { getOffer } from "@/lib/trades";
 import { money } from "@/lib/rules";
 import type { RosterPlayer } from "@/lib/roster";
 import { acceptOffer, closeOffer } from "@/app/(league)/trade/actions";
+import SubmitButton from "@/components/SubmitButton";
 
 export const dynamic = "force-dynamic";
 
@@ -43,8 +44,8 @@ export default async function OfferPage({ params }: PageProps<"/offers/[id]">) {
         </table>
         {open ? (
           <div className="flex gap-2 pt-1">
-            <form action={closeOffer} className="flex-1"><input type="hidden" name="offer" value={o.id} /><button className="w-full rounded-full border border-line py-3 font-semibold">{o.mine ? "Cancel offer" : "Decline"}</button></form>
-            {!o.mine && <form action={acceptOffer} className="flex-1"><input type="hidden" name="offer" value={o.id} /><button className="w-full rounded-full bg-good py-3 font-semibold text-white">Accept</button></form>}
+            <form action={closeOffer} className="flex-1"><input type="hidden" name="offer" value={o.id} /><SubmitButton className="w-full rounded-full border border-line py-3 font-semibold">{o.mine ? "Cancel offer" : "Decline"}</SubmitButton></form>
+            {!o.mine && <form action={acceptOffer} className="flex-1"><input type="hidden" name="offer" value={o.id} /><SubmitButton className="w-full rounded-full bg-good py-3 font-semibold text-white">Accept</SubmitButton></form>}
           </div>
         ) : (
           <p className="text-sm font-semibold capitalize">{o.status}</p>

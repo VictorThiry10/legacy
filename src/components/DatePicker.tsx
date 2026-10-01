@@ -40,6 +40,7 @@ export default function DatePicker({ day, today, label, path, params, from, to }
                         {week.map((d, j) =>
                           d ? (
                             <Link
+                              prefetch={false}
                               key={d}
                               href={href(d)}
                               transitionTypes={d < day ? BACK : FORWARD}

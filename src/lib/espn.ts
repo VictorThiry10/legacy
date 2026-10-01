@@ -1,3 +1,4 @@
+import { unstable_cache } from "next/cache";
 import "server-only";
 import { db } from "./supabase/server";
 import { getSettings } from "./league";
@@ -124,6 +125,14 @@ export async function playerOverview(id: string) {
     return null;
   }
 }
+
+// The same, kept for 15 minutes: ESPN is the slowest thing a player page waits on, and it changes slowly.
+// Throws when ESPN fails, so a failure is never kept: callers catch.
+export const playerOverviewCached = unstable_cache(
+  async (id: string) => parseOverview(await get(`/athletes/${encodeURIComponent(id)}/overview`, WEB)),
+  ["espn-player-overview"],
+  { revalidate: 900 },
+);
 
 // ---------- automatic refresh ----------
 // Called every 10 minutes by a timer. Each part has its own rhythm, remembered in the sync_log table,

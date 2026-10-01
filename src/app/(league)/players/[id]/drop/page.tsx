@@ -7,6 +7,7 @@ import { money, yearsLeft } from "@/lib/rules";
 import Slide, { BACK } from "@/components/Slide";
 import { drop } from "./actions";
 import { headshot } from "@/lib/names";
+import SubmitButton from "@/components/SubmitButton";
 
 export const dynamic = "force-dynamic";
 
@@ -41,7 +42,7 @@ export default async function DropPlayer({ params, searchParams }: PageProps<"/p
           <form action={drop}>
             <input type="hidden" name="player_id" value={p.id} />
             <input type="hidden" name="contract_id" value={p.contract_id} />
-            <button className="inline-flex w-full items-center justify-center rounded-lg bg-bad px-3 py-2 text-sm font-semibold text-white disabled:opacity-40">Drop {p.name}</button>
+            <SubmitButton className="inline-flex w-full items-center justify-center rounded-lg bg-bad px-3 py-2 text-sm font-semibold text-white">Drop {p.name}</SubmitButton>
           </form>
         )}
       </div>

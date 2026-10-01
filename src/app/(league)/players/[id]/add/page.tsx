@@ -12,6 +12,7 @@ import LocalTime from "@/components/LocalTime";
 import Slide, { BACK } from "@/components/Slide";
 import { addPlayer, bid, unbid } from "./actions";
 import { headshot } from "@/lib/names";
+import SubmitButton from "@/components/SubmitButton";
 
 export const dynamic = "force-dynamic";
 
@@ -98,12 +99,12 @@ export default async function AddPlayer({ params, searchParams }: PageProps<"/pl
                 />
               </Field>
               {full && dropPicker(`Your roster is full (${rules.rosterMax}). Pick a player to drop if you win:`, myBid?.drop_contract)}
-              <button className="btn w-full">{myBid ? "Change bid" : "Place bid"}</button>
+              <SubmitButton className="btn w-full">{myBid ? "Change bid" : "Place bid"}</SubmitButton>
             </form>
             {myBid && (
               <form action={unbid}>
                 <input type="hidden" name="player_id" value={p.id} />
-                <button className="btn-ghost w-full">Withdraw bid</button>
+                <SubmitButton className="btn-ghost w-full">Withdraw bid</SubmitButton>
               </form>
             )}
           </>
@@ -111,7 +112,7 @@ export default async function AddPlayer({ params, searchParams }: PageProps<"/pl
           <form action={addPlayer} className="space-y-3">
             <input type="hidden" name="player_id" value={p.id} />
             {full && dropPicker(`Your roster is full (${rules.rosterMax}). Pick a player to drop (he goes on waivers):`)}
-            <button className="btn w-full">{full ? "Drop and add" : `Add ${p.name}`}</button>
+            <SubmitButton className="btn w-full">{full ? "Drop and add" : `Add ${p.name}`}</SubmitButton>
           </form>
         )}
       </div>

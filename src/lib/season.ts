@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import { db } from "./supabase/server";
 import { all, rpc } from "./db";
 import { addDays, today } from "./dates";
@@ -13,14 +14,15 @@ import type { Row } from "./supabase/types";
 
 export type Matchup = Row<"matchups">;
 
-export async function matchups(teamId?: string): Promise<Matchup[]> {
+// Read once per page (cache): Matchup and standings both need it.
+export const matchups = cache(async (teamId?: string): Promise<Matchup[]> => {
   const { season } = await getSettings();
   return all((a, b) => {
     let q = db().from("matchups").select("*").eq("season", season);
     if (teamId) q = q.or(`home_team_id.eq.${teamId},away_team_id.eq.${teamId}`);
     return q.order("week").range(a, b);
   });
-}
+});
 
 // The week being played now, else the next one, else the last one.
 export function currentOf(ms: Matchup[], day = today()) {

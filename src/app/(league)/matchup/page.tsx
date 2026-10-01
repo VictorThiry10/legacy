@@ -20,10 +20,11 @@ export const dynamic = "force-dynamic";
 // Head to head, ESPN style: swipe through the week's matchups at the top, the score stays pinned while you
 // scroll, then one day at a time, slot by slot, one team on each side. My own team is always on the right.
 export default async function MatchupPage({ searchParams }: PageProps<"/matchup">) {
-  const [me, teams, sp] = await Promise.all([myTeamOrWelcome(), teamSummaries(), searchParams]);
+  const [me, teams, sp, schedule] = await Promise.all([myTeamOrWelcome(), teamSummaries(), searchParams, load(() => matchups())]);
   const now = today();
   const r = await load(async () => {
-    const all = await matchups();
+    if ("err" in schedule) throw new Error(schedule.err);
+    const all = schedule.ok;
     const mine = all.filter((x) => x.home_team_id === me.id || x.away_team_id === me.id);
     const picked = all.find((x) => x.id === sp.m);
     const week = picked?.week ?? (typeof sp.week === "string" ? Number(sp.week) : (currentOf(mine, now) ?? currentOf(all, now))?.week);
@@ -138,11 +139,11 @@ export default async function MatchupPage({ searchParams }: PageProps<"/matchup"
 
         <div className="flex items-center border-y border-line bg-card">
           {day > m.starts
-            ? <Link href={href({ m: m.id, d: addDays(day, -1) })} transitionTypes={BACK} className="px-6 py-2.5 text-xl text-muted hover:text-fg" aria-label="Previous day">‹</Link>
+            ? <Link href={href({ m: m.id, d: addDays(day, -1) })} prefetch={true} transitionTypes={BACK} className="px-6 py-2.5 text-xl text-muted hover:text-fg" aria-label="Previous day">‹</Link>
             : <span className="px-6 py-2.5 text-xl text-line">‹</span>}
           <div className="flex-1 text-center font-semibold text-accent">{nice(day)}</div>
           {day < m.ends
-            ? <Link href={href({ m: m.id, d: addDays(day, 1) })} transitionTypes={FORWARD} className="px-6 py-2.5 text-xl text-muted hover:text-fg" aria-label="Next day">›</Link>
+            ? <Link href={href({ m: m.id, d: addDays(day, 1) })} prefetch={true} transitionTypes={FORWARD} className="px-6 py-2.5 text-xl text-muted hover:text-fg" aria-label="Next day">›</Link>
             : <span className="px-6 py-2.5 text-xl text-line">›</span>}
         </div>
 
@@ -180,7 +181,7 @@ function PlayerCell({ p, g, abbr, right }: { p?: RosterPlayer; g?: Game; abbr: M
   const logo = nbaLogo(p.nba_team, 48);
   const inj = p.injury_status ? INJ[p.injury_status.toLowerCase()] ?? p.injury_status : null;
   return (
-    <Link href={`/players/${p.id}`} className={`flex min-w-0 flex-col justify-center px-3 py-2.5 leading-tight ${right ? "items-end text-right" : ""}`}>
+    <Link href={`/players/${p.id}`} prefetch={false} transitionTypes={FORWARD} className={`flex min-w-0 flex-col justify-center px-3 py-2.5 leading-tight active:bg-line/50 ${right ? "items-end text-right" : ""}`}>
       <span className={`flex min-w-0 max-w-full items-center gap-1.5 ${right ? "flex-row-reverse" : ""}`}>
         <span className="truncate text-[15px] font-medium">{shortName(p.name)}</span>
         {logo && <img src={logo} alt={p.nba_team ?? ""} className="h-4 w-4 shrink-0" />}

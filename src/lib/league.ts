@@ -37,14 +37,14 @@ export type TeamSummary = Team & { state: TeamState; capSpace: number; adjustmen
 
 // Salary, roster size and contract slots used, for every team. Read once per page (cache).
 export const teamSummaries = cache(async (): Promise<TeamSummary[]> => {
-  const { season, rules } = await getSettings();
   const d = db();
-  const [{ data: teams }, { data: contracts }, { data: adj }] = await Promise.all([
+  const [{ season, rules }, { data: teams }, { data: contracts }, { data: adj }, ir] = await Promise.all([
+    getSettings(),
     d.from("teams").select("*").order("name"),
     d.from("contracts").select("team_id, player_id, salary, years, season_signed, active"),
     d.from("cap_adjustments").select("team_id, amount").eq("active", true),
+    onIR(), // every team's IR, in the same wave
   ]);
-  const ir = await onIR((teams ?? []).map((t) => t.id));
   return (teams ?? []).map((t) => {
     const mine = (contracts ?? []).filter((c) => c.team_id === t.id);
     const adjustments = (adj ?? []).filter((a) => a.team_id === t.id).reduce((a, b) => a + Number(b.amount), 0);

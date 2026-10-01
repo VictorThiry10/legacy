@@ -1,5 +1,7 @@
 import Nav from "@/components/Nav";
 import { getMe } from "@/lib/auth";
+import TimeZone from "@/components/TimeZone";
+import NavTracker from "@/components/NavTracker";
 
 // The league app: tab bar on top once you have a team.
 export default async function LeagueLayout({ children }: { children: React.ReactNode }) {
@@ -12,6 +14,8 @@ export default async function LeagueLayout({ children }: { children: React.React
         </header>
       )}
       <main className="mx-auto max-w-7xl px-4 py-6">{children}</main>
+      <TimeZone />
+      <NavTracker />
     </>
   );
 }

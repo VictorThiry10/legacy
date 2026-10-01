@@ -1,7 +1,8 @@
+import { Suspense } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { db } from "@/lib/supabase/server";
-import { playerOverview } from "@/lib/espn";
+import { playerOverviewCached } from "@/lib/espn";
 import { getMe } from "@/lib/auth";
 import { getSettings, type Player } from "@/lib/league";
 import { money, yearsLeft } from "@/lib/rules";
@@ -9,9 +10,10 @@ import { seasonLabel } from "@/lib/player-stats";
 import { nbaLogo } from "@/lib/names";
 import { waiverFor } from "@/lib/waivers";
 import LocalTime from "@/components/LocalTime";
-import Slide, { BACK, FORWARD } from "@/components/Slide";
+import Slide, { FORWARD } from "@/components/Slide";
+import BackLink from "@/components/BackLink";
 
-export const dynamic = "force-dynamic";
+// Dynamic anyway (it reads who is signed in). Not "force-dynamic": that would switch off the ESPN cache below.
 
 type Line = { label: string; gp: number; min: number; pts: number; reb: number; ast: number; stl: number; blk: number; to: number; fpts: number };
 const TABS = [["overview", "Overview"], ["news", "News"], ["log", "Game Log"], ["moves", "Transactions"]] as const;
@@ -21,12 +23,12 @@ export default async function PlayerPage({ params, searchParams }: PageProps<"/p
   const [{ id }, sp] = await Promise.all([params, searchParams]);
   const tab = TABS.some(([k]) => k === sp.tab) ? (sp.tab as string) : "overview";
   const d = db();
-  const [{ data: player }, { data: contract }, { data: logs }, { data: moves }, overview, me, { season }, onWaivers] = await Promise.all([
+  const overview = playerOverviewCached(id).catch(() => null); // ESPN: streamed in below, the page doesn't wait for it
+  const [{ data: player }, { data: contract }, { data: logs }, { data: moves }, me, { season }, onWaivers] = await Promise.all([
     d.from("players").select("*").eq("id", id).maybeSingle(),
     d.from("contracts").select("id, salary, years, season_signed, team:teams(id, name)").eq("player_id", id).eq("active", true).maybeSingle(),
     d.from("player_games").select("*, game:games(start, home_team_id, away_team_id, home_score, away_score)").eq("player_id", id).eq("played", true),
     d.from("transactions").select("kind, created_at, salary, years, note, team:teams!transactions_team_id_fkey(name), other:teams!transactions_other_team_id_fkey(name)").eq("player_id", id).order("created_at", { ascending: false }),
-    playerOverview(id),
     getMe(),
     getSettings(),
     getMe().then((m) => waiverFor(id, m?.team?.id)),
@@ -58,7 +60,7 @@ export default async function PlayerPage({ params, searchParams }: PageProps<"/p
         <div className="relative -mx-4 -mt-6 overflow-hidden bg-gradient-to-b from-line/80 to-card px-4 pb-4 pt-5 sm:mx-0 sm:mt-0 sm:rounded-2xl">
           {bigLogo && <img src={bigLogo} alt="" className="pointer-events-none absolute -right-6 -top-4 h-56 w-56 max-w-none opacity-[0.08]" />}
           {p.headshot && <img src={p.headshot} alt="" className="pointer-events-none absolute bottom-0 right-0 h-40 max-w-none object-contain sm:h-48" />}
-          <Link href="/players" transitionTypes={BACK} className="absolute right-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full text-2xl text-muted hover:bg-line" aria-label="Close">×</Link>
+          <BackLink href="/players" label="Close" className="absolute right-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full text-2xl text-muted hover:bg-line">×</BackLink>
           <div className="relative w-[62%] space-y-2">
             <h1 className="text-[26px] font-black uppercase leading-[1.05] tracking-tight">{p.name}</h1>
             <div className="flex items-center gap-1.5 text-sm">
@@ -105,11 +107,15 @@ export default async function PlayerPage({ params, searchParams }: PageProps<"/p
 
         {/* stats strip */}
         <div className="relative z-10 -mx-1 mt-3 grid grid-cols-5 rounded-2xl border border-line bg-card py-3 text-center sm:mx-0">
-          <Strip value={overview?.positionRank ? `#${overview.positionRank}` : "–"} label="Pos rank" />
+          <Suspense fallback={<Strip value="–" label="Pos rank" />}>
+            <Espn data={overview}>{(o) => <Strip value={o?.positionRank ? `#${o.positionRank}` : "–"} label="Pos rank" />}</Espn>
+          </Suspense>
           <Strip value={main?.gp ? (main.fpts / main.gp).toFixed(1) : "–"} label="Avg fpts" />
           <Strip value={main?.gp && main.min ? (main.min / main.gp).toFixed(1) : "–"} label="Min" />
           <Strip value={main ? main.fpts.toFixed(0) : "–"} label={main ? `${main.label} fpts` : "Fpts"} />
-          <Strip value={overview?.rostered != null ? overview.rostered.toFixed(1) : "–"} label="% Rost" />
+          <Suspense fallback={<Strip value="–" label="% Rost" />}>
+            <Espn data={overview}>{(o) => <Strip value={o?.rostered != null ? o.rostered.toFixed(1) : "–"} label="% Rost" />}</Espn>
+          </Suspense>
         </div>
 
         {/* tabs */}
@@ -150,28 +156,40 @@ export default async function PlayerPage({ params, searchParams }: PageProps<"/p
                   </div>
                 ) : <p className="text-sm text-muted">No NBA games yet.</p>}
               </Section>
-              {overview?.outlook && (
-                <Section title="Outlook">
-                  <details className="group">
-                    <summary className="list-none cursor-pointer">
-                      <p className="text-sm leading-relaxed line-clamp-4 group-open:line-clamp-none">{overview.outlook}</p>
-                      <span className="mt-1 inline-block text-sm font-medium text-accent group-open:hidden">Show more</span>
-                    </summary>
-                  </details>
-                </Section>
-              )}
-              {(overview?.note || !!overview?.news.length) && (
-                <Section title="Recent news">
-                  <NewsList note={overview?.note ?? null} news={(overview?.news ?? []).slice(0, 3)} />
-                  <Link href={tabHref("news")} scroll={false} className="text-sm font-medium text-accent">All news</Link>
-                </Section>
-              )}
+              <Suspense fallback={null}>
+                <Espn data={overview}>
+                  {(o) => (
+                    <>
+                      {o?.outlook && (
+                        <Section title="Outlook">
+                          <details className="group">
+                            <summary className="list-none cursor-pointer">
+                              <p className="text-sm leading-relaxed line-clamp-4 group-open:line-clamp-none">{o.outlook}</p>
+                              <span className="mt-1 inline-block text-sm font-medium text-accent group-open:hidden">Show more</span>
+                            </summary>
+                          </details>
+                        </Section>
+                      )}
+                      {(o?.note || !!o?.news.length) && (
+                        <Section title="Recent news">
+                          <NewsList note={o?.note ?? null} news={(o?.news ?? []).slice(0, 3)} />
+                          <Link href={tabHref("news")} scroll={false} className="text-sm font-medium text-accent">All news</Link>
+                        </Section>
+                      )}
+                    </>
+                  )}
+                </Espn>
+              </Suspense>
             </>
           )}
 
           {tab === "news" && (
             <Section title="News">
-              {overview && (overview.note || overview.news.length) ? <NewsList note={overview.note} news={overview.news} /> : <p className="text-sm text-muted">No news right now.</p>}
+              <Suspense fallback={<p className="animate-pulse text-sm text-muted">Loading news…</p>}>
+                <Espn data={overview}>
+                  {(o) => (o && (o.note || o.news.length) ? <NewsList note={o.note} news={o.news} /> : <p className="text-sm text-muted">No news right now.</p>)}
+                </Espn>
+              </Suspense>
             </Section>
           )}
 
@@ -261,4 +279,10 @@ function NewsList({ note, news }: { note: { headline: string; story: string | nu
       ))}
     </div>
   );
+}
+
+// Waits for ESPN's overview inside a Suspense boundary, so only that part of the page waits.
+type Overview = Awaited<ReturnType<typeof playerOverviewCached>> | null;
+async function Espn({ data, children }: { data: Promise<Overview>; children: (o: Overview) => React.ReactNode }) {
+  return <>{children(await data)}</>;
 }

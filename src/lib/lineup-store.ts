@@ -1,6 +1,5 @@
 import "server-only";
-import { db } from "./supabase/server";
-import { all, rpc } from "./db";
+import { rpc } from "./db";
 import { buildLineup, isSlot, type LineupRow } from "./lineup";
 import type { RosterPlayer } from "./roster";
 import { today } from "./dates";
@@ -9,9 +8,10 @@ import { today } from "./dates";
 
 type Saved = { team_id: string; day: string; slot: string; player_id: string };
 
-async function savedUpTo(teamIds: string[], day: string): Promise<Saved[]> {
-  if (!teamIds.length) return [];
-  return all((a, b) => db().from("lineups").select("*").in("team_id", teamIds).lte("day", day).order("day").range(a, b));
+// Each team's save that applies on `day` (its latest on or before it). null = every team. One query, any season length.
+async function savedUpTo(teamIds: string[] | null, day: string): Promise<Saved[]> {
+  if (teamIds && !teamIds.length) return [];
+  return rpc("current_lineups", { p_teams: teamIds, p_day: day });
 }
 
 // The save that applies to one team on one day: its latest save on or before that day.
@@ -32,10 +32,10 @@ export async function lineupFor(teamId: string, day: string, roster: RosterPlaye
 }
 
 // Players on IR right now (in the IR slot of their team's current lineup). They don't take a roster spot.
-export async function onIR(teamIds: string[]): Promise<Set<string>> {
-  const day = today();
-  const saved = await savedUpTo(teamIds, day);
-  return new Set(teamIds.flatMap((t) => savedFor(saved, t, day).filter((r) => r.slot === "IR").map((r) => r.playerId)));
+// No team ids = every team.
+export async function onIR(teamIds?: string[]): Promise<Set<string>> {
+  const saved = await savedUpTo(teamIds ?? null, today());
+  return new Set(saved.filter((r) => r.slot === "IR").map((r) => r.player_id));
 }
 
 export async function saveLineup(teamId: string, day: string, rows: LineupRow[]) {
