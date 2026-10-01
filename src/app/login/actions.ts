@@ -20,7 +20,7 @@ export async function sendCode(form: FormData) {
   ]);
   if (dbError) fail("Database problem: " + dbError.message);
   if (!team && (count ?? 0) >= leagueSize) fail(`The league is full (${leagueSize} teams).`);
-  // The email carries a link that works on any device (and a code, once the email template shows it).
+  // The email carries a 6-digit code (typed in the app) and a backup link for the same device.
   const h = await headers();
   const origin = h.get("origin") ?? `https://${h.get("host")}`;
   const { error } = await linkClient().auth.signInWithOtp({ email, options: { shouldCreateUser: true, emailRedirectTo: `${origin}/auth/callback` } });
