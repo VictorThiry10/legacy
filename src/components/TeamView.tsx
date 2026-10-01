@@ -4,7 +4,10 @@ import { boxLines, gamesBetween, teamAbbrs, type BoxLine, type Game } from "@/li
 import { rosters, type RosterPlayer } from "@/lib/roster";
 import { lineupFor } from "@/lib/lineup-store";
 import { canPlay, isStarter, slotLabel } from "@/lib/lineup";
-import { addDays, isDay, longDate, shortDate, today, weekday } from "@/lib/dates";
+import { addDays, isDay, longDate, monthDay, today, weekday } from "@/lib/dates";
+import { viewKey, views } from "@/lib/team-views";
+import type { SeasonLine } from "@/lib/espn-parse";
+import Slide, { BACK, FORWARD } from "./Slide";
 import { money } from "@/lib/rules";
 import { moveSlot } from "@/app/team/actions";
 
@@ -16,12 +19,12 @@ const STATS = [
 type Key = (typeof STATS)[number][0];
 type Agg = Record<Key, number> & { gp: number; fpts: number };
 
-// ESPN style lineup: date strip, stats period, one row per slot. `editable` only for the signed in owner.
+// ESPN style lineup: one day at a time, a stats view picker, one row per slot. `editable` only for the signed in owner.
 export default async function TeamView({ team, editable, base, sp }: { team: TeamSummary; editable: boolean; base: string; sp: Search }) {
   const str = (k: string) => (typeof sp[k] === "string" ? (sp[k] as string) : "");
   const now = today();
   const day = isDay(str("d")) ? str("d") : now;
-  const period = ["day", "7", "15", "season"].includes(str("stat")) ? str("stat") : "season";
+  const period = viewKey(str("stat"));
   const mode = str("mode") === "tot" ? "tot" : "avg";
   const move = editable && day >= now ? str("move") : "";
   const href = (o: Record<string, string>) => {
@@ -30,7 +33,7 @@ export default async function TeamView({ team, editable, base, sp }: { team: Tea
     return `${base}?${q}`;
   };
 
-  const [{ rules }, roster, games, abbr] = await Promise.all([getSettings(), rosters([team.id]), gamesBetween(day, day), teamAbbrs()]);
+  const [{ rules, season }, roster, games, abbr] = await Promise.all([getSettings(), rosters([team.id]), gamesBetween(day, day), teamAbbrs()]);
   const [rows, lines] = await Promise.all([lineupFor(team.id, day, roster), boxLines(roster.map((p) => p.id))]);
   const players = new Map(roster.map((p) => [p.id, p]));
   const gameOf = (p?: RosterPlayer) => (p?.nba_team_id ? games.find((g) => g.home_team_id === p.nba_team_id || g.away_team_id === p.nba_team_id) : undefined);
@@ -38,6 +41,12 @@ export default async function TeamView({ team, editable, base, sp }: { team: Tea
   const inPeriod = (l: BoxLine) =>
     period === "day" ? l.day === day : period === "season" ? true : l.day > addDays(now, -Number(period)) && l.day <= now;
   const agg = (id: string): Agg => {
+    if (period === "last") {
+      // last season's totals, from ESPN (saved on each player)
+      const s = players.get(id)?.last_season as SeasonLine | null | undefined;
+      if (!s?.gp) return { gp: 0, fpts: 0, min: 0, fgm: 0, fgmi: 0, reb: 0, ast: 0, stl: 0, blk: 0, tov: 0, ej: 0, pts: 0 };
+      return { gp: s.gp, fpts: s.fpts, min: s.min, fgm: s.fgm, fgmi: s.fga - s.fgm, reb: s.reb, ast: s.ast, stl: s.stl, blk: s.blk, tov: s.to, ej: s.ej, pts: s.pts };
+    }
     const a: Agg = { gp: 0, fpts: 0, min: 0, fgm: 0, fgmi: 0, reb: 0, ast: 0, stl: 0, blk: 0, tov: 0, ej: 0, pts: 0 };
     for (const l of lines) {
       if (l.playerId !== id || !inPeriod(l)) continue;
@@ -49,9 +58,12 @@ export default async function TeamView({ team, editable, base, sp }: { team: Tea
   const moving = move ? players.get(move) : undefined;
   const movingFrom = rows.find((r) => r.playerId === move)?.slot;
   const starterPts = rows.filter((r) => r.playerId && isStarter(r.slot)).reduce((s, r) => s + agg(r.playerId!).fpts, 0);
-  const periodName = ({ day: shortDate(day), "7": "Last 7 days", "15": "Last 15 days", season: "Season" } as Record<string, string>)[period];
+  const periodName = views(day, season).find((v) => v.key === period)!.label;
+  const dayName = `${weekday(day).charAt(0)}${weekday(day).slice(1).toLowerCase()}, ${monthDay(day)}`;
+  const viewsHref = `/team/views?${new URLSearchParams({ back: base, d: day, stat: period, mode })}`;
 
   return (
+    <Slide>
     <div className="space-y-4">
       <div className="flex flex-wrap items-end gap-x-6 gap-y-2">
         <div>
@@ -64,33 +76,28 @@ export default async function TeamView({ team, editable, base, sp }: { team: Tea
         {editable && <Link href="/players" className="btn-ghost ml-auto">+ Add</Link>}
       </div>
 
-      <div className="card flex items-center gap-2 overflow-x-auto">
-        <span className="text-sm font-medium whitespace-nowrap mr-2">{editable ? "Set Lineup" : "Lineup"}</span>
-        <Link href={href({ d: addDays(day, -1) })} className="btn-ghost px-2" aria-label="Previous day">‹</Link>
-        {[-2, -1, 0, 1, 2].map((n) => {
-          const d = addDays(day, n);
-          return (
-            <Link key={d} href={href({ d })} className={`text-center px-3 leading-tight ${n === 0 ? "text-accent" : "text-muted hover:text-fg"}`}>
-              <div className="text-[11px] uppercase">{shortDate(d)}</div>
-              <div className={`text-lg ${n === 0 ? "font-semibold" : ""}`}>{d === now ? "TODAY" : weekday(d)}</div>
-            </Link>
-          );
-        })}
-        <Link href={href({ d: addDays(day, 1) })} className="btn-ghost px-2" aria-label="Next day">›</Link>
-        {day !== now && <Link href={href({ d: now })} className="text-xs text-muted hover:text-fg ml-2 whitespace-nowrap">Back to today</Link>}
+      <div className="flex items-center border-y border-line -mx-4 px-2 sm:mx-0 sm:rounded-xl sm:border sm:bg-card">
+        <Link href={href({ d: addDays(day, -1) })} transitionTypes={BACK} className="px-4 py-3 text-2xl text-muted hover:text-fg" aria-label="Previous day">‹</Link>
+        <div className="flex-1 text-center leading-tight">
+          <div className="text-lg font-semibold text-accent">{dayName}</div>
+          {day === now ? (
+            <div className="text-[11px] uppercase tracking-wide text-muted">Today</div>
+          ) : (
+            <Link href={href({ d: now })} transitionTypes={day < now ? FORWARD : BACK} className="text-[11px] uppercase tracking-wide text-muted hover:text-fg">Back to today</Link>
+          )}
+        </div>
+        <Link href={href({ d: addDays(day, 1) })} transitionTypes={FORWARD} className="px-4 py-3 text-2xl text-muted hover:text-fg" aria-label="Next day">›</Link>
       </div>
 
+      <Link href={viewsHref} transitionTypes={FORWARD} className="flex items-center justify-center gap-2 rounded-full border-2 border-accent py-2.5 font-semibold text-accent hover:bg-accent/10">
+        {periodName}{period !== "day" && mode === "tot" ? " · Totals" : ""}
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="m6 9 6 6 6-6" /></svg>
+      </Link>
+
+      <Slide key={day}>
+      <div className="space-y-4">
       {str("err") && <p className="card text-bad text-sm">{str("err")}</p>}
       {move && moving && <p className="text-sm text-accent">Moving {moving.name}: pick a slot marked Here, or cancel.</p>}
-
-      <div className="flex flex-wrap items-center gap-x-6 gap-y-2 border-b border-line">
-        <span className="pb-2 -mb-px border-b-2 border-accent font-semibold text-sm">Stats</span>
-        <div className="ml-auto flex flex-wrap items-center gap-3 pb-2 text-sm">
-          <span className="text-muted">Show stats</span>
-          <Pills items={[["day", shortDate(day)], ["7", "Last 7"], ["15", "Last 15"], ["season", "Season"]]} active={period} to={(v) => href({ stat: v })} />
-          {period !== "day" && <Pills items={[["tot", "Totals"], ["avg", "Averages"]]} active={mode} to={(v) => href({ mode: v })} />}
-        </div>
-      </div>
 
       <div className="card p-0 overflow-x-auto">
         <table className="t whitespace-nowrap">
@@ -98,7 +105,7 @@ export default async function TeamView({ team, editable, base, sp }: { team: Tea
             <tr className="[&>th]:text-center [&>th]:border-r [&>th]:border-line">
               <th colSpan={3}>Starters</th>
               <th colSpan={2}>{longDate(day)}</th>
-              <th colSpan={STATS.length}>Stats · {periodName}{period !== "day" ? (mode === "avg" ? " · per game" : " · totals") : ""}</th>
+              <th colSpan={STATS.length}>{periodName}{period !== "day" ? (mode === "avg" ? " · per game" : " · totals") : ""}</th>
               <th colSpan={2} className="!border-r-0">Fantasy pts</th>
             </tr>
             <tr>
@@ -171,17 +178,10 @@ export default async function TeamView({ team, editable, base, sp }: { team: Tea
       </div>
       {day < now && <p className="text-xs text-muted">Past day: this is the lineup that counted. It can no longer change.</p>}
       {editable && day >= now && <p className="text-xs text-muted">Changes apply to this day and every later day until you change them again. A player locks when his game tips off.</p>}
+      </div>
+      </Slide>
     </div>
-  );
-}
-
-function Pills({ items, active, to }: { items: [string, string][]; active: string; to: (v: string) => string }) {
-  return (
-    <span className="inline-flex rounded-lg border border-line overflow-hidden">
-      {items.map(([v, label]) => (
-        <Link key={v} href={to(v)} className={`px-2.5 py-1 text-xs ${v === active ? "bg-fg text-bg" : "text-muted hover:text-fg"}`}>{label}</Link>
-      ))}
-    </span>
+    </Slide>
   );
 }
 
