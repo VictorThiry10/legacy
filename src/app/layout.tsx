@@ -19,7 +19,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
     <html lang="en">
       <body className="min-h-screen">
         {me?.team && (
-          <header className="sticky top-0 z-30 bg-card shadow-[0_1px_2px_rgba(0,0,0,0.12)]">
+          <header className="sticky top-0 z-30 bg-card shadow-[0_1px_2px_rgba(0,0,0,0.12)]" style={{ viewTransitionName: "site-header" }}>
             <Nav />
           </header>
         )}
