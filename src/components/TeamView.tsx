@@ -25,10 +25,9 @@ export default async function TeamView({ team, editable, base, sp }: { team: Tea
   const now = today();
   const day = isDay(str("d")) ? str("d") : now;
   const period = viewKey(str("stat"));
-  const mode = str("mode") === "tot" ? "tot" : "avg";
   const move = editable && day >= now ? str("move") : "";
   const href = (o: Record<string, string>) => {
-    const q = new URLSearchParams({ d: day, stat: period, mode, ...o });
+    const q = new URLSearchParams({ d: day, stat: period, ...o });
     for (const [k, v] of [...q.entries()]) if (!v) q.delete(k);
     return `${base}?${q}`;
   };
@@ -60,7 +59,7 @@ export default async function TeamView({ team, editable, base, sp }: { team: Tea
   const starterPts = rows.filter((r) => r.playerId && isStarter(r.slot)).reduce((s, r) => s + agg(r.playerId!).fpts, 0);
   const periodName = views(day, season).find((v) => v.key === period)!.label;
   const dayName = `${weekday(day).charAt(0)}${weekday(day).slice(1).toLowerCase()}, ${monthDay(day)}`;
-  const viewsHref = `/team/views?${new URLSearchParams({ back: base, d: day, stat: period, mode })}`;
+  const viewsHref = `/team/views?${new URLSearchParams({ back: base, d: day, stat: period })}`;
 
   return (
     <Slide>
@@ -90,26 +89,26 @@ export default async function TeamView({ team, editable, base, sp }: { team: Tea
       </div>
 
       <Link href={viewsHref} transitionTypes={FORWARD} className="flex items-center justify-center gap-2 rounded-full border-2 border-accent py-2.5 font-semibold text-accent hover:bg-accent/10">
-        {periodName}{period !== "day" && mode === "tot" ? " · Totals" : ""}
+        {periodName}
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="m6 9 6 6 6-6" /></svg>
       </Link>
 
       <Slide key={day}>
       <div className="space-y-4">
       {str("err") && <p className="card text-bad text-sm">{str("err")}</p>}
-      {move && moving && <p className="text-sm text-accent">Moving {moving.name}: pick a slot marked Here, or cancel.</p>}
+      {move && moving && <p className="text-sm text-accent">Moving {moving.name}: tap a lit slot to put him there, or his own slot to cancel.</p>}
 
       <div className="card p-0 overflow-x-auto">
         <table className="t whitespace-nowrap">
           <thead>
             <tr className="[&>th]:text-center [&>th]:border-r [&>th]:border-line">
-              <th colSpan={3}>Starters</th>
+              <th colSpan={2}>Starters</th>
               <th colSpan={2}>{longDate(day)}</th>
-              <th colSpan={STATS.length}>{periodName}{period !== "day" ? (mode === "avg" ? " · per game" : " · totals") : ""}</th>
+              <th colSpan={STATS.length}>{periodName}{period !== "day" ? " · per game" : ""}</th>
               <th colSpan={2} className="!border-r-0">Fantasy pts</th>
             </tr>
             <tr>
-              <th>Slot</th><th>Player</th><th>Action</th><th>Opp</th><th>Status</th>
+              <th>Slot</th><th>Player</th><th>Opp</th><th>Status</th>
               {STATS.map(([k, label]) => <th key={k} className="text-right">{label}</th>)}
               <th className="text-right">Tot</th><th className="text-right">Avg</th>
             </tr>
@@ -119,14 +118,28 @@ export default async function TeamView({ team, editable, base, sp }: { team: Tea
               const p = r.playerId ? players.get(r.playerId) : undefined;
               const g = gameOf(p);
               const a = p ? agg(p.id) : null;
-              const val = (k: Key) => (!a || !a.gp ? "--" : mode === "avg" && period !== "day" ? (a[k] / a.gp).toFixed(1) : String(a[k]));
+              const val = (k: Key) => (!a || !a.gp ? "--" : period !== "day" ? (a[k] / a.gp).toFixed(1) : String(a[k]));
               const here =
                 moving && movingFrom && r.slot !== movingFrom && r.slot !== "BE" && canPlay(moving, r.slot) &&
                 (!p || (canPlay(p, movingFrom) && !locked(p)));
               const firstBench = !isStarter(r.slot) && (i === 0 || isStarter(rows[i - 1].slot));
               return (
                 <tr key={`${r.slot}-${i}`} className={`${firstBench ? "[&>td]:border-t-2" : ""} ${r.playerId && r.playerId === move ? "bg-line/50" : ""}`}>
-                  <td className="text-muted">{slotLabel(r.slot)}</td>
+                  <td>
+                    <SlotButton
+                      label={slotLabel(r.slot)}
+                      state={
+                        !editable || day < now ? "off"
+                        : r.playerId && r.playerId === move ? "moving"
+                        : here ? "target"
+                        : p && !move && !locked(p) ? "tap"
+                        : p && locked(p) ? "locked"
+                        : "off"
+                      }
+                      href={r.playerId === move ? href({ move: "" }) : p ? href({ move: p.id }) : ""}
+                      form={here ? { back: href({ move: "" }), day, player: move, to: r.slot } : undefined}
+                    />
+                  </td>
                   <td>
                     <div className="flex items-center gap-2">
                       {p?.headshot ? <img src={p.headshot} alt="" className="h-8 w-8 rounded-full object-cover bg-line" /> : <span className="h-8 w-8 rounded-full bg-line inline-block" />}
@@ -143,23 +156,6 @@ export default async function TeamView({ team, editable, base, sp }: { team: Tea
                       )}
                     </div>
                   </td>
-                  <td>
-                    {editable && day >= now && (
-                      r.playerId && r.playerId === move ? (
-                        <Link href={href({ move: "" })} className="text-xs text-muted hover:text-fg">Cancel</Link>
-                      ) : here ? (
-                        <form action={moveSlot}>
-                          <input type="hidden" name="back" value={href({ move: "" })} />
-                          <input type="hidden" name="day" value={day} />
-                          <input type="hidden" name="player_id" value={move} />
-                          <input type="hidden" name="to" value={r.slot} />
-                          <button className="text-xs font-semibold text-accent">HERE</button>
-                        </form>
-                      ) : p && !move ? (
-                        locked(p) ? <span className="text-xs text-muted">Locked</span> : <Link href={href({ move: p.id })} className="text-xs font-semibold hover:text-accent">MOVE</Link>
-                      ) : null
-                    )}
-                  </td>
                   <td>{g && p ? opp(g, p.nba_team_id!, abbr) : <span className="text-muted">--</span>}</td>
                   <td className="text-xs">{g && p ? status(g, p.nba_team_id!) : <span className="text-muted">--</span>}</td>
                   {STATS.map(([k]) => <td key={k} className={`num text-right ${val(k) === "--" ? "text-muted" : ""}`}>{val(k)}</td>)}
@@ -169,7 +165,7 @@ export default async function TeamView({ team, editable, base, sp }: { team: Tea
               );
             })}
             <tr className="font-medium">
-              <td colSpan={5 + STATS.length} className="text-right text-muted text-xs uppercase">Starters total</td>
+              <td colSpan={4 + STATS.length} className="text-right text-muted text-xs uppercase">Starters total</td>
               <td className="num text-right">{round(starterPts)}</td>
               <td />
             </tr>
@@ -182,6 +178,32 @@ export default async function TeamView({ team, editable, base, sp }: { team: Tea
       </Slide>
     </div>
     </Slide>
+  );
+}
+
+// The slot pill (ESPN style) is the move control: tap to pick a player up, tap a lit slot to drop him there.
+function SlotButton({ label, state, href, form }: {
+  label: string; state: "off" | "tap" | "moving" | "target" | "locked"; href: string;
+  form?: { back: string; day: string; player: string; to: string };
+}) {
+  const pill = "inline-flex h-8 min-w-14 px-3 items-center justify-center rounded-full border-2 text-xs font-bold whitespace-nowrap";
+  if (state === "target" && form) {
+    return (
+      <form action={moveSlot}>
+        <input type="hidden" name="back" value={form.back} />
+        <input type="hidden" name="day" value={form.day} />
+        <input type="hidden" name="player_id" value={form.player} />
+        <input type="hidden" name="to" value={form.to} />
+        <button className={`${pill} border-accent bg-accent text-bg`} aria-label={`Move here (${label})`}>{label}</button>
+      </form>
+    );
+  }
+  if (state === "moving") return <Link href={href} className={`${pill} border-accent bg-accent/20 text-accent`} aria-label="Cancel move">{label}</Link>;
+  if (state === "tap") return <Link href={href} className={`${pill} border-accent text-accent hover:bg-accent/10`} aria-label={`Move (${label})`}>{label}</Link>;
+  return (
+    <span className={`${pill} border-line text-muted`} title={state === "locked" ? "Locked: his game has started" : undefined}>
+      {label}{state === "locked" && " 🔒"}
+    </span>
   );
 }
 
