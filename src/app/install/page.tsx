@@ -10,7 +10,6 @@ export default function Install() {
         <img src="/apple-icon.png" alt="" className="h-16 w-16 rounded-2xl" />
         <div>
           <h1 className="text-2xl font-semibold">Get the Legacy app</h1>
-          <p className="text-sm text-muted">Takes 10 seconds. No App Store needed.</p>
         </div>
       </div>
 

@@ -82,10 +82,8 @@ export default async function TeamView({ team, editable, base, sp }: { team: Tea
             day={day} today={now} label={dayName} path={base}
             params={{ stat: period }} from={`${season}-10-01`} to={`${season + 1}-06-30`}
           />
-          {day === now ? (
-            <div className="text-[10px] uppercase tracking-wide text-muted">Today</div>
-          ) : (
-            <Link href={href({ d: now })} transitionTypes={day < now ? FORWARD : BACK} className="text-[10px] uppercase tracking-wide text-muted hover:text-fg">Back to today</Link>
+          {day !== now && (
+            <Link href={href({ d: now })} transitionTypes={day < now ? FORWARD : BACK} className="block text-[10px] uppercase tracking-wide text-muted hover:text-fg">Today</Link>
           )}
         </div>
         <Link href={href({ d: addDays(day, 1) })} transitionTypes={FORWARD} className="px-4 py-2 text-xl text-muted hover:text-fg" aria-label="Next day">›</Link>
@@ -99,7 +97,7 @@ export default async function TeamView({ team, editable, base, sp }: { team: Tea
       <Slide key={day}>
       <div className="space-y-4">
       {str("err") && <p className="card text-bad text-sm">{str("err")}</p>}
-      {move && moving && <p className="text-sm text-accent">Moving {moving.name}: tap a lit slot to put him there, or his own slot to cancel.</p>}
+      {move && moving && <p className="text-sm text-accent">Moving {moving.name}</p>}
 
       <div className="-mx-4 overflow-x-auto border-y border-line bg-card sm:mx-0 sm:rounded-xl sm:border">
         <table className="t whitespace-nowrap text-[13px] [&_td]:py-1.5 [&_th]:py-2">
@@ -171,8 +169,6 @@ export default async function TeamView({ team, editable, base, sp }: { team: Tea
           </tbody>
         </table>
       </div>
-      {day < now && <p className="text-xs text-muted">Past day: this is the lineup that counted. It can no longer change.</p>}
-      {editable && day >= now && <p className="text-xs text-muted">Changes apply to this day and every later day until you change them again. A player locks when his game tips off.</p>}
       </div>
       </Slide>
     </div>

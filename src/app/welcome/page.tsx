@@ -20,7 +20,7 @@ export default async function Welcome({ searchParams }: PageProps<"/welcome">) {
         <p className="card mt-6 text-sm">Sorry, all {leagueSize} teams are taken.</p>
       ) : (
         <>
-          <p className="text-muted mt-1 text-sm">{leagueSize - taken} of {leagueSize} spots left. Name your team to take one.</p>
+          <p className="text-muted mt-1 text-sm">{leagueSize - taken} of {leagueSize} spots left</p>
           <form action={createTeam} className="mt-6 space-y-3">
             <label className="block">
               <span className="label">Team name</span>

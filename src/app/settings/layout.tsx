@@ -12,7 +12,6 @@ export default async function SettingsLayout({ children }: LayoutProps<"/setting
       <div>
         <Link href="/league" className="text-xs text-muted hover:text-fg">← League</Link>
         <h1 className="text-2xl font-semibold">Settings</h1>
-        <p className="text-muted text-sm">Only the commissioner sees these pages.</p>
       </div>
       <SubNav tabs={[["/settings", "League"], ["/settings/rosters", "Rosters"], ["/settings/schedule", "Schedule"]]} />
       {children}

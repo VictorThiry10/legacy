@@ -128,12 +128,6 @@ export default async function MatchupPage({ searchParams }: PageProps<"/matchup"
           <TeamName t={team(R)} rec={table.find((x) => x.teamId === R)} right />
         </div>
 
-        {now < m.starts && (
-          <p className="border-b border-line bg-line/40 px-4 py-3 text-center text-sm">
-            This matchup starts {nice(m.starts)}. Check back then to follow it live.
-          </p>
-        )}
-
         <div className="flex items-center border-b border-line bg-card">
           {day > m.starts
             ? <Link href={href({ m: m.id, d: addDays(day, -1) })} transitionTypes={BACK} className="px-6 py-2.5 text-xl text-muted hover:text-fg" aria-label="Previous day">‹</Link>

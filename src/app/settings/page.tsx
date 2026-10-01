@@ -35,7 +35,6 @@ export default async function LeagueSettings() {
           ))}
           <div className="col-span-full flex items-center gap-3">
             <button className="btn">Save</button>
-            <span className="text-xs text-muted">Points per stat. Saving recounts the whole season.</span>
           </div>
         </ActionForm>
       </section>
