@@ -3,14 +3,18 @@ import nodemailer from "nodemailer";
 import { commissionerEmail } from "./supabase/server";
 
 // League emails, sent from the commissioner's Gmail. Needs GMAIL_APP_PASSWORD in Vercel (a Google app password).
-// Without it nothing is sent and the caller carries on: email is a nice-to-have, never a blocker.
-export async function sendMail(o: { to: string; subject: string; html: string }): Promise<boolean> {
+// sendMail never blocks the caller: email is a nice-to-have. deliver throws, for the commissioner's test button.
+export async function deliver(o: { to: string; subject: string; html: string }) {
   const pass = process.env.GMAIL_APP_PASSWORD?.replace(/\s+/g, "");
-  if (!pass) return false;
+  if (!pass) throw new Error("GMAIL_APP_PASSWORD is not set in Vercel.");
   const user = process.env.GMAIL_USER || commissionerEmail();
+  const mail = nodemailer.createTransport({ host: "smtp.gmail.com", port: 465, secure: true, auth: { user, pass } });
+  await mail.sendMail({ from: `"Legacy League" <${user}>`, to: o.to, subject: o.subject, html: o.html });
+}
+
+export async function sendMail(o: { to: string; subject: string; html: string }): Promise<boolean> {
   try {
-    const mail = nodemailer.createTransport({ host: "smtp.gmail.com", port: 465, secure: true, auth: { user, pass } });
-    await mail.sendMail({ from: `"Legacy League" <${user}>`, to: o.to, subject: o.subject, html: o.html });
+    await deliver(o);
     return true;
   } catch (e) {
     console.error("email failed", e);
