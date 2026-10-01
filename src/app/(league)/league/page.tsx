@@ -8,6 +8,7 @@ import { weekLabel } from "@/lib/dates";
 import { load } from "@/lib/guard";
 import Moves from "@/components/Moves";
 import TeamAvatar from "@/components/TeamAvatar";
+import PickMenu from "@/components/PickMenu";
 
 export const dynamic = "force-dynamic";
 
@@ -35,7 +36,7 @@ export default async function League({ searchParams }: PageProps<"/league">) {
       </div>
 
       {view === "standings" && <Standings teams={teams} myId={myId} />}
-      {view === "scoreboard" && <Scoreboard team={team} />}
+      {view === "scoreboard" && <Scoreboard team={team} pick={typeof sp.week === "string" ? sp.week : undefined} />}
       {view === "playoffs" && <Playoffs team={team} />}
       {view === "cap" && <Cap teams={teams} myId={myId} rosterMax={rules.rosterMax} />}
 
@@ -100,19 +101,29 @@ async function Standings({ teams, myId }: { teams: TeamSummary[]; myId?: string 
   );
 }
 
-async function Scoreboard({ team }: { team: (id: string | null) => TeamSummary | undefined }) {
+// One week's matchups. The week label is a menu: every week of the season, past and future, playoffs included.
+async function Scoreboard({ team, pick }: { team: (id: string | null) => TeamSummary | undefined; pick?: string }) {
   const r = await load(async () => {
     const all = await matchups();
-    const now = currentOf(all);
-    const week = all.filter((m) => m.week === now?.week);
-    return { week, s: await scores(week) };
+    const weeks = [...new Set(all.map((m) => m.week))];
+    const current = currentOf(all)?.week;
+    const chosen = weeks.includes(Number(pick)) ? Number(pick) : current;
+    const week = all.filter((m) => m.week === chosen);
+    return { all, weeks, current, chosen, week, s: await scores(week.filter((m) => m.home_team_id && m.away_team_id)) };
   });
   if ("err" in r) return <p className="bg-card px-4 py-4 text-sm text-bad">{r.err}</p>;
-  const { week, s } = r.ok;
+  const { all, weeks, current, chosen, week, s } = r.ok;
   if (!week.length) return <p className="bg-card px-4 py-6 text-center text-sm text-muted">No matchups scheduled yet.</p>;
+  const items = weeks.map((w) => ({
+    label: weekLabel(all.find((m) => m.week === w)!),
+    href: w === current ? "/league?view=scoreboard" : `/league?view=scoreboard&week=${w}`,
+    on: w === chosen,
+  }));
   return (
     <div className="bg-card">
-      <div className={`border-y border-line px-4 py-2 ${head}`}>{weekLabel(week[0])}</div>
+      <div className={`border-y border-line px-4 py-2 ${head}`}>
+        <PickMenu label={weekLabel(week[0])} items={items} width={300} className="!font-bold uppercase tracking-wide" />
+      </div>
       {week.map((m) => <Game key={m.id} m={m} team={team} home={s.get(m.id)?.home ?? 0} away={s.get(m.id)?.away ?? 0} />)}
     </div>
   );
