@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import { db } from "./supabase/server";
 import { all, chunks } from "./db";
 import { addDays, etDay } from "./dates";
@@ -23,6 +24,13 @@ export async function teamAbbrs(): Promise<Map<string, string>> {
   return new Map((data ?? []).map((r) => [r.id!, r.abbr ?? "?"]));
 }
 
+// Has the NBA regular season tipped off? Until then, stats show preseason games (handy for testing);
+// from opening night on, preseason games drop out of every stat.
+export const regularSeasonStarted = cache(async () => {
+  const { data } = await db().from("games").select("id").eq("season_type", 2).lte("start", new Date().toISOString()).limit(1);
+  return !!data?.length;
+});
+
 export type BoxLine = {
   playerId: string; day: string; min: number; fgm: number; fga: number; reb: number; ast: number;
   stl: number; blk: number; tov: number; ej: number; pts: number; fpts: number;
@@ -30,16 +38,17 @@ export type BoxLine = {
 
 // Every game each player has played this season, with the US date it was played on.
 export async function boxLines(playerIds: string[]): Promise<BoxLine[]> {
-  const { season } = await getSettings();
+  const [{ season }, regular] = await Promise.all([getSettings(), regularSeasonStarted()]);
   const seasonStart = `${season}-09-01`;
   const out: BoxLine[] = [];
   for (const ids of chunks([...new Set(playerIds)])) {
     const rows = await all((a, b) =>
-      db().from("player_games").select("player_id, min, fgm, fga, reb, ast, stl, blk, tov, ej, pts, fpts, game:games(start)")
+      db().from("player_games").select("player_id, min, fgm, fga, reb, ast, stl, blk, tov, ej, pts, fpts, game:games(start, season_type)")
         .in("player_id", ids).eq("played", true).range(a, b),
     );
     for (const { player_id, game, ...r } of rows) {
       const day = etDay(game.start);
+      if (regular && game.season_type === 1) continue; // preseason only counts until opening night
       if (day >= seasonStart) out.push({ ...r, playerId: player_id, day, fpts: Number(r.fpts) });
     }
   }

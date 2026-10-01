@@ -54,6 +54,28 @@ export function buildSchedule(teamIds: string[], firstDay: string): ScheduleRow[
   ];
 }
 
+/**
+ * The preseason dress rehearsal: the whole season squeezed into the NBA preseason (first to last day):
+ * two short regular weeks (round robin rounds 1 and 2), semifinals, then a final, in about 3 / 4 / 3 / 4 days.
+ */
+export function rehearsalSchedule(teamIds: string[], first: string, last: string): ScheduleRow[] {
+  let span = 1;
+  while (addDays(first, span) <= last) span++;
+  const sizes = [3, 4, 3].map((n) => Math.max(1, Math.round((n * span) / 14)));
+  const starts: string[] = [first];
+  for (const n of sizes) starts.push(addDays(starts[starts.length - 1], n));
+  const phase = (i: number) => ({ week: i + 1, starts: starts[i], ends: i < 3 ? addDays(starts[i + 1], -1) : last });
+  const [r1, r2] = roundRobin(teamIds);
+  const empty = { home_team_id: null, away_team_id: null };
+  return [
+    ...r1.map(([home, away]) => ({ ...phase(0), round: "regular" as const, home_team_id: home, away_team_id: away })),
+    ...(r2 ?? []).map(([home, away]) => ({ ...phase(1), round: "regular" as const, home_team_id: home, away_team_id: away })),
+    { ...phase(2), round: "semi", ...empty },
+    { ...phase(2), round: "semi", ...empty },
+    { ...phase(3), round: "final", ...empty },
+  ];
+}
+
 // Semifinals from the final standings (best first): 1 v 4 and 2 v 3, higher seed at home.
 export const semifinalPairs = (seeds: string[]): [string, string][] => [[seeds[0], seeds[3]], [seeds[1], seeds[2]]];
 

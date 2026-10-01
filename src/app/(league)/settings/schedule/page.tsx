@@ -3,14 +3,15 @@ import { matchups, type Matchup } from "@/lib/season";
 import { today, weekLabel } from "@/lib/dates";
 import ActionForm from "@/components/ActionForm";
 import Field from "@/components/Field";
-import { buildSeason } from "../actions";
+import { buildSeason, rehearse } from "../actions";
 
 export const dynamic = "force-dynamic";
 
 export default async function Schedule() {
   const [teams, ms, { leagueSize }] = await Promise.all([teamSummaries(), matchups(), getSettings()]);
   const name = (id: string | null) => (id ? teams.find((t) => t.id === id)?.name ?? "?" : "To be decided");
-  const started = ms.some((m) => m.starts <= today());
+  const started = ms.some((m) => !m.is_test && m.starts <= today());
+  const testing = ms.some((m) => m.is_test);
   const full = teams.length === leagueSize;
   const group = (round: string) => {
     const rows = ms.filter((m) => m.round === round);
@@ -33,12 +34,24 @@ export default async function Schedule() {
         ) : !full ? (
           <p className="card text-sm text-muted">{teams.length} of {leagueSize} teams have joined.</p>
         ) : (
-          <ActionForm action={buildSeason} className="card grid gap-4 sm:grid-cols-2 items-end" confirm={ms.length ? "Replace the current schedule?" : undefined}>
+          <ActionForm action={buildSeason} className="card grid gap-4 sm:grid-cols-2 items-end" confirm={ms.length ? (testing ? "Build the real schedule? The preseason rehearsal is removed." : "Replace the current schedule?") : undefined}>
             <Field label="Opening night"><input name="first_day" type="date" required className="input" /></Field>
             <button className="btn">{ms.length ? "Rebuild" : "Build"}</button>
           </ActionForm>
         )}
       </section>
+      {!ms.some((m) => !m.is_test) && (
+        <section className="space-y-2 max-w-xl">
+          <h2 className="font-semibold">Preseason dress rehearsal</h2>
+          <ActionForm action={rehearse} className="card space-y-3" confirm={testing ? "Start the rehearsal again? Test matchups are replaced." : undefined}>
+            <p className="text-sm text-muted">
+              The teams that have joined play a mini season on real NBA preseason games: two short weeks, semifinals, final.
+              Building the real schedule removes it.
+            </p>
+            <button className="btn">{testing ? "Restart rehearsal" : "Start rehearsal"}</button>
+          </ActionForm>
+        </section>
+      )}
       {!!ms.length && (
         <>
           <section className="space-y-2">

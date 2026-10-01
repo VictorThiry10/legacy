@@ -4,6 +4,7 @@ import { db } from "./supabase/server";
 import { getSettings } from "./league";
 import { refreshScores } from "./season";
 import { parseEligibility, parseInjuries, parseOverview, parseRoster, parseScoreboard, parseSeasonStats, parseSummary, type GameRow, type PlayerRow } from "./espn-parse";
+import { etDay } from "./dates";
 
 // ESPN's free public data feed (unofficial: if ESPN changes it, espn-parse.ts is the file to fix).
 const BASE = process.env.ESPN_BASE ?? "https://site.api.espn.com/apis/site/v2/sports/basketball/nba";
@@ -154,8 +155,11 @@ async function attempt<T>(fn: () => Promise<T>) {
 }
 
 export async function autoRefresh() {
-  if (!(await due("scores", 4))) return { skipped: "ran less than 4 minutes ago" };
+  // The timer calls every 2 minutes: real work every couple of minutes while games are on, every 10 otherwise.
+  const live = await gamesOnNow();
+  if (!(await due("scores", live ? 1.5 : 9.5))) return { skipped: live ? "ran under 2 minutes ago" : "no games on; ran under 10 minutes ago" };
   const out: Record<string, unknown> = { scores: await attempt(syncRecent) };
+  if (await due("catch-up", 30)) out.catchUp = await attempt(catchUpGames);
   out.fantasy = await attempt(refreshScores); // after box scores, so lineups score the latest stats
   if (await due("players", 55)) out.players = await attempt(syncPlayers);
   if (await due("schedule", 60 * 24 - 10)) {
@@ -163,6 +167,26 @@ export async function autoRefresh() {
     out.schedule = await attempt(() => syncSchedule(new Date(Date.now() - day), new Date(Date.now() + 14 * day)));
   }
   return out;
+}
+
+// A game is on, or tips off within 15 minutes (games last under 4 hours).
+async function gamesOnNow() {
+  const now = Date.now();
+  const { count } = await db().from("games").select("id", { count: "exact", head: true }).eq("final", false)
+    .gte("start", new Date(now - 4 * 3600_000).toISOString()).lte("start", new Date(now + 15 * 60_000).toISOString());
+  return (count ?? 0) > 0;
+}
+
+// Box scores for any game of the last week that started but isn't final in our records: after an outage,
+// the first run back fills every missed day. (Yesterday and today are covered by every run.)
+async function catchUpGames() {
+  const now = Date.now();
+  const { data } = await db().from("games").select("start").eq("final", false)
+    .gte("start", new Date(now - 8 * 24 * 3600_000).toISOString()).lt("start", new Date(now - 36 * 3600_000).toISOString());
+  const days = [...new Set((data ?? []).map((g) => etDay(g.start)))];
+  let lines = 0;
+  for (const day of days) lines += (await syncDay(day.replace(/-/g, ""))).lines;
+  return { days, lines };
 }
 
 export async function lastRuns() {

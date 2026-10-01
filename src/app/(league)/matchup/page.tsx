@@ -6,7 +6,9 @@ import { rosters, type RosterPlayer } from "@/lib/roster";
 import { lineupsOn } from "@/lib/lineup-store";
 import { SLOTS, isStarter, slotLabel, type LineupRow } from "@/lib/lineup";
 import { gamesBetween, linesIn, teamAbbrs, type Game } from "@/lib/nba";
-import { addDays, isDay, monthDay, today, weekday } from "@/lib/dates";
+import { addDays, ago, isDay, minutesSince, monthDay, today, weekday } from "@/lib/dates";
+import { lastRuns } from "@/lib/espn";
+import { STALE_MINUTES } from "@/lib/health";
 import { nbaLogo, shortName } from "@/lib/names";
 import TeamAvatar from "@/components/TeamAvatar";
 import { load } from "@/lib/guard";
@@ -22,7 +24,7 @@ export const dynamic = "force-dynamic";
 // Head to head, ESPN style: swipe through the week's matchups at the top, the score stays pinned while you
 // scroll, then one day at a time, slot by slot, one team on each side. My own team is always on the right.
 export default async function MatchupPage({ searchParams }: PageProps<"/matchup">) {
-  const [me, teams, sp, schedule] = await Promise.all([myTeamOrWelcome(), teamSummaries(), searchParams, load(() => matchups())]);
+  const [me, teams, sp, schedule, runs] = await Promise.all([myTeamOrWelcome(), teamSummaries(), searchParams, load(() => matchups()), lastRuns()]);
   const now = today();
   const r = await load(async () => {
     if ("err" in schedule) throw new Error(schedule.err);
@@ -154,6 +156,8 @@ export default async function MatchupPage({ searchParams }: PageProps<"/matchup"
           <TeamName t={team(R)} rec={table.find((x) => x.teamId === R)} right />
         </div>
 
+        {m.starts <= now && runs.scores && <Updated at={runs.scores} />}
+
         <div className="flex items-center border-y border-line bg-card">
           {!summary && day > m.starts
             ? <Link href={href({ m: m.id, d: addDays(day, -1) })} prefetch={true} transitionTypes={BACK} className="px-6 py-2.5 text-xl text-muted hover:text-fg" aria-label="Previous day">‹</Link>
@@ -178,6 +182,16 @@ export default async function MatchupPage({ searchParams }: PageProps<"/matchup"
         </MatchupSwipe>
       </div>
     </Slide>
+  );
+}
+
+// When scores last came in; red once they're stale (the commissioner is emailed then too).
+function Updated({ at }: { at: string }) {
+  const stale = minutesSince(at) >= STALE_MINUTES;
+  return (
+    <p className={`bg-card px-4 pb-2 text-center text-[11px] ${stale ? "text-bad" : "text-muted"}`}>
+      {stale ? "Scores last updated" : "Scores updated"} {ago(at)}
+    </p>
   );
 }
 

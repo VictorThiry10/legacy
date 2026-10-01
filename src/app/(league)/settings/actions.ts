@@ -6,7 +6,7 @@ import { requireCommish } from "@/lib/auth";
 import { guard } from "@/lib/guard";
 import { SCORING, type Scoring } from "@/lib/rules";
 import { releaseContract, signPlayer, trade } from "@/lib/roster";
-import { createSchedule, rescoreEverything } from "@/lib/season";
+import { createSchedule, createTestSchedule, rescoreEverything } from "@/lib/season";
 import { isDay } from "@/lib/dates";
 import { deliver, emailHtml } from "@/lib/mail";
 
@@ -117,4 +117,8 @@ export async function sendTestEmail() {
     });
     return `Sent to ${me.manager_email}.`;
   });
+}
+
+export async function rehearse() {
+  return commish(() => createTestSchedule());
 }

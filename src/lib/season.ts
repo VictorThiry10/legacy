@@ -2,12 +2,13 @@ import "server-only";
 import { cache } from "react";
 import { db } from "./supabase/server";
 import { all, rpc } from "./db";
-import { addDays, today } from "./dates";
+import { addDays, etDay, today } from "./dates";
 import { getSettings } from "./league";
-import { isSlot, isStarter } from "./lineup";
-import { lineupsOn } from "./lineup-store";
+import { freezeLineup, isSlot, isStarter } from "./lineup";
+import { gamesBetween } from "./nba";
+import { lineupsFrom, savedUpTo } from "./lineup-store";
 import { rosters } from "./roster";
-import { buildSchedule, semifinalPairs, winner } from "./schedule";
+import { buildSchedule, rehearsalSchedule, semifinalPairs, winner } from "./schedule";
 import type { Row } from "./supabase/types";
 
 // The season: who plays whom each week, each team's frozen daily lineups and points, scores and standings.
@@ -33,7 +34,7 @@ export function currentOf(ms: Matchup[], day = today()) {
 export async function createSchedule(firstDay: string) {
   const { season, leagueSize } = await getSettings();
   const existing = await matchups();
-  if (existing.some((m) => m.starts <= today())) throw new Error("The season has started: the schedule can't be rebuilt.");
+  if (existing.some((m) => !m.is_test && m.starts <= today())) throw new Error("The season has started: the schedule can't be rebuilt.");
   const { data: teams } = await db().from("teams").select("id").order("created_at");
   const ids = (teams ?? []).map((t) => t.id);
   if (ids.length !== leagueSize) throw new Error(`Wait until all ${leagueSize} teams have joined (${ids.length} so far).`);
@@ -42,38 +43,108 @@ export async function createSchedule(firstDay: string) {
   const d = db();
   const del = await d.from("matchups").delete().eq("season", season);
   if (del.error) throw new Error(del.error.message);
+  // the dress rehearsal's frozen lineups go too (they're all before opening night)
+  await d.from("lineup_points").delete().lt("day", firstDay);
   const ins = await d.from("matchups").insert(rows);
   if (ins.error) throw new Error(ins.error.message);
   return `${weeks} regular season weeks, then semifinals and a final (two weeks each).`;
 }
 
+// Commissioner: the preseason dress rehearsal. The teams that have joined play a mini season on real NBA
+// preseason games (two regular weeks, semifinals, final) so scoring, lineups, the table and the playoffs can be
+// checked before opening night. Marked as test: building the real schedule removes it, and its lineups.
+export async function createTestSchedule() {
+  const { season } = await getSettings();
+  const existing = await matchups();
+  if (existing.some((m) => !m.is_test)) throw new Error("The real schedule is already built.");
+  const d = db();
+  const [{ data: teams }, { data: pre }] = await Promise.all([
+    d.from("teams").select("id").order("created_at"),
+    d.from("games").select("start").eq("season_type", 1).gte("start", new Date().toISOString()).order("start"),
+  ]);
+  const ids = (teams ?? []).map((t) => t.id);
+  if (ids.length < 4) throw new Error("The rehearsal needs at least 4 teams.");
+  const days = [...new Set((pre ?? []).map((g) => etDay(g.start)))];
+  if (days.length < 4) throw new Error("There isn't enough preseason left to rehearse.");
+  const rows = rehearsalSchedule(ids, days[0], days[days.length - 1]).map((m) => ({ ...m, season, is_test: true }));
+  const del = await d.from("matchups").delete().eq("season", season).eq("is_test", true);
+  if (del.error) throw new Error(del.error.message);
+  const ins = await d.from("matchups").insert(rows);
+  if (ins.error) throw new Error(ins.error.message);
+  return `Rehearsal set: ${days[0]} to ${days[days.length - 1]}, two regular weeks, semifinals, final.`;
+}
+
 // ---------- daily lineups and points ----------
 
-// Freeze every team's lineup for a day into lineup_points (and score it).
+// Freeze every team's lineup for a day into lineup_points (and score it). Each player's slot locks at his
+// tip-off (freezeLineup): moves and roster changes after his game started don't change that day's points.
 export async function snapshotDay(day: string) {
-  const { data: teams } = await db().from("teams").select("id");
+  const d = db();
+  const [{ data: teams }, saved, { data: frozenRows }, games] = await Promise.all([
+    d.from("teams").select("id"),
+    savedUpTo(null, day),
+    d.from("lineup_points").select("team_id, slot, player_id").eq("day", day),
+    gamesBetween(day, day),
+  ]);
   const ids = (teams ?? []).map((t) => t.id);
-  const lineups = await lineupsOn(ids, day, await rosters(ids));
-  const rows = [...lineups].flatMap(([team_id, rows]) =>
-    rows.filter((r) => r.playerId && isSlot(r.slot)).map((r) => ({ team_id, slot: r.slot, player_id: r.playerId! })),
-  );
+  const roster = await rosters(ids);
+  const built = lineupsFrom(saved, ids, day, roster);
+  const frozen = frozenRows ?? [];
+
+  // Tip-off of each player's game that day, once it has started. Frozen players may have left the roster since.
+  const nbaTeam = new Map(roster.map((p) => [p.id, p.nba_team_id]));
+  const gone = [...new Set(frozen.map((r) => r.player_id).filter((id) => !nbaTeam.has(id)))];
+  if (gone.length) {
+    const { data } = await d.from("players").select("id, nba_team_id").in("id", gone);
+    for (const p of data ?? []) nbaTeam.set(p.id, p.nba_team_id);
+  }
+  const now = Date.now();
+  const tipOf = new Map<string, number>();
+  for (const g of games) {
+    const t = Date.parse(g.start);
+    if (t <= now) for (const id of [g.home_team_id, g.away_team_id]) tipOf.set(id, Math.min(tipOf.get(id) ?? Infinity, t));
+  }
+  const tip = (playerId: string) => {
+    const team = nbaTeam.get(playerId);
+    return team ? tipOf.get(team) : undefined;
+  };
+
+  const rows = ids.flatMap((team_id) => {
+    const save = saved.filter((r) => r.team_id === team_id);
+    const savedAt = save.length ? Math.max(...save.map((r) => Date.parse(r.saved_at))) : null;
+    const before = frozen.filter((r) => r.team_id === team_id).map((r) => ({ slot: r.slot, playerId: r.player_id }));
+    return freezeLineup(built.get(team_id) ?? [], before, tip, savedAt)
+      .filter((r) => isSlot(r.slot))
+      .map((r) => ({ team_id, slot: r.slot, player_id: r.playerId }));
+  });
   await rpc("snapshot_lineups", { p_day: day, p_rows: rows });
 }
 
-// Called by the 10 minute refresh (and after lineup changes): today's lineups are re-frozen, yesterday's is only
-// frozen if it never was (so later roster moves can't rewrite it), and both days' points are recounted.
+// Called by the scores timer (and after lineup changes). Looks at every matchup day of the last week:
+// today is re-frozen (slots lock at tip-off), any earlier day never frozen gets frozen now (catch-up after an
+// outage), and all of them are recounted, so points always match the stored box scores.
 export async function refreshScores() {
   const ms = await matchups();
   const now = today();
-  const days = [addDays(now, -1), now].filter((d) => ms.some((m) => m.starts <= d && d <= m.ends));
+  const days: string[] = [];
+  for (let k = 7; k >= 0; k--) {
+    const d = addDays(now, -k);
+    if (ms.some((m) => m.starts <= d && d <= m.ends)) days.push(d);
+  }
   if (!days.length) return { days: 0 };
   await fillPlayoffs(ms);
+  const { data: done } = await db().from("lineup_points").select("day").gte("day", days[0]).lte("day", now);
+  const frozenDays = new Set((done ?? []).map((r) => r.day));
+  const caughtUp: string[] = [];
   for (const day of days) {
-    const { count } = await db().from("lineup_points").select("team_id", { count: "exact", head: true }).eq("day", day);
-    if (day === now || !count) await snapshotDay(day);
+    if (day === now) await snapshotDay(day);
+    else if (!frozenDays.has(day)) {
+      await snapshotDay(day);
+      caughtUp.push(day);
+    }
   }
-  await rpc("score_lineup_points", { p_from: days[0], p_to: days[days.length - 1] });
-  return { days: days.length };
+  await rpc("score_lineup_points", { p_from: days[0], p_to: now });
+  return { days: days.length, caughtUp };
 }
 
 // Playoff teams fill in as soon as the round before is over: semis 1 v 4 and 2 v 3, then the two winners.
