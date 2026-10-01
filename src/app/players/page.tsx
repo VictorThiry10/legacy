@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { db } from "@/lib/supabase/server";
 import { getSettings, type Player } from "@/lib/league";
-import { leagueNews } from "@/lib/espn";
 import { STAT_COLS, fmt, seasonLabel, stat, type StatKey } from "@/lib/player-stats";
 import LocalTime from "@/components/LocalTime";
 
@@ -13,24 +12,11 @@ const POSITIONS = ["PG", "SG", "SF", "PF", "C"];
 export default async function Players({ searchParams }: PageProps<"/players">) {
   const raw = await searchParams;
   const sp: Params = Object.fromEntries(Object.entries(raw).map(([k, v]) => [k, typeof v === "string" ? v : undefined]));
-  const tab = sp.tab === "news" ? "news" : "stats";
   return (
     <div className="space-y-4">
       <h1 className="text-2xl font-semibold">Players</h1>
-      <div className="flex gap-6 border-b border-line text-sm">
-        <Tab href={href(sp, { tab: undefined })} on={tab === "stats"}>Stats</Tab>
-        <Tab href={href(sp, { tab: "news" })} on={tab === "news"}>News</Tab>
-      </div>
-      {tab === "news" ? <News /> : <StatsTable sp={sp} />}
+      <StatsTable sp={sp} />
     </div>
-  );
-}
-
-function Tab({ href, on, children }: { href: string; on: boolean; children: React.ReactNode }) {
-  return (
-    <Link href={href} className={`pb-2 -mb-px border-b-2 ${on ? "border-accent font-semibold" : "border-transparent text-muted hover:text-fg"}`}>
-      {children}
-    </Link>
   );
 }
 
@@ -40,6 +26,12 @@ function href(sp: Params, change: Params) {
   const qs = new URLSearchParams(Object.entries(next).filter(([, v]) => v) as [string, string][]).toString();
   return qs ? `/players?${qs}` : "/players";
 }
+
+// Fantasy team shown as initials: "Brunson Bhenchodes" -> BB, one-word names -> first 3 letters.
+const initials = (name: string) => {
+  const words = name.split(/\s+/).filter(Boolean);
+  return (words.length > 1 ? words.map((w) => w[0]).join("").slice(0, 4) : name.slice(0, 3)).toUpperCase();
+};
 
 async function StatsTable({ sp }: { sp: Params }) {
   const perGame = sp.view !== "tot";
@@ -75,31 +67,21 @@ async function StatsTable({ sp }: { sp: Params }) {
 
   return (
     <>
-      <div className="flex flex-wrap gap-3 items-center justify-between">
-        <form className="flex gap-2 w-full sm:w-auto">
-          {Object.entries(sp).filter(([k, v]) => v && k !== "q").map(([k, v]) => <input key={k} type="hidden" name={k} value={v} />)}
-          <input name="q" defaultValue={sp.q ?? ""} placeholder="Search players" className="input sm:w-64" />
-          <button className="btn">Search</button>
-        </form>
-        <div className="flex flex-wrap gap-2 text-sm">
-          <Pills sp={sp} name="show" value={show} options={[["all", "All"], ["fa", "Free agents"], ["owned", "Rostered"]]} />
-          <Pills sp={sp} name="pos" value={sp.pos ?? ""} options={[["", "All pos"], ...POSITIONS.map((p) => [p, p] as [string, string])]} />
-          <Pills sp={sp} name="view" value={perGame ? "" : "tot"} options={[["", "Averages"], ["tot", "Totals"]]} />
-        </div>
-      </div>
+      <FilterBar sp={sp} show={show} perGame={perGame} />
 
       <div className="card p-0 overflow-x-auto">
         <table className="t players whitespace-nowrap">
           <thead>
             <tr className="group">
-              <th colSpan={2} className="text-center">Players</th>
+              <th colSpan={3} className="text-center">Players</th>
               <th colSpan={2} className="text-center border-l border-line">Next game</th>
               <th colSpan={STAT_COLS.length} className="text-center border-l border-line">{seasonLabel(lastYear)} stats</th>
               <th colSpan={2} className="text-center border-l border-line">Fantasy pts</th>
             </tr>
             <tr>
-              <th className="sticky left-0 bg-card">Player</th>
-              <th>Type</th>
+              <th className="sticky left-0 z-10 bg-card w-12" aria-label="Photo" />
+              <th>Player</th>
+              <th>Team</th>
               <th className="border-l border-line">Opp</th>
               <th>Time</th>
               {STAT_COLS.map((c, i) => (
@@ -116,17 +98,19 @@ async function StatsTable({ sp }: { sp: Params }) {
               const g = p.nba_team_id ? nextGame.get(p.nba_team_id) : undefined;
               return (
                 <tr key={p.id}>
-                  <td className="sticky left-0 bg-card">
-                    <Link href={`/players/${p.id}`} className="flex items-center gap-3 group">
-                      {p.headshot ? <img src={p.headshot} alt="" className="h-9 w-9 rounded-full object-cover bg-line shrink-0" /> : <span className="h-9 w-9 rounded-full bg-line shrink-0" />}
-                      <span>
-                        <span className="text-accent group-hover:underline">{p.name}</span>
-                        {p.injury_status && <span className="ml-2 text-[10px] font-semibold uppercase text-bad" title={p.injury_note ?? ""}>{p.injury_status}</span>}
-                        <span className="block text-xs text-muted">{p.nba_team} · {p.position}</span>
-                      </span>
+                  <td className="sticky left-0 z-10 bg-card pr-0">
+                    <Link href={`/players/${p.id}`} aria-label={p.name}>
+                      {p.headshot ? <img src={p.headshot} alt="" className="h-9 w-9 rounded-full object-cover bg-line" /> : <span className="block h-9 w-9 rounded-full bg-line" />}
                     </Link>
                   </td>
-                  <td className="text-xs">{o ? <Link href={`/teams/${o.id}`} className="hover:underline">{o.name}</Link> : <span className="text-muted">FA</span>}</td>
+                  <td>
+                    <Link href={`/players/${p.id}`} className="group">
+                      <span className="text-accent group-hover:underline">{p.name}</span>
+                      {p.injury_status && <span className="ml-2 text-[10px] font-semibold uppercase text-bad" title={p.injury_note ?? ""}>{p.injury_status}</span>}
+                      <span className="block text-xs text-muted">{p.nba_team} · {p.position}</span>
+                    </Link>
+                  </td>
+                  <td className="text-xs font-semibold">{o ? <Link href={`/teams/${o.id}`} title={o.name} className="hover:underline">{initials(o.name)}</Link> : <span className="text-muted font-normal">FA</span>}</td>
                   <td className="border-l border-line text-accent">{g?.opp ?? <span className="text-muted">–</span>}</td>
                   <td className="text-xs text-muted">{g ? <><LocalTime iso={g.start} mode="day" /> <LocalTime iso={g.start} /></> : "–"}</td>
                   {STAT_COLS.map((c, i) => (
@@ -169,40 +153,54 @@ function SortTh({ sp, sort, asc, k, label, title, className = "" }: { sp: Params
   );
 }
 
-function Pills({ sp, name, value, options }: { sp: Params; name: string; value: string; options: [string, string][] }) {
+const pill = "h-10 min-w-12 px-4 inline-flex items-center justify-center rounded-full text-sm font-semibold whitespace-nowrap";
+const chip = (on: boolean) => `${pill} ${on ? "border-2 border-fg text-fg bg-card" : "bg-line/70 text-muted hover:text-fg"}`;
+
+// ESPN style filter row: search and filter buttons, then position chips. Works without JavaScript (details/summary).
+function FilterBar({ sp, show, perGame }: { sp: Params; show: string; perGame: boolean }) {
+  const filtered = show !== "all" || !perGame;
   return (
-    <div className="flex rounded-lg border border-line overflow-hidden">
+    // Dropdowns are placed against the outer box, so the sideways-scrolling chip row doesn't clip them.
+    <div className="relative">
+    <div className="flex items-center gap-2 overflow-x-auto pb-1 -mx-4 px-4 sm:mx-0 sm:px-0">
+      <details className="shrink-0" open={!!sp.q}>
+        <summary className={`${chip(!!sp.q)} list-none cursor-pointer`} aria-label="Search"><SearchIcon /></summary>
+        <form className="absolute left-0 top-full z-20 mt-1 flex gap-2 card p-2 shadow-lg">
+          {Object.entries(sp).filter(([k, v]) => v && k !== "q").map(([k, v]) => <input key={k} type="hidden" name={k} value={v} />)}
+          <input name="q" defaultValue={sp.q ?? ""} placeholder="Search players" className="input w-56" autoFocus />
+          <button className="btn">Go</button>
+          {sp.q && <Link href={href(sp, { q: undefined })} className="btn-ghost">Clear</Link>}
+        </form>
+      </details>
+      <details className="shrink-0">
+        <summary className={`${chip(filtered)} list-none cursor-pointer`} aria-label="Filters"><FilterIcon /></summary>
+        <div className="absolute left-0 top-full z-20 mt-1 card p-3 shadow-lg space-y-3 text-sm">
+          <Options sp={sp} name="show" value={show} options={[["all", "All players"], ["fa", "Free agents"], ["owned", "Rostered"]]} />
+          <Options sp={sp} name="view" value={perGame ? "" : "tot"} options={[["", "Averages"], ["tot", "Totals"]]} />
+        </div>
+      </details>
+      <span className="h-8 w-px bg-line shrink-0 mx-1" />
+      {[["", "All"], ...POSITIONS.map((p) => [p, p])].map(([v, label]) => (
+        <Link key={label} href={href(sp, { pos: v || undefined })} className={`${chip((sp.pos ?? "") === v)} shrink-0`}>{label}</Link>
+      ))}
+    </div>
+    </div>
+  );
+}
+
+function Options({ sp, name, value, options }: { sp: Params; name: string; value: string; options: [string, string][] }) {
+  return (
+    <div className="flex gap-2">
       {options.map(([v, label]) => (
-        <Link key={v} href={href(sp, { [name]: v || undefined })} className={`px-3 py-1.5 ${value === v ? "bg-fg text-bg" : "hover:bg-line"}`}>
-          {label}
-        </Link>
+        <Link key={v} href={href(sp, { [name]: v || undefined })} className={`${chip(value === v)} h-9 text-xs`}>{label}</Link>
       ))}
     </div>
   );
 }
 
-async function News() {
-  const [items, { data: players }] = await Promise.all([leagueNews(), db().from("players").select("id, name")]);
-  const names = new Map((players ?? []).map((p) => [p.id as string, p.name as string]));
-  if (!items.length) return <p className="card text-muted text-sm">No news right now. ESPN may be unreachable; try again in a minute.</p>;
-  return (
-    <div className="space-y-3">
-      {items.map((n, i) => (
-        <div key={i} className="card flex gap-4">
-          {n.image && <img src={n.image} alt="" className="hidden sm:block h-20 w-32 rounded-lg object-cover bg-line shrink-0" />}
-          <div className="min-w-0 space-y-1">
-            <a href={n.url ?? "#"} target="_blank" rel="noreferrer" className="font-medium hover:underline">{n.headline}</a>
-            {n.description && n.description !== n.headline && <p className="text-sm text-muted">{n.description}</p>}
-            <div className="flex flex-wrap gap-2 items-center text-xs text-muted">
-              {n.published && <LocalTime iso={n.published} mode="day" />}
-              {(n.athleteIds ?? []).filter((id) => names.has(id)).map((id) => (
-                <Link key={id} href={`/players/${id}`} className="rounded-full border border-line px-2 py-0.5 text-fg hover:bg-line">{names.get(id)}</Link>
-              ))}
-            </div>
-          </div>
-        </div>
-      ))}
-      <p className="text-xs text-muted">Headlines from ESPN.</p>
-    </div>
-  );
-}
+const SearchIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
+);
+const FilterIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M4 6h16M7 12h10M10 18h4" /></svg>
+);

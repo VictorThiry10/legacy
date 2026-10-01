@@ -79,6 +79,13 @@ export default async function League() {
         <h2 className="font-semibold">Recent moves</h2>
         <div className="card"><Moves moves={moves} /></div>
       </section>
+      <section className="flex flex-wrap items-center gap-3 border-t border-line pt-4 text-sm">
+        {me?.team?.is_commish && <Link href="/settings" className="btn-ghost">Commissioner settings</Link>}
+        <span className="text-muted">Signed in as {me?.email}</span>
+        <form action="/auth/signout" method="post" className="ml-auto">
+          <button className="btn-ghost">Sign out</button>
+        </form>
+      </section>
     </div>
   );
 }
