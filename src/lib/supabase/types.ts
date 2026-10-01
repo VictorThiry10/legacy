@@ -32,6 +32,11 @@ export type Database = {
         { acquired_via?: string; active?: boolean; created_at?: string; id?: string; player_id: string; salary: number; season_signed: number; team_id: string; years: number },
         [FK<"contracts_player_id_fkey", "player_id", "players">, FK<"contracts_team_id_fkey", "team_id", "teams">]
       >;
+      extension_decisions: Table<
+        { decided_at: string; players: string[]; season: number; team_id: string },
+        { decided_at?: string; players?: string[]; season: number; team_id: string },
+        [FK<"extension_decisions_team_id_fkey", "team_id", "teams">]
+      >;
       games: Table<
         { away_score: number | null; away_team_id: string; final: boolean; home_score: number | null; home_team_id: string; id: string; season_type: number | null; start: string; state: string; updated_at: string },
         { away_score?: number | null; away_team_id: string; final?: boolean; home_score?: number | null; home_team_id: string; id: string; season_type?: number | null; start: string; state: string; updated_at?: string }
@@ -144,6 +149,7 @@ export type Database = {
         Args: { p_teams: string[] | null; p_day: string };
         Returns: { day: string; player_id: string; saved_at: string; slot: string; team_id: string }[];
       };
+      extensions_decide: { Args: { p_team: string; p_season: number; p_rows: Json; p_note: string }; Returns: undefined };
       rescore_all: { Args: { w: Json }; Returns: undefined };
       roster_pickup: {
         Args: { p_team: string; p_player: string; p_salary: number; p_season: number; p_drop: string | null; p_note: string };

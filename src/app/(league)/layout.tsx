@@ -1,7 +1,11 @@
+import { Suspense } from "react";
 import Nav from "@/components/Nav";
 import { getMe } from "@/lib/auth";
+import { extensionOffer } from "@/lib/extensions";
+import type { Team } from "@/lib/league";
 import TimeZone from "@/components/TimeZone";
 import NavTracker from "@/components/NavTracker";
+import Extensions from "@/components/Extensions";
 
 // The league app: tab bar on top once you have a team.
 export default async function LeagueLayout({ children }: { children: React.ReactNode }) {
@@ -14,8 +18,19 @@ export default async function LeagueLayout({ children }: { children: React.React
         </header>
       )}
       <main className="mx-auto max-w-7xl px-4 py-6">{children}</main>
+      {me?.team && (
+        <Suspense fallback={null}>
+          <ExtensionsPrompt team={me.team} />
+        </Suspense>
+      )}
       <TimeZone />
       <NavTracker />
     </>
   );
+}
+
+// The one-off contract extensions pop-up (lib/extensions.ts). It never holds up or breaks the page.
+async function ExtensionsPrompt({ team }: { team: Team }) {
+  const offer = await extensionOffer(team).catch(() => null);
+  return offer ? <Extensions offer={offer} /> : null;
 }
