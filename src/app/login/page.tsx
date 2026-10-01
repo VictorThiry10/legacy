@@ -11,9 +11,9 @@ export default async function Login({ searchParams }: PageProps<"/login">) {
       <h1 className="text-2xl font-semibold">Legacy League</h1>
       {codeStep ? (
         <>
-          <p className="text-muted mt-1 text-sm">We emailed <b className="text-fg">{email}</b>. Tap the link in it, on any device, or type its code here. It can take a minute.</p>
+          <p className="text-muted mt-1 text-sm">We emailed a 6-digit code to <b className="text-fg">{email}</b>. Type it below. It can take a minute, and might land in spam.</p>
           <form action={verifyCode} className="mt-6 space-y-3">
-            <input name="code" inputMode="numeric" autoComplete="one-time-code" required placeholder="Code" maxLength={10} className="input text-center text-lg tracking-widest" autoFocus />
+            <input name="code" inputMode="numeric" autoComplete="one-time-code" required placeholder="6-digit code" maxLength={10} className="input text-center text-lg tracking-widest" autoFocus />
             <button className="btn w-full">Sign in</button>
             {error && <p className="text-bad text-sm">{error}</p>}
           </form>
