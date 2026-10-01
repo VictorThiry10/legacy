@@ -4,6 +4,7 @@ import { getSettings, type Player } from "@/lib/league";
 import { STAT_COLS, fmt, seasonLabel, stat, type StatKey } from "@/lib/player-stats";
 import LocalTime from "@/components/LocalTime";
 import SearchBar from "@/components/SearchBar";
+import { initials } from "@/lib/names";
 
 export const dynamic = "force-dynamic";
 
@@ -27,12 +28,6 @@ function href(sp: Params, change: Params) {
   const qs = new URLSearchParams(Object.entries(next).filter(([, v]) => v) as [string, string][]).toString();
   return qs ? `/players?${qs}` : "/players";
 }
-
-// Fantasy team shown as initials: "Brunson Bhenchodes" -> BB, one-word names -> first 3 letters.
-const initials = (name: string) => {
-  const words = name.split(/\s+/).filter(Boolean);
-  return (words.length > 1 ? words.map((w) => w[0]).join("").slice(0, 4) : name.slice(0, 3)).toUpperCase();
-};
 
 async function StatsTable({ sp }: { sp: Params }) {
   const perGame = sp.view !== "tot";
@@ -70,7 +65,7 @@ async function StatsTable({ sp }: { sp: Params }) {
     <>
       <FilterBar sp={sp} show={show} perGame={perGame} />
 
-      <div className="card p-0 overflow-x-auto">
+      <div className="-mx-4 overflow-x-auto border-y border-line bg-card sm:mx-0 sm:rounded-xl sm:border">
         <table className="t players whitespace-nowrap">
           <thead>
             <tr className="group">
@@ -80,7 +75,7 @@ async function StatsTable({ sp }: { sp: Params }) {
               <th colSpan={2} className="text-center border-l border-line">Fantasy pts</th>
             </tr>
             <tr>
-              <th className="sticky left-0 z-10 bg-card w-12" aria-label="Photo" />
+              <th className="sticky left-0 z-10 bg-card [transform:translateZ(0)] shadow-[2px_0_3px_-2px_rgba(0,0,0,0.25)] w-12 min-w-12" aria-label="Photo" />
               <th>Player</th>
               <th>Team</th>
               <th className="border-l border-line">Opp</th>
@@ -99,9 +94,9 @@ async function StatsTable({ sp }: { sp: Params }) {
               const g = p.nba_team_id ? nextGame.get(p.nba_team_id) : undefined;
               return (
                 <tr key={p.id}>
-                  <td className="sticky left-0 z-10 bg-card pr-0">
+                  <td className="sticky left-0 z-10 bg-card [transform:translateZ(0)] shadow-[2px_0_3px_-2px_rgba(0,0,0,0.25)] w-12 min-w-12 pr-0">
                     <Link href={`/players/${p.id}`} aria-label={p.name}>
-                      {p.headshot ? <img src={p.headshot} alt="" className="h-9 w-9 rounded-full object-cover bg-line" /> : <span className="block h-9 w-9 rounded-full bg-line" />}
+                      {p.headshot ? <img src={p.headshot} alt="" className="block h-9 w-9 max-w-none rounded-full object-cover bg-line" /> : <span className="block h-9 w-9 rounded-full bg-line" />}
                     </Link>
                   </td>
                   <td>

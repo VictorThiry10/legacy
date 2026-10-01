@@ -9,7 +9,7 @@ const TABS = [
   ["/league", "League"],
 ] as const;
 
-// Main tabs, evenly spaced. The open tab gets a thin crimson line underneath.
+// Main tabs, evenly spaced, 44px tall (pages can stick things right below: top-11). The open tab gets a thin crimson line.
 export default function Nav() {
   const path = usePathname();
   const on = (href: string) => path === href || path.startsWith(`${href}/`) || (href === "/team" && (path === "/" || path.startsWith("/teams/"))) || (href === "/league" && path.startsWith("/settings"));
@@ -19,7 +19,7 @@ export default function Nav() {
         <Link
           key={href}
           href={href}
-          className={`py-2.5 text-center text-[13px] font-semibold uppercase tracking-wide border-b-2 ${on(href) ? "border-crimson text-fg" : "border-transparent text-muted hover:text-fg"}`}
+          className={`flex h-11 items-center justify-center text-[13px] font-semibold uppercase tracking-wide border-b-2 ${on(href) ? "border-crimson text-fg" : "border-transparent text-muted hover:text-fg"}`}
         >
           {label}
         </Link>
