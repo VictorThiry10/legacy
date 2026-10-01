@@ -7,7 +7,8 @@ import { lineupsOn } from "@/lib/lineup-store";
 import { SLOTS, isStarter, slotLabel, type LineupRow } from "@/lib/lineup";
 import { boxLines, gamesBetween, teamAbbrs, type Game } from "@/lib/nba";
 import { addDays, isDay, monthDay, today, weekday } from "@/lib/dates";
-import { initials, nbaLogo, shortName } from "@/lib/names";
+import { nbaLogo, shortName } from "@/lib/names";
+import TeamAvatar from "@/components/TeamAvatar";
 import { load } from "@/lib/guard";
 import AutoRefresh from "@/components/AutoRefresh";
 import Slide, { BACK, FORWARD } from "@/components/Slide";
@@ -108,11 +109,11 @@ export default async function MatchupPage({ searchParams }: PageProps<"/matchup"
                 className={`flex shrink-0 snap-start items-center gap-2 rounded-full px-3 py-1.5 text-sm ${x.id === m.id ? "border-2 border-fg" : "border-2 border-transparent bg-line/70"}`}
                 aria-current={x.id === m.id ? "true" : undefined}
               >
-                <Avatar t={team(a)} size="sm" />
+                <TeamAvatar name={team(a)?.name} size="sm" />
                 <span className="num font-semibold">{Math.round(scoreOf(x, a))}</span>
                 <span className="text-xs text-muted">vs</span>
                 <span className="num font-semibold">{Math.round(scoreOf(x, b))}</span>
-                <Avatar t={team(b)} size="sm" />
+                <TeamAvatar name={team(b)?.name} size="sm" />
               </Link>
             );
           })}
@@ -120,8 +121,8 @@ export default async function MatchupPage({ searchParams }: PageProps<"/matchup"
 
         {/* score, pinned under the tabs while scrolling */}
         <div className="sticky top-11 z-20 grid grid-cols-2 items-center bg-card px-4 py-3">
-          <div className="flex items-center gap-3"><Avatar t={team(L)} /><span className="num text-4xl font-black leading-none">{scoreOf(m, L).toFixed(1)}</span></div>
-          <div className="flex items-center justify-end gap-3"><span className="num text-4xl font-black leading-none">{scoreOf(m, R).toFixed(1)}</span><Avatar t={team(R)} /></div>
+          <div className="flex items-center gap-3"><TeamAvatar name={team(L)?.name} size="lg" /><span className="num text-4xl font-black leading-none">{scoreOf(m, L).toFixed(1)}</span></div>
+          <div className="flex items-center justify-end gap-3"><span className="num text-4xl font-black leading-none">{scoreOf(m, R).toFixed(1)}</span><TeamAvatar name={team(R)?.name} size="lg" /></div>
         </div>
         <div className="grid grid-cols-2 gap-4 bg-card px-4 pb-4">
           <TeamName t={team(L)} rec={table.find((x) => x.teamId === L)} />
@@ -151,17 +152,6 @@ export default async function MatchupPage({ searchParams }: PageProps<"/matchup"
         </Slide>
       </div>
     </Slide>
-  );
-}
-
-// A fantasy team's badge: initials on a colour picked from its name.
-function Avatar({ t, size = "lg" }: { t?: TeamSummary; size?: "sm" | "lg" }) {
-  const hue = [...(t?.name ?? "?")].reduce((a, c) => (a * 31 + c.charCodeAt(0)) % 360, 7);
-  const box = size === "sm" ? "h-7 w-7 text-[9px]" : "h-12 w-12 text-sm";
-  return (
-    <span className={`${box} inline-flex shrink-0 items-center justify-center rounded-full font-bold text-white`} style={{ background: t ? `hsl(${hue} 55% 42%)` : "var(--line)" }}>
-      {t ? initials(t.name) : "?"}
-    </span>
   );
 }
 
