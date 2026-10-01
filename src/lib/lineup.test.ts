@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildLineup, canPlay, swap, type LineupPlayer, type LineupRow } from "./lineup";
+import { buildLineup, canPlay, swap, type LineupPlayer, type LineupRow, freezeLineup } from "./lineup";
 import { addDays, etDay } from "./dates";
 
 const p = (id: string, position: string, injury_status: string | null = null): LineupPlayer => ({ id, position, injury_status });
@@ -51,4 +51,34 @@ test("swap checks both players fit", () => {
 test("dates are US Eastern", () => {
   assert.equal(etDay("2026-10-21T02:30:00Z"), "2026-10-20");
   assert.equal(addDays("2026-10-31", 1), "2026-11-01");
+});
+
+test("freeze: each player's slot locks at his tip-off", () => {
+  const T = 1_000; // tip-off time
+  const started = new Set(["a", "b", "x"]);
+  const tip = (id: string) => (started.has(id) ? T : undefined);
+  const row = (slot: string, playerId: string | null) => ({ slot, playerId });
+  const frozen = [{ slot: "PG", playerId: "a" }, { slot: "BE1", playerId: "b" }, { slot: "SG", playerId: "c" }];
+  const sort = (rs: { slot: string; playerId: string }[]) => [...rs].sort((p, q) => p.slot.localeCompare(q.slot));
+
+  // first freeze of the day: as built
+  assert.deepEqual(freezeLineup([row("PG", "a")], [], tip, null), [{ slot: "PG", playerId: "a" }]);
+
+  // a save after tip-off can't move started players; unstarted ones follow the save
+  assert.deepEqual(
+    sort(freezeLineup([row("PG", "b"), row("BE1", "a"), row("SF", "c")], frozen, tip, T + 60)),
+    sort([{ slot: "PG", playerId: "a" }, { slot: "BE1", playerId: "b" }, { slot: "SF", playerId: "c" }]),
+  );
+
+  // a move saved just before tip-off counts even if the last freeze was earlier
+  assert.deepEqual(
+    sort(freezeLineup([row("PG", "b"), row("BE1", "a"), row("SG", "c")], frozen, tip, T - 1)),
+    sort([{ slot: "PG", playerId: "b" }, { slot: "BE1", playerId: "a" }, { slot: "SG", playerId: "c" }]),
+  );
+
+  // dropped after his game: his points stay; picked up after his game: sits out today
+  assert.deepEqual(
+    sort(freezeLineup([row("BE1", "b"), row("SG", "c"), row("PG", "x")], frozen, tip, T + 60)),
+    sort([{ slot: "PG", playerId: "a" }, { slot: "BE1", playerId: "b" }, { slot: "SG", playerId: "c" }]),
+  );
 });

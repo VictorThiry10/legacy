@@ -55,6 +55,14 @@ table.t { @apply w-full text-sm; }
 :where(table.t) th { @apply text-left font-medium text-muted text-xs uppercase tracking-wide py-2 px-2 border-b border-line; }
 :where(table.t) td { @apply py-2 px-2 border-b border-line; }
 .num { font-variant-numeric: tabular-nums; }
+/* PickMenu: drops in under its label, the page dims behind */
+.menu-pop { animation: menu-pop 180ms cubic-bezier(0.22, 1, 0.36, 1) both; transform-origin: top center; }
+@keyframes menu-pop { from { opacity: 0; transform: translateY(-6px) scale(0.97); } }
+.menu-pop-up { animation-name: menu-pop-up; transform-origin: bottom center; }
+@keyframes menu-pop-up { from { opacity: 0; transform: translateY(6px) scale(0.97); } }
+.menu-dim { animation: menu-dim 180ms ease-out both; }
+@keyframes menu-dim { from { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .menu-pop, .menu-pop-up, .menu-dim { animation: none; } }
 /* Players table: short class names for the cells repeated on every row (keeps the page light) */
 table.players th.stick, table.players td.stick {
   position: sticky; left: 0; z-index: 10; width: 3rem; min-width: 3rem; background: var(--card);

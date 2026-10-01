@@ -6,7 +6,9 @@ import { rosters, type RosterPlayer } from "@/lib/roster";
 import { lineupsOn } from "@/lib/lineup-store";
 import { SLOTS, isStarter, slotLabel, type LineupRow } from "@/lib/lineup";
 import { gamesBetween, linesIn, teamAbbrs, type Game } from "@/lib/nba";
-import { addDays, isDay, monthDay, today, weekday } from "@/lib/dates";
+import { addDays, ago, isDay, minutesSince, monthDay, today, weekday } from "@/lib/dates";
+import { lastRuns } from "@/lib/espn";
+import { STALE_MINUTES } from "@/lib/health";
 import { nbaLogo, shortName } from "@/lib/names";
 import TeamAvatar from "@/components/TeamAvatar";
 import { load } from "@/lib/guard";
@@ -14,13 +16,15 @@ import AutoRefresh from "@/components/AutoRefresh";
 import Slide, { BACK, FORWARD } from "@/components/Slide";
 import { GameStatus, oppLabel } from "@/components/GameInfo";
 import MatchupSwipe from "@/components/MatchupSwipe";
+import PickMenu from "@/components/PickMenu";
+import { db } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
 // Head to head, ESPN style: swipe through the week's matchups at the top, the score stays pinned while you
 // scroll, then one day at a time, slot by slot, one team on each side. My own team is always on the right.
 export default async function MatchupPage({ searchParams }: PageProps<"/matchup">) {
-  const [me, teams, sp, schedule] = await Promise.all([myTeamOrWelcome(), teamSummaries(), searchParams, load(() => matchups())]);
+  const [me, teams, sp, schedule, runs] = await Promise.all([myTeamOrWelcome(), teamSummaries(), searchParams, load(() => matchups()), lastRuns()]);
   const now = today();
   const r = await load(async () => {
     if ("err" in schedule) throw new Error(schedule.err);
@@ -33,17 +37,26 @@ export default async function MatchupPage({ searchParams }: PageProps<"/matchup"
     if (!m) return null;
     // left / right: my team on the right; otherwise away left, home right
     const [L, R] = m.home_team_id === me.id ? [m.away_team_id, m.home_team_id] : m.away_team_id === me.id ? [m.home_team_id, m.away_team_id] : [m.away_team_id, m.home_team_id];
-    const asked = typeof sp.d === "string" && isDay(sp.d) ? sp.d : now;
+    // Summary: the whole matchup, each player's points while in a starting slot (the lineup shown is today's).
+    const summary = sp.d === "summary";
+    const asked = !summary && typeof sp.d === "string" && isDay(sp.d) ? sp.d : now;
     const day = asked < m.starts ? m.starts : asked > m.ends ? m.ends : asked;
     const ids = [L, R].filter((x): x is string => !!x);
-    const [s, table, roster, games, abbr] = await Promise.all([
+    const [s, table, roster, games, abbr, counted] = await Promise.all([
       scores(weekMs), standings(teams.map((t) => t.id)), rosters(ids), gamesBetween(day, day), teamAbbrs(),
+      summary && ids.length
+        ? db().from("lineup_points").select("team_id, player_id, slot, fpts").in("team_id", ids).gte("day", m.starts).lte("day", m.ends)
+        : null,
     ]);
     const [lineups, lines] = await Promise.all([lineupsOn(ids, day, roster), linesIn(roster.map((p) => p.id), games.map((g) => g.id))]);
     const pts = new Map<string, number>();
-    for (const l of lines) pts.set(l.playerId, (pts.get(l.playerId) ?? 0) + l.fpts);
+    if (summary) {
+      for (const c of counted?.data ?? []) if (isStarter(c.slot)) pts.set(c.player_id, (pts.get(c.player_id) ?? 0) + Number(c.fpts));
+    } else {
+      for (const l of lines) pts.set(l.playerId, (pts.get(l.playerId) ?? 0) + l.fpts);
+    }
     const weeks = [...new Set(all.map((x) => x.week))];
-    return { m, L, R, day, s, table, roster, games, abbr, pts, lineups, weekMs, weeks };
+    return { m, L, R, day, summary, s, table, roster, games, abbr, pts, lineups, weekMs, weeks };
   });
 
   if ("err" in r) return <p className="card text-bad text-sm">{r.err}</p>;
@@ -55,7 +68,7 @@ export default async function MatchupPage({ searchParams }: PageProps<"/matchup"
       </div>
     );
   }
-  const { m, L, R, day, s, table, roster, games, abbr, pts, lineups, weekMs, weeks } = r.ok;
+  const { m, L, R, day, summary, s, table, roster, games, abbr, pts, lineups, weekMs, weeks } = r.ok;
   const team = (id: string | null) => (id ? teams.find((t) => t.id === id) : undefined);
   const scoreOf = (x: Matchup, id: string | null) => (id === x.home_team_id ? s.get(x.id)?.home : s.get(x.id)?.away) ?? 0;
   const live = m.starts <= now && now <= m.ends;
@@ -78,16 +91,22 @@ export default async function MatchupPage({ searchParams }: PageProps<"/matchup"
   const fmt = (n?: number) => (n == null ? "-" : String(Math.round(n * 10) / 10));
   const starters = pairs.filter((x) => isStarter(x.slot));
   const benchAndIR = pairs.filter((x) => !isStarter(x.slot));
-  const dayTotal = (side: "l" | "r") => starters.reduce((a, x) => a + (dayPts(x[side]) ?? 0), 0);
+  const dayTotal = (side: "l" | "r") => (summary ? scoreOf(m, side === "l" ? L : R) : starters.reduce((a, x) => a + (dayPts(x[side]) ?? 0), 0));
+  const days: string[] = [];
+  for (let d = m.starts; d <= m.ends; d = addDays(d, 1)) days.push(d);
+  const dayMenu = [
+    { label: "Summary", href: href({ m: m.id, d: "summary" }), on: summary },
+    ...days.map((d) => ({ label: nice(d), href: href({ m: m.id, d }), on: !summary && d === day })),
+  ];
   const row = ({ slot, l, r: rr }: { slot: string; l?: LineupRow; r?: LineupRow }, key: string) => {
     const pl = l?.playerId ? players.get(l.playerId) : undefined, pr = rr?.playerId ? players.get(rr.playerId) : undefined;
     return (
       <div key={key} className="grid grid-cols-[minmax(0,1fr)_2.5rem_2.75rem_2.5rem_minmax(0,1fr)] border-b border-line/60 bg-card">
-        <PlayerCell p={pl} g={gameOf(pl)} abbr={abbr} />
+        <PlayerCell p={pl} g={summary ? undefined : gameOf(pl)} abbr={abbr} />
         <div className="flex items-center justify-end pr-2 text-sm num">{fmt(dayPts(l))}</div>
         <div className="flex items-center justify-center bg-line/70 text-[11px] font-bold text-muted">{slotLabel(slot) === "Bench" ? "BE" : slotLabel(slot) === "UTIL" ? "UTL" : slotLabel(slot)}</div>
         <div className="flex items-center pl-2 text-sm num">{fmt(dayPts(rr))}</div>
-        <PlayerCell p={pr} g={gameOf(pr)} abbr={abbr} right />
+        <PlayerCell p={pr} g={summary ? undefined : gameOf(pr)} abbr={abbr} right />
       </div>
     );
   };
@@ -137,22 +156,24 @@ export default async function MatchupPage({ searchParams }: PageProps<"/matchup"
           <TeamName t={team(R)} rec={table.find((x) => x.teamId === R)} right />
         </div>
 
+        {m.starts <= now && runs.scores && <Updated at={runs.scores} />}
+
         <div className="flex items-center border-y border-line bg-card">
-          {day > m.starts
+          {!summary && day > m.starts
             ? <Link href={href({ m: m.id, d: addDays(day, -1) })} prefetch={true} transitionTypes={BACK} className="px-6 py-2.5 text-xl text-muted hover:text-fg" aria-label="Previous day">‹</Link>
             : <span className="px-6 py-2.5 text-xl text-line">‹</span>}
-          <div className="flex-1 text-center font-semibold text-accent">{nice(day)}</div>
-          {day < m.ends
+          <div className="flex-1 text-center"><PickMenu label={summary ? "Summary" : nice(day)} items={dayMenu} /></div>
+          {!summary && day < m.ends
             ? <Link href={href({ m: m.id, d: addDays(day, 1) })} prefetch={true} transitionTypes={FORWARD} className="px-6 py-2.5 text-xl text-muted hover:text-fg" aria-label="Next day">›</Link>
             : <span className="px-6 py-2.5 text-xl text-line">›</span>}
         </div>
 
-        <Slide key={`${m.id}-${day}`}>
+        <Slide key={`${m.id}-${summary ? "summary" : day}`}>
           <div className="bg-card">
             {starters.map((x, k) => row(x, `${x.slot}-${k}`))}
             <div className="grid grid-cols-[1fr_auto_1fr] items-center border-y-4 border-bg bg-card px-4 py-3">
               <span className="num text-2xl font-bold">{dayTotal("l").toFixed(1)}</span>
-              <span className="font-semibold">Daily Total</span>
+              <span className="font-semibold">{summary ? "Total" : "Daily Total"}</span>
               <span className="num text-right text-2xl font-bold">{dayTotal("r").toFixed(1)}</span>
             </div>
             <div className="opacity-80">{benchAndIR.map((x, k) => row(x, `${x.slot}-b${k}`))}</div>
@@ -161,6 +182,16 @@ export default async function MatchupPage({ searchParams }: PageProps<"/matchup"
         </MatchupSwipe>
       </div>
     </Slide>
+  );
+}
+
+// When scores last came in; red once they're stale (the commissioner is emailed then too).
+function Updated({ at }: { at: string }) {
+  const stale = minutesSince(at) >= STALE_MINUTES;
+  return (
+    <p className={`bg-card px-4 pb-2 text-center text-[11px] ${stale ? "text-bad" : "text-muted"}`}>
+      {stale ? "Scores last updated" : "Scores updated"} {ago(at)}
+    </p>
   );
 }
 

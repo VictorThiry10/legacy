@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildSchedule, roundRobin, scoringWeeks, semifinalPairs, winner } from "./schedule";
+import { buildSchedule, rehearsalSchedule, roundRobin, scoringWeeks, semifinalPairs, winner } from "./schedule";
 
 test("round robin: 8 teams, 7 rounds, everyone meets everyone once", () => {
   const teams = ["a", "b", "c", "d", "e", "f", "g", "h"];
@@ -52,4 +52,18 @@ test("playoffs: 1 v 4, 2 v 3; ties go to the higher seed", () => {
   const m = { home_team_id: "s1", away_team_id: "s4" };
   assert.equal(winner(m, 100, 120), "s4");
   assert.equal(winner(m, 110, 110), "s1");
+});
+
+test("preseason rehearsal: two regular weeks, semis, final inside the preseason", () => {
+  const rows = rehearsalSchedule(["a", "b", "c", "d"], "2026-10-03", "2026-10-16");
+  const phases = [...new Map(rows.map((r) => [r.week, `${r.round} ${r.starts} ${r.ends}`])).values()];
+  assert.deepEqual(phases, [
+    "regular 2026-10-03 2026-10-05",
+    "regular 2026-10-06 2026-10-09",
+    "semi 2026-10-10 2026-10-12",
+    "final 2026-10-13 2026-10-16",
+  ]);
+  assert.equal(rows.filter((r) => r.round === "regular").length, 4); // 2 games a week, 4 teams
+  const met = rows.filter((r) => r.round === "regular").map((r) => [r.home_team_id, r.away_team_id].sort().join());
+  assert.equal(new Set(met).size, 4); // nobody meets twice
 });

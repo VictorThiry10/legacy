@@ -6,10 +6,10 @@ import { today } from "./dates";
 
 // Saved lineups. A save on a day applies to that day and every later day until the next save.
 
-type Saved = { team_id: string; day: string; slot: string; player_id: string };
+export type Saved = { team_id: string; day: string; slot: string; player_id: string; saved_at: string };
 
 // Each team's save that applies on `day` (its latest on or before it). null = every team. One query, any season length.
-async function savedUpTo(teamIds: string[] | null, day: string): Promise<Saved[]> {
+export async function savedUpTo(teamIds: string[] | null, day: string): Promise<Saved[]> {
   if (teamIds && !teamIds.length) return [];
   return rpc("current_lineups", { p_teams: teamIds, p_day: day });
 }
@@ -23,7 +23,11 @@ function savedFor(rows: Saved[], teamId: string, day: string) {
 
 // The lineup each team fields on a day (saved lineup, filled out with the current roster).
 export async function lineupsOn(teamIds: string[], day: string, roster: RosterPlayer[]): Promise<Map<string, LineupRow[]>> {
-  const saved = await savedUpTo(teamIds, day);
+  return lineupsFrom(await savedUpTo(teamIds, day), teamIds, day, roster);
+}
+
+// The same, from saves already read (savedUpTo).
+export function lineupsFrom(saved: Saved[], teamIds: string[], day: string, roster: RosterPlayer[]): Map<string, LineupRow[]> {
   return new Map(teamIds.map((t) => [t, buildLineup(savedFor(saved, t, day), roster.filter((p) => p.team_id === t))]));
 }
 

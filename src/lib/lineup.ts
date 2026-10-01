@@ -81,3 +81,38 @@ export function swap(rows: LineupRow[], playerId: string, to: string, players: M
   next[i].playerId = other?.id ?? null;
   return next;
 }
+
+type Placed = { slot: string; playerId: string };
+
+/**
+ * The lineup to freeze for a day, with each player's slot locked at his tip-off.
+ * `built` is the lineup from the saves and the current roster; `frozen` is what was frozen earlier that day
+ * (empty the first time); `tip(id)` is the player's tip-off time if his game has started; `savedAt` is when the
+ * save behind `built` was made (null when the team never saved one).
+ * - Players whose game hasn't started: as built.
+ * - Started players: keep their frozen slot, even if since dropped or traded (their points stay with this team),
+ *   unless a save made before their tip-off puts them elsewhere (a move just before tip-off counts).
+ * - Started players who weren't frozen with this team (picked up after their game): left out for the day.
+ * Locked players win their slot; anyone else built into it sits out that day.
+ */
+export function freezeLineup(built: LineupRow[], frozen: Placed[], tip: (playerId: string) => number | undefined, savedAt: number | null): Placed[] {
+  const rows = built.filter((r): r is Placed => !!r.playerId);
+  if (!frozen.length) return rows;
+  const out = new Map<string, string>(); // slot -> player
+  const placed = new Set<string>();
+  const put = (slot: string, playerId: string) => {
+    if (out.has(slot) || placed.has(playerId)) return;
+    out.set(slot, playerId);
+    placed.add(playerId);
+  };
+  const builtSlot = new Map(rows.map((r) => [r.playerId, r.slot]));
+  for (const f of frozen) {
+    const t = tip(f.playerId);
+    if (t === undefined) continue;
+    const before = savedAt !== null && savedAt <= t && builtSlot.has(f.playerId);
+    put(before ? builtSlot.get(f.playerId)! : f.slot, f.playerId);
+  }
+  const wasFrozen = new Set(frozen.map((f) => f.playerId));
+  for (const r of rows) if (tip(r.playerId) === undefined || wasFrozen.has(r.playerId)) put(r.slot, r.playerId);
+  return [...out].map(([slot, playerId]) => ({ slot, playerId }));
+}

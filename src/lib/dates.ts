@@ -23,5 +23,16 @@ export const longDate = (day: string) => show(day, { month: "long", day: "numeri
 export const weekday = (day: string) => show(day, { weekday: "short" }).toUpperCase(); // TUE
 
 const ROUND: Record<string, string> = { semi: "Semifinal", final: "Final" };
-export const weekLabel = (m: { week: number; starts: string; ends: string; round?: string }) =>
-  `${ROUND[m.round ?? ""] ?? `Week ${m.week}`} · ${monthDay(m.starts)} to ${monthDay(m.ends)}`;
+export const weekLabel = (m: { week: number; starts: string; ends: string; round?: string; is_test?: boolean }) =>
+  `${m.is_test ? "Test · " : ""}${ROUND[m.round ?? ""] ?? `Week ${m.week}`} · ${monthDay(m.starts)} to ${monthDay(m.ends)}`;
+
+export const minutesSince = (iso: string, now = Date.now()) => Math.max(0, Math.round((now - Date.parse(iso)) / 60_000));
+
+// How long ago a moment was, in words: "just now", "3 min ago", "2 h ago", "3 days ago".
+export function ago(iso: string, now = Date.now()) {
+  const m = minutesSince(iso, now);
+  if (m < 1) return "just now";
+  if (m < 60) return `${m} min ago`;
+  if (m < 48 * 60) return `${Math.round(m / 60)} h ago`;
+  return `${Math.round(m / 1440)} days ago`;
+}

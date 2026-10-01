@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { db } from "@/lib/supabase/server";
 import { playerOverviewCached } from "@/lib/espn";
+import { regularSeasonStarted } from "@/lib/nba";
 import { getMe } from "@/lib/auth";
 import { getSettings, type Player } from "@/lib/league";
 import { money, yearsLeft } from "@/lib/rules";
@@ -24,14 +25,15 @@ export default async function PlayerPage({ params, searchParams }: PageProps<"/p
   const tab = TABS.some(([k]) => k === sp.tab) ? (sp.tab as string) : "overview";
   const d = db();
   const overview = playerOverviewCached(id).catch(() => null); // ESPN: streamed in below, the page doesn't wait for it
-  const [{ data: player }, { data: contract }, { data: logs }, { data: moves }, me, { season }, onWaivers] = await Promise.all([
+  const [{ data: player }, { data: contract }, { data: logs }, { data: moves }, me, { season }, onWaivers, regular] = await Promise.all([
     d.from("players").select("*").eq("id", id).maybeSingle(),
     d.from("contracts").select("id, salary, years, season_signed, team:teams(id, name)").eq("player_id", id).eq("active", true).maybeSingle(),
-    d.from("player_games").select("*, game:games(start, home_team_id, away_team_id, home_score, away_score)").eq("player_id", id).eq("played", true),
+    d.from("player_games").select("*, game:games(start, home_team_id, away_team_id, home_score, away_score, season_type)").eq("player_id", id).eq("played", true),
     d.from("transactions").select("kind, created_at, salary, years, note, team:teams!transactions_team_id_fkey(name), other:teams!transactions_other_team_id_fkey(name)").eq("player_id", id).order("created_at", { ascending: false }),
     getMe(),
     getSettings(),
     getMe().then((m) => waiverFor(id, m?.team?.id)),
+    regularSeasonStarted(),
   ]);
   if (!player) notFound();
   const p = player as unknown as Player & { injury_note: string | null };
@@ -39,12 +41,16 @@ export default async function PlayerPage({ params, searchParams }: PageProps<"/p
   const w = c ? null : onWaivers;
 
   // This season so far (our box scores), and last season (ESPN totals).
-  type Log = { pts: number; reb: number; ast: number; stl: number; blk: number; tov: number; min: number; fpts: number; game: { start: string } };
-  const games = ((logs ?? []) as unknown as Log[]).sort((a, b) => b.game.start.localeCompare(a.game.start));
+  // Preseason games count until opening night (handy for testing), then drop out.
+  type Log = { pts: number; reb: number; ast: number; stl: number; blk: number; tov: number; min: number; fpts: number; game: { start: string; season_type: number | null } };
+  const games = ((logs ?? []) as unknown as Log[])
+    .filter((g) => !regular || g.game.season_type !== 1)
+    .sort((a, b) => b.game.start.localeCompare(a.game.start));
+  const preseason = !regular && games.some((g) => g.game.season_type === 1);
   const lines: Line[] = [];
   if (games.length) {
     const sum = (k: keyof Omit<Log, "game">) => games.reduce((a, g) => a + Number(g[k]), 0);
-    lines.push({ label: seasonLabel(season + 1), gp: games.length, min: sum("min"), pts: sum("pts"), reb: sum("reb"), ast: sum("ast"), stl: sum("stl"), blk: sum("blk"), to: sum("tov"), fpts: sum("fpts") });
+    lines.push({ label: preseason ? "Preseason" : seasonLabel(season + 1), gp: games.length, min: sum("min"), pts: sum("pts"), reb: sum("reb"), ast: sum("ast"), stl: sum("stl"), blk: sum("blk"), to: sum("tov"), fpts: sum("fpts") });
   }
   const ls = p.last_season;
   if (ls?.gp) lines.push({ label: seasonLabel(ls.season), gp: ls.gp, min: ls.min, pts: ls.pts, reb: ls.reb, ast: ls.ast, stl: ls.stl, blk: ls.blk, to: ls.to, fpts: ls.fpts });

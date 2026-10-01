@@ -56,6 +56,7 @@ export function parseInjuries(json: InjuryJson): InjuryRow[] {
 export type GameRow = {
   id: string; start: string; state: "pre" | "in" | "post"; final: boolean;
   home_team_id: string; away_team_id: string; home_score: number | null; away_score: number | null;
+  season_type?: number; // 1 preseason, 2 regular season, 3 playoffs (left out when ESPN doesn't say)
 };
 
 type Competition = {
@@ -64,7 +65,7 @@ type Competition = {
   competitors: { id: string; homeAway: string; winner?: boolean; score?: string | { value?: number } }[];
 };
 
-function gameFrom(c: Competition): GameRow {
+function gameFrom(c: Competition, seasonType?: number): GameRow {
   const home = c.competitors.find((x) => x.homeAway === "home")!;
   const away = c.competitors.find((x) => x.homeAway === "away")!;
   const score = (x: typeof home) => {
@@ -80,17 +81,18 @@ function gameFrom(c: Competition): GameRow {
     away_team_id: away.id,
     home_score: score(home),
     away_score: score(away),
+    ...(seasonType ? { season_type: seasonType } : {}),
   };
 }
 
-export function parseScoreboard(json: { events?: { competitions: Competition[] }[] }): GameRow[] {
-  return (json.events ?? []).map((e) => gameFrom(e.competitions[0]));
+export function parseScoreboard(json: { events?: { competitions: Competition[]; season?: { type?: number } }[] }): GameRow[] {
+  return (json.events ?? []).map((e) => gameFrom(e.competitions[0], e.season?.type));
 }
 
 export type Line = { playerId: string; teamId: string; gameId: string; played: boolean; min: number; stats: StatLine; points: number };
 
 type SummaryJson = {
-  header: { competitions: Competition[] };
+  header: { competitions: Competition[]; season?: { type?: number } };
   boxscore: {
     players?: {
       team: { id: string };
@@ -102,7 +104,7 @@ type SummaryJson = {
 
 // One game's box score -> one line per player with our fantasy points.
 export function parseSummary(json: SummaryJson, w: Scoring = SCORING): { game: GameRow; lines: Line[] } {
-  const game = gameFrom(json.header.competitions[0]);
+  const game = gameFrom(json.header.competitions[0], json.header.season?.type);
   const winnerId = game.final ? json.header.competitions[0].competitors.find((c) => c.winner)?.id : undefined;
 
   const techs = new Map<string, number>();

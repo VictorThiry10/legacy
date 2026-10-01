@@ -33,20 +33,20 @@ export type Database = {
         [FK<"contracts_player_id_fkey", "player_id", "players">, FK<"contracts_team_id_fkey", "team_id", "teams">]
       >;
       games: Table<
-        { away_score: number | null; away_team_id: string; final: boolean; home_score: number | null; home_team_id: string; id: string; start: string; state: string; updated_at: string },
-        { away_score?: number | null; away_team_id: string; final?: boolean; home_score?: number | null; home_team_id: string; id: string; start: string; state: string; updated_at?: string }
+        { away_score: number | null; away_team_id: string; final: boolean; home_score: number | null; home_team_id: string; id: string; season_type: number | null; start: string; state: string; updated_at: string },
+        { away_score?: number | null; away_team_id: string; final?: boolean; home_score?: number | null; home_team_id: string; id: string; season_type?: number | null; start: string; state: string; updated_at?: string }
       >;
       lineup_points: Table<
         { day: string; fpts: number; games: number; player_id: string; slot: string; team_id: string },
         { day: string; fpts?: number; games?: number; player_id: string; slot: string; team_id: string },
         [FK<"lineup_points_player_id_fkey", "player_id", "players">, FK<"lineup_points_team_id_fkey", "team_id", "teams">]
       >;
-      lineups: Table<{ day: string; player_id: string; slot: string; team_id: string }, { day: string; player_id: string; slot: string; team_id: string },
+      lineups: Table<{ day: string; player_id: string; saved_at: string; slot: string; team_id: string }, { day: string; player_id: string; saved_at?: string; slot: string; team_id: string },
         [FK<"lineups_player_id_fkey", "player_id", "players">, FK<"lineups_team_id_fkey", "team_id", "teams">]
       >;
       matchups: Table<
-        { away_team_id: string | null; ends: string; home_team_id: string | null; id: string; round: string; season: number; starts: string; week: number },
-        { away_team_id?: string | null; ends: string; home_team_id?: string | null; id?: string; round?: string; season: number; starts: string; week: number },
+        { away_team_id: string | null; ends: string; home_team_id: string | null; id: string; is_test: boolean; round: string; season: number; starts: string; week: number },
+        { away_team_id?: string | null; ends: string; home_team_id?: string | null; id?: string; is_test?: boolean; round?: string; season: number; starts: string; week: number },
         [FK<"matchups_away_team_id_fkey", "away_team_id", "teams">, FK<"matchups_home_team_id_fkey", "home_team_id", "teams">]
       >;
       player_games: Table<
@@ -142,7 +142,7 @@ export type Database = {
       bidding_set_lengths: { Args: { p_team: string; p_season: number; p_rows: Json; p_limits: Json }; Returns: undefined };
       current_lineups: {
         Args: { p_teams: string[] | null; p_day: string };
-        Returns: { day: string; player_id: string; slot: string; team_id: string }[];
+        Returns: { day: string; player_id: string; saved_at: string; slot: string; team_id: string }[];
       };
       rescore_all: { Args: { w: Json }; Returns: undefined };
       roster_pickup: {
