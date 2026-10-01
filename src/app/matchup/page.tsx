@@ -20,13 +20,14 @@ export default async function MatchupPage({ searchParams }: PageProps<"/matchup"
     const mine = await matchups(me.id);
     const m = mine.find((x) => String(x.week) === sp.week) ?? currentOf(mine, now);
     if (!m) return null;
+    const [home, away] = [m.home_team_id!, m.away_team_id!]; // my matchups always have both teams
     const ref = now < m.starts ? m.starts : now > m.ends ? m.ends : now; // lineup shown: today, clamped to the week
-    const [s, pts, roster] = await Promise.all([scores([m]), weekPoints(m), rosters([m.home_team_id, m.away_team_id])]);
+    const [s, pts, roster] = await Promise.all([scores([m]), weekPoints(m), rosters([home, away])]);
     const side = async (teamId: string) => {
       const players = roster.filter((p) => p.team_id === teamId);
       return { teamId, players, rows: await lineupFor(teamId, ref, players) };
     };
-    const sides = await Promise.all([side(m.home_team_id), side(m.away_team_id)]);
+    const sides = await Promise.all([side(home), side(away)]);
     if (m.away_team_id === me.id) sides.reverse();
     return { m, s: s.get(m.id)!, pts, sides, weeks: mine, ref };
   });

@@ -6,7 +6,7 @@ import { getSettings } from "./league";
 import { isSlot, isStarter } from "./lineup";
 import { lineupsOn } from "./lineup-store";
 import { rosters } from "./roster";
-import { buildSchedule } from "./schedule";
+import { buildSchedule, semifinalPairs, winner } from "./schedule";
 import type { Row } from "./supabase/types";
 
 // The season: who plays whom each week, each team's frozen daily lineups and points, scores and standings.
@@ -27,21 +27,22 @@ export function currentOf(ms: Matchup[], day = today()) {
   return ms.find((m) => m.starts <= day && day <= m.ends) ?? ms.find((m) => m.starts > day) ?? ms[ms.length - 1] ?? null;
 }
 
-// Commissioner: (re)build this season's schedule. Refused once a week has started.
-export async function createSchedule(firstDay: string, weeks: number) {
-  const { season } = await getSettings();
+// Commissioner: build this season's schedule once every team has joined. Refused once a week has started.
+export async function createSchedule(firstDay: string) {
+  const { season, leagueSize } = await getSettings();
   const existing = await matchups();
   if (existing.some((m) => m.starts <= today())) throw new Error("The season has started: the schedule can't be rebuilt.");
   const { data: teams } = await db().from("teams").select("id").order("created_at");
   const ids = (teams ?? []).map((t) => t.id);
-  if (ids.length < 2) throw new Error("Need at least 2 teams.");
-  const rows = buildSchedule(ids, firstDay, weeks).map((m) => ({ ...m, season }));
+  if (ids.length !== leagueSize) throw new Error(`Wait until all ${leagueSize} teams have joined (${ids.length} so far).`);
+  const rows = buildSchedule(ids, firstDay).map((m) => ({ ...m, season }));
+  const weeks = rows.filter((m) => m.round === "regular").reduce((a, m) => Math.max(a, m.week), 0);
   const d = db();
   const del = await d.from("matchups").delete().eq("season", season);
   if (del.error) throw new Error(del.error.message);
   const ins = await d.from("matchups").insert(rows);
   if (ins.error) throw new Error(ins.error.message);
-  return `${weeks} weeks, ${rows.length} matchups.`;
+  return `${weeks} regular season weeks, then semifinals and a final (two weeks each).`;
 }
 
 // ---------- daily lineups and points ----------
@@ -64,12 +65,37 @@ export async function refreshScores() {
   const now = today();
   const days = [addDays(now, -1), now].filter((d) => ms.some((m) => m.starts <= d && d <= m.ends));
   if (!days.length) return { days: 0 };
+  await fillPlayoffs(ms);
   for (const day of days) {
     const { count } = await db().from("lineup_points").select("team_id", { count: "exact", head: true }).eq("day", day);
     if (day === now || !count) await snapshotDay(day);
   }
   await rpc("score_lineup_points", { p_from: days[0], p_to: days[days.length - 1] });
   return { days: days.length };
+}
+
+// Playoff teams fill in as soon as the round before is over: semis 1 v 4 and 2 v 3, then the two winners.
+async function fillPlayoffs(ms: Matchup[]) {
+  const now = today();
+  const regular = ms.filter((m) => m.round === "regular");
+  const semis = ms.filter((m) => m.round === "semi");
+  const final = ms.find((m) => m.round === "final");
+  const set = async (id: string, home: string, away: string) => {
+    const { error } = await db().from("matchups").update({ home_team_id: home, away_team_id: away }).eq("id", id);
+    if (error) throw new Error(error.message);
+  };
+  const regularOver = regular.length > 0 && regular.every((m) => m.ends < now);
+  if (regularOver && semis.length === 2 && semis.some((m) => !m.home_team_id)) {
+    const seeds = (await standings([...new Set(regular.flatMap((m) => [m.home_team_id!, m.away_team_id!]))])).map((s) => s.teamId);
+    const pairs = semifinalPairs(seeds);
+    for (const [i, m] of semis.entries()) await set(m.id, ...pairs[i]);
+    return;
+  }
+  if (final && !final.home_team_id && semis.length === 2 && semis.every((m) => m.home_team_id && m.ends < now)) {
+    const s = await scores(semis);
+    const [a, b] = semis.map((m) => winner({ home_team_id: m.home_team_id!, away_team_id: m.away_team_id! }, s.get(m.id)!.home, s.get(m.id)!.away));
+    await set(final.id, a, b); // the 1 v 4 winner hosts
+  }
 }
 
 export type MatchupScore = { home: number; away: number };
@@ -81,9 +107,9 @@ export async function scores(ms: Matchup[]): Promise<Map<string, MatchupScore>> 
   if (!ms.length) return out;
   const from = ms.reduce((a, m) => (m.starts < a ? m.starts : a), ms[0].starts);
   const to = ms.reduce((a, m) => (m.ends > a ? m.ends : a), ms[0].ends);
-  const teams = [...new Set(ms.flatMap((m) => [m.home_team_id, m.away_team_id]))];
+  const teams = [...new Set(ms.flatMap((m) => [m.home_team_id, m.away_team_id]))].filter((t): t is string => !!t);
   const days = await all((a, b) => db().from("team_day_points").select("*").in("team_id", teams).gte("day", from).lte("day", to).range(a, b));
-  const sum = (team: string, m: Matchup) => round1(days.filter((d) => d.team_id === team && d.day! >= m.starts && d.day! <= m.ends).reduce((s, d) => s + Number(d.pts), 0));
+  const sum = (team: string | null, m: Matchup) => round1(days.filter((d) => d.team_id === team && d.day! >= m.starts && d.day! <= m.ends).reduce((s, d) => s + Number(d.pts), 0));
   for (const m of ms) out.set(m.id, { home: sum(m.home_team_id, m), away: sum(m.away_team_id, m) });
   return out;
 }
@@ -91,7 +117,7 @@ export async function scores(ms: Matchup[]): Promise<Map<string, MatchupScore>> 
 // Each player's points while in a starting slot during one matchup week, for both teams.
 export async function weekPoints(m: Matchup): Promise<Map<string, number>> {
   const rows = await all((a, b) =>
-    db().from("lineup_points").select("team_id, player_id, slot, fpts").in("team_id", [m.home_team_id, m.away_team_id])
+    db().from("lineup_points").select("team_id, player_id, slot, fpts").in("team_id", [m.home_team_id, m.away_team_id].filter((t): t is string => !!t))
       .gte("day", m.starts).lte("day", m.ends).range(a, b),
   );
   const out = new Map<string, number>();
@@ -104,14 +130,14 @@ export async function weekPoints(m: Matchup): Promise<Map<string, number>> {
 
 export type Standing = { teamId: string; w: number; l: number; t: number; pf: number; pa: number };
 
-// Wins and losses from finished weeks only.
+// Wins and losses from finished regular season weeks (playoffs don't count).
 export async function standings(teamIds: string[]): Promise<Standing[]> {
-  const done = (await matchups()).filter((m) => m.ends < today());
+  const done = (await matchups()).filter((m) => m.round === "regular" && m.ends < today());
   const s = await scores(done);
   const table = new Map(teamIds.map((id) => [id, { teamId: id, w: 0, l: 0, t: 0, pf: 0, pa: 0 }]));
   for (const m of done) {
     const { home, away } = s.get(m.id)!;
-    const h = table.get(m.home_team_id), a = table.get(m.away_team_id);
+    const h = table.get(m.home_team_id!), a = table.get(m.away_team_id!);
     if (!h || !a) continue;
     h.pf += home; h.pa += away; a.pf += away; a.pa += home;
     if (home > away) { h.w++; a.l++; } else if (away > home) { a.w++; h.l++; } else { h.t++; a.t++; }

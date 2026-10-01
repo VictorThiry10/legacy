@@ -92,9 +92,7 @@ export async function makeTrade(f: FormData) {
 export async function buildSeason(f: FormData) {
   return commish(async () => {
     const first = str(f, "first_day");
-    const weeks = num(f, "weeks");
-    if (!isDay(first)) throw new Error("Pick the first day.");
-    if (!Number.isInteger(weeks) || weeks < 1 || weeks > 30) throw new Error("Weeks: 1 to 30.");
-    return createSchedule(first, weeks);
+    if (!isDay(first)) throw new Error("Pick opening night.");
+    return createSchedule(first);
   });
 }

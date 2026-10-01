@@ -42,8 +42,8 @@ export type Database = {
         [FK<"lineups_player_id_fkey", "player_id", "players">, FK<"lineups_team_id_fkey", "team_id", "teams">]
       >;
       matchups: Table<
-        { away_team_id: string; ends: string; home_team_id: string; id: string; season: number; starts: string; week: number },
-        { away_team_id: string; ends: string; home_team_id: string; id?: string; season: number; starts: string; week: number },
+        { away_team_id: string | null; ends: string; home_team_id: string | null; id: string; round: string; season: number; starts: string; week: number },
+        { away_team_id?: string | null; ends: string; home_team_id?: string | null; id?: string; round?: string; season: number; starts: string; week: number },
         [FK<"matchups_away_team_id_fkey", "away_team_id", "teams">, FK<"matchups_home_team_id_fkey", "home_team_id", "teams">]
       >;
       player_games: Table<

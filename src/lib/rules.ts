@@ -197,6 +197,22 @@ export function fantasyPoints(l: StatLine, w: Scoring = SCORING): number {
   return Math.round(p * 10) / 10;
 }
 
+// A team's cap picture from its contracts. Every active contract counts against the cap; a player on IR
+// doesn't take a roster spot; this season's signings use contract-length slots.
+export function teamState(
+  id: string,
+  contracts: { player_id?: string; salary: number; years: number; season_signed: number; active: boolean }[],
+  adjustments: number,
+  season: number,
+  ir: Set<string> = new Set(),
+): TeamState {
+  const active = contracts.filter((c) => c.active);
+  const slotsUsed: Record<number, number> = {};
+  contracts.filter((c) => c.season_signed === season).forEach((c) => (slotsUsed[c.years] = (slotsUsed[c.years] ?? 0) + 1));
+  const rosterCount = active.filter((c) => !c.player_id || !ir.has(c.player_id)).length;
+  return { id, salary: active.reduce((a, c) => a + Number(c.salary), 0) + adjustments, rosterCount, slotsUsed };
+}
+
 // Is a team legal after a roster move? Hard cap, roster size, and contract-length slots for this season's signings.
 export function rosterProblems(t: TeamState, s: Settings): string[] {
   const out: string[] = [];

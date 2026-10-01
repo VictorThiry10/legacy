@@ -1,8 +1,9 @@
 import "server-only";
 import { db } from "./supabase/server";
 import { all, rpc } from "./db";
-import { getSettings, teamState, type Player } from "./league";
-import { money, rosterProblems } from "./rules";
+import { getSettings, type Player } from "./league";
+import { money, rosterProblems, teamState } from "./rules";
+import { onIR } from "./lineup-store";
 
 // Rosters and every way they change. All roster moves go through here: each one is checked against the
 // league rules, then written in one step together with its line in the transactions log.
@@ -19,22 +20,28 @@ export async function rosters(teamIds: string[]): Promise<RosterPlayer[]> {
   return rows.map(({ player, id, ...c }) => ({ ...(player as Player), ...c, contract_id: id, salary: Number(c.salary) }));
 }
 
+type Change = { teamId: string; add: { player_id?: string; salary: number; years: number; season_signed: number }[]; remove: string[] };
+
 // Would these teams still be legal with these contract changes? Throws with every problem, unless overridden.
-async function check(changes: { teamId: string; add: { salary: number; years: number; season_signed: number }[]; remove: string[] }[], override: boolean) {
+// Trades only need every team under the cap (capOnly); signings also check roster spots and contract slots.
+async function check(changes: Change[], override: boolean, capOnly = false) {
   const { season, rules } = await getSettings();
   const ids = changes.map((c) => c.teamId);
   const [{ data: contracts }, { data: adj }, { data: teams }] = await Promise.all([
-    db().from("contracts").select("id, team_id, salary, years, season_signed, active").in("team_id", ids),
+    db().from("contracts").select("id, team_id, player_id, salary, years, season_signed, active").in("team_id", ids),
     db().from("cap_adjustments").select("team_id, amount").eq("active", true).in("team_id", ids),
     db().from("teams").select("id, name").in("id", ids),
   ]);
+  const ir = await onIR(ids);
   const problems: string[] = [];
   for (const c of changes) {
     const mine = (contracts ?? []).filter((x) => x.team_id === c.teamId && !c.remove.includes(x.id));
     const after = [...mine, ...c.add.map((a) => ({ ...a, active: true }))];
     const extra = (adj ?? []).filter((a) => a.team_id === c.teamId).reduce((s, a) => s + Number(a.amount), 0);
     const name = teams?.find((t) => t.id === c.teamId)?.name ?? "Team";
-    problems.push(...rosterProblems(teamState(c.teamId, after, extra, season), rules).map((p) => `${name}: ${p}`));
+    const state = teamState(c.teamId, after, extra, season, ir);
+    const found = capOnly ? (state.salary > rules.cap ? [`over the ${money(rules.cap)} cap by ${money(state.salary - rules.cap)}`] : []) : rosterProblems(state, rules);
+    problems.push(...found.map((p) => `${name}: ${p}`));
   }
   if (problems.length && !override) throw new Error(`Not allowed: ${problems.join("; ")}. Tick "override" to do it anyway.`);
   return { season, note: problems.length ? `Rules overridden (${problems.join("; ")})` : "" };
@@ -69,7 +76,7 @@ export async function releaseContract(contractId: string, note?: string) {
 export async function trade(o: { teamA: string; teamB: string; fromA: string[]; fromB: string[]; note?: string; override?: boolean }) {
   if (o.teamA === o.teamB) throw new Error("Pick two different teams.");
   if (!o.fromA.length && !o.fromB.length) throw new Error("Pick at least one player.");
-  const { data: moving } = await db().from("contracts").select("id, salary, years, season_signed").in("id", [...o.fromA, ...o.fromB]);
+  const { data: moving } = await db().from("contracts").select("id, player_id, salary, years, season_signed").in("id", [...o.fromA, ...o.fromB]);
   const pick = (ids: string[]) => (moving ?? []).filter((c) => ids.includes(c.id));
   const { season, note } = await check(
     [
@@ -77,6 +84,7 @@ export async function trade(o: { teamA: string; teamB: string; fromA: string[]; 
       { teamId: o.teamB, add: pick(o.fromA), remove: o.fromB },
     ],
     !!o.override,
+    true, // trades: each team just has to stay under the cap
   );
   await rpc("roster_trade", { p_team_a: o.teamA, p_team_b: o.teamB, p_from_a: o.fromA, p_from_b: o.fromB, p_season: season, p_note: join(o.note, note) });
   return "Trade done.";

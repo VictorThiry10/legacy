@@ -42,7 +42,7 @@ async function CurrentMatchup({ myId, name }: { myId: string; name: (id: string)
   if ("err" in r) return <p className="text-sm text-bad">{r.err}</p>;
   if (!r.ok) return <p className="text-sm text-muted">No matchups scheduled yet.</p>;
   const { m, s } = r.ok;
-  const sides: [string, number][] = [[m.home_team_id, s.home], [m.away_team_id, s.away]];
+  const sides: [string, number][] = [[m.home_team_id!, s.home], [m.away_team_id!, s.away]]; // my matchups always have both teams
   if (m.away_team_id === myId) sides.reverse();
   return (
     <Link href="/matchup" className="block space-y-2">

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { resolveRound, DEFAULT_SETTINGS as S, drawLottery, lotteryOdds, fantasyPoints, canRenounce, rosterProblems, type TeamState, type Bid } from "./rules";
+import { resolveRound, DEFAULT_SETTINGS as S, drawLottery, lotteryOdds, fantasyPoints, canRenounce, rosterProblems, teamState, type TeamState, type Bid } from "./rules";
 
 const M = 1_000_000;
 const team = (id: string, salary = 0, rosterCount = 0): TeamState => ({ id, salary, rosterCount, slotsUsed: {} });
@@ -97,4 +97,12 @@ test("roster problems: cap, roster size, contract slots", () => {
   const p = rosterProblems(bad, S);
   assert.equal(p.length, 3);
   assert.match(p[0], /over the \$150m cap by \$1m/);
+});
+
+test("team state: every contract counts against the cap, IR doesn't take a roster spot", () => {
+  const c = (player_id: string, salary: number, season_signed = 2025) => ({ player_id, salary, years: 2, season_signed, active: true });
+  const t = teamState("a", [c("p1", 10_000_000), c("p2", 5_000_000, 2026), { ...c("p3", 3_000_000), active: false }], 1_000_000, 2026, new Set(["p2"]));
+  assert.equal(t.salary, 16_000_000); // released p3 doesn't count, the $1m adjustment does
+  assert.equal(t.rosterCount, 1); // p2 is on IR
+  assert.deepEqual(t.slotsUsed, { 2: 1 }); // only this season's signing uses a slot
 });

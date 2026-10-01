@@ -2,6 +2,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireTeam } from "@/lib/auth";
+import { getSettings } from "@/lib/league";
 import { gamesBetween } from "@/lib/nba";
 import { rosters } from "@/lib/roster";
 import { lineupFor, saveLineup } from "@/lib/lineup-store";
@@ -32,6 +33,13 @@ export async function moveSlot(f: FormData) {
     if (started(playerId) || started(rows.find((r) => r.slot === to)?.playerId)) throw new Error("Locked: that player's game has started.");
     const next = swap(rows, playerId, to, players);
     if (typeof next === "string") throw new Error(next);
+    // IR doesn't take a roster spot, so coming off it needs a free one.
+    const irBefore = rows.find((r) => r.slot === "IR")?.playerId;
+    const irAfter = next.find((r) => r.slot === "IR")?.playerId;
+    const { rules } = await getSettings();
+    if (irBefore && irBefore !== irAfter && roster.length - (irAfter ? 1 : 0) > rules.rosterMax) {
+      throw new Error(`Your roster is full (${rules.rosterMax}): release a player before bringing ${players.get(irBefore)!.name} off IR.`);
+    }
     await saveLineup(team.id, day, next);
     if (day === today()) await refreshScores(); // live matchup shows the new lineup right away
   } catch (e) {

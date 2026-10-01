@@ -1,8 +1,9 @@
 import "server-only";
 import { db } from "./supabase/server";
-import { SCORING, type Scoring, type Settings, type TeamState } from "./rules";
+import { SCORING, teamState, type Scoring, type Settings, type TeamState } from "./rules";
 import type { Row } from "./supabase/types";
 import type { SeasonLine } from "./espn-parse";
+import { onIR } from "./lineup-store";
 
 export type Team = Row<"teams">;
 
@@ -37,26 +38,14 @@ export async function teamSummaries(): Promise<TeamSummary[]> {
   const d = db();
   const [{ data: teams }, { data: contracts }, { data: adj }] = await Promise.all([
     d.from("teams").select("*").order("name"),
-    d.from("contracts").select("team_id, salary, years, season_signed, active"),
+    d.from("contracts").select("team_id, player_id, salary, years, season_signed, active"),
     d.from("cap_adjustments").select("team_id, amount").eq("active", true),
   ]);
+  const ir = await onIR((teams ?? []).map((t) => t.id));
   return (teams ?? []).map((t) => {
     const mine = (contracts ?? []).filter((c) => c.team_id === t.id);
     const adjustments = (adj ?? []).filter((a) => a.team_id === t.id).reduce((a, b) => a + Number(b.amount), 0);
-    const state = teamState(t.id, mine, adjustments, season);
+    const state = teamState(t.id, mine, adjustments, season, ir);
     return { ...t, state, capSpace: rules.cap - state.salary, adjustments };
   });
-}
-
-// A team's cap picture from its contracts (active ones count; this season's signings use contract slots).
-export function teamState(
-  id: string,
-  contracts: { salary: number; years: number; season_signed: number; active: boolean }[],
-  adjustments: number,
-  season: number,
-): TeamState {
-  const active = contracts.filter((c) => c.active);
-  const slotsUsed: Record<number, number> = {};
-  contracts.filter((c) => c.season_signed === season).forEach((c) => (slotsUsed[c.years] = (slotsUsed[c.years] ?? 0) + 1));
-  return { id, salary: active.reduce((a, c) => a + Number(c.salary), 0) + adjustments, rosterCount: active.length, slotsUsed };
 }

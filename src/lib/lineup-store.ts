@@ -3,6 +3,7 @@ import { db } from "./supabase/server";
 import { all, rpc } from "./db";
 import { buildLineup, isSlot, type LineupRow } from "./lineup";
 import type { RosterPlayer } from "./roster";
+import { today } from "./dates";
 
 // Saved lineups. A save on a day applies to that day and every later day until the next save.
 
@@ -28,6 +29,13 @@ export async function lineupsOn(teamIds: string[], day: string, roster: RosterPl
 
 export async function lineupFor(teamId: string, day: string, roster: RosterPlayer[]): Promise<LineupRow[]> {
   return (await lineupsOn([teamId], day, roster)).get(teamId)!;
+}
+
+// Players on IR right now (in the IR slot of their team's current lineup). They don't take a roster spot.
+export async function onIR(teamIds: string[]): Promise<Set<string>> {
+  const day = today();
+  const saved = await savedUpTo(teamIds, day);
+  return new Set(teamIds.flatMap((t) => savedFor(saved, t, day).filter((r) => r.slot === "IR").map((r) => r.playerId)));
 }
 
 export async function saveLineup(teamId: string, day: string, rows: LineupRow[]) {
