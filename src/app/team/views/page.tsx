@@ -13,9 +13,8 @@ export default async function Views({ searchParams }: PageProps<"/team/views">) 
   const back = str("back").startsWith("/team") ? str("back") : "/team";
   const day = isDay(str("d")) ? str("d") : today();
   const current = viewKey(str("stat"));
-  const mode = str("mode") === "tot" ? "tot" : "avg";
   const { season } = await getSettings();
-  const to = (stat: string, m = mode) => `${back}?${new URLSearchParams({ d: day, stat, mode: m })}`;
+  const to = (stat: string) => `${back}?${new URLSearchParams({ d: day, stat })}`;
 
   return (
     <Slide>
@@ -36,14 +35,6 @@ export default async function Views({ searchParams }: PageProps<"/team/views">) 
             </li>
           ))}
         </ul>
-        <div className="flex items-center justify-between px-4 py-4 text-sm">
-          <span className="text-muted">Show stats as</span>
-          <span className="inline-flex rounded-full border border-line overflow-hidden">
-            {[["avg", "Averages"], ["tot", "Totals"]].map(([m, label]) => (
-              <Link key={m} href={to(current, m)} transitionTypes={BACK} className={`px-4 py-1.5 ${m === mode ? "bg-fg text-bg" : "text-muted"}`}>{label}</Link>
-            ))}
-          </span>
-        </div>
       </div>
     </Slide>
   );
