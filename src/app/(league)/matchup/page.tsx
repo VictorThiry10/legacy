@@ -177,7 +177,7 @@ const INJ: Record<string, string> = { "day-to-day": "DTD", out: "O", questionabl
 
 function PlayerCell({ p, g, abbr, right }: { p?: RosterPlayer; g?: Game; abbr: Map<string, string>; right?: boolean }) {
   if (!p) return <div className={`flex items-center px-3 py-4 text-sm text-muted ${right ? "justify-end" : ""}`}>Empty</div>;
-  const logo = nbaLogo(p.nba_team);
+  const logo = nbaLogo(p.nba_team, 48);
   const inj = p.injury_status ? INJ[p.injury_status.toLowerCase()] ?? p.injury_status : null;
   return (
     <Link href={`/players/${p.id}`} className={`flex min-w-0 flex-col justify-center px-3 py-2.5 leading-tight ${right ? "items-end text-right" : ""}`}>

@@ -8,6 +8,7 @@ import { money, yearsLeft } from "@/lib/rules";
 import { load } from "@/lib/guard";
 import Slide, { BACK } from "@/components/Slide";
 import { sendOffer } from "../actions";
+import { headshot } from "@/lib/names";
 
 export const dynamic = "force-dynamic";
 
@@ -79,7 +80,7 @@ function PlayerPick({ p, season, name, checked }: { p: RosterPlayer; season: num
           <span className="plus">+</span>
           <span className="tick hidden text-base">✓</span>
         </span>
-        {p.headshot ? <img src={p.headshot} alt="" className="h-9 w-9 shrink-0 rounded-full bg-line object-cover" /> : <span className="h-9 w-9 shrink-0 rounded-full bg-line" />}
+        {p.headshot ? <img src={headshot(p.headshot, 110)!} alt="" loading="lazy" decoding="async" className="h-9 w-9 shrink-0 rounded-full bg-line object-cover" /> : <span className="h-9 w-9 shrink-0 rounded-full bg-line" />}
         <span className="min-w-0 flex-1 leading-tight">
           <span className="block truncate text-[15px] font-medium">{p.name}</span>
           <span className="block truncate text-[11px] text-muted">

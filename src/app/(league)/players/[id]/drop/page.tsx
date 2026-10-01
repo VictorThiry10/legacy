@@ -6,6 +6,7 @@ import { lockedMessage, lockedToday, rosters } from "@/lib/roster";
 import { money, yearsLeft } from "@/lib/rules";
 import Slide, { BACK } from "@/components/Slide";
 import { drop } from "./actions";
+import { headshot } from "@/lib/names";
 
 export const dynamic = "force-dynamic";
 
@@ -22,7 +23,7 @@ export default async function DropPlayer({ params, searchParams }: PageProps<"/p
       <div className="mx-auto max-w-md space-y-4">
         <Link href={`/players/${p.id}`} transitionTypes={BACK} className="text-sm text-muted hover:text-fg">← {p.name}</Link>
         <div className="card flex items-center gap-4">
-          {p.headshot ? <img src={p.headshot} alt="" className="h-16 w-16 rounded-full object-cover bg-line" /> : <span className="h-16 w-16 rounded-full bg-line" />}
+          {p.headshot ? <img src={headshot(p.headshot, 192)!} alt="" decoding="async" className="h-16 w-16 rounded-full object-cover bg-line" /> : <span className="h-16 w-16 rounded-full bg-line" />}
           <div>
             <h1 className="text-xl font-semibold">Drop {p.name}</h1>
             <p className="text-sm text-muted">{p.nba_team} · {p.position}</p>

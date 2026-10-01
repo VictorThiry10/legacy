@@ -47,7 +47,8 @@ export default async function PlayerPage({ params, searchParams }: PageProps<"/p
   const ls = p.last_season;
   if (ls?.gp) lines.push({ label: seasonLabel(ls.season), gp: ls.gp, min: ls.min, pts: ls.pts, reb: ls.reb, ast: ls.ast, stl: ls.stl, blk: ls.blk, to: ls.to, fpts: ls.fpts });
   const main = lines[0];
-  const logo = nbaLogo(p.nba_team);
+  const logo = nbaLogo(p.nba_team, 48);
+  const bigLogo = nbaLogo(p.nba_team, 0);
   const tabHref = (k: string) => (k === "overview" ? `/players/${id}` : `/players/${id}?tab=${k}`);
 
   return (
@@ -55,7 +56,7 @@ export default async function PlayerPage({ params, searchParams }: PageProps<"/p
       <div className="mx-auto max-w-3xl">
         {/* header card */}
         <div className="relative -mx-4 -mt-6 overflow-hidden bg-gradient-to-b from-line/80 to-card px-4 pb-4 pt-5 sm:mx-0 sm:mt-0 sm:rounded-2xl">
-          {logo && <img src={logo} alt="" className="pointer-events-none absolute -right-6 -top-4 h-56 w-56 max-w-none opacity-[0.08]" />}
+          {bigLogo && <img src={bigLogo} alt="" className="pointer-events-none absolute -right-6 -top-4 h-56 w-56 max-w-none opacity-[0.08]" />}
           {p.headshot && <img src={p.headshot} alt="" className="pointer-events-none absolute bottom-0 right-0 h-40 max-w-none object-contain sm:h-48" />}
           <Link href="/players" transitionTypes={BACK} className="absolute right-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full text-2xl text-muted hover:bg-line" aria-label="Close">×</Link>
           <div className="relative w-[62%] space-y-2">

@@ -4,7 +4,7 @@ import { getSettings, type Player } from "@/lib/league";
 import { STAT_COLS, fmt, seasonLabel, stat, type StatKey } from "@/lib/player-stats";
 import LocalTime from "@/components/LocalTime";
 import SearchBar from "@/components/SearchBar";
-import { initials } from "@/lib/names";
+import { headshot, initials } from "@/lib/names";
 import { openWaivers } from "@/lib/waivers";
 
 export const dynamic = "force-dynamic";
@@ -98,7 +98,7 @@ async function StatsTable({ sp }: { sp: Params }) {
                 <tr key={p.id}>
                   <td className="sticky left-0 z-10 bg-card [transform:translateZ(0)] shadow-[2px_0_3px_-2px_rgba(0,0,0,0.25)] w-12 min-w-12 pr-0">
                     <Link href={`/players/${p.id}`} aria-label={p.name}>
-                      {p.headshot ? <img src={p.headshot} alt="" className="block h-9 w-9 max-w-none rounded-full object-cover bg-line" /> : <span className="block h-9 w-9 rounded-full bg-line" />}
+                      {p.headshot ? <img src={headshot(p.headshot, 110)!} alt="" loading="lazy" decoding="async" className="block h-9 w-9 max-w-none rounded-full object-cover bg-line" /> : <span className="block h-9 w-9 rounded-full bg-line" />}
                     </Link>
                   </td>
                   <td>
