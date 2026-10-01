@@ -50,7 +50,7 @@ export default function Results({ data, me, onReplay }: { data: Room; me: RoomTe
               className={`flex gap-4 rounded-2xl p-3 ${mine ? "bg-white/[0.06] ring-1 ring-inset ring-white/15" : "bg-white/[0.025]"}`}
             >
               <div className="w-[5.5rem] shrink-0">
-                <PlayerCard p={p} className={w ? "" : "grayscale brightness-75"} />
+                <PlayerCard p={p} size="thumb" className={w ? "" : "grayscale brightness-75"} />
               </div>
               <div className="min-w-0 flex-1 py-0.5">
                 <div className="truncate font-semibold">{p.name}</div>
@@ -97,7 +97,7 @@ export default function Results({ data, me, onReplay }: { data: Room; me: RoomTe
       <AnimatePresence>
         {ask && (
           <>
-            <motion.div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setAsk(null)} />
+            <motion.div data-overlay className="fixed inset-0 z-50 touch-none bg-black/70" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setAsk(null)} />
             <motion.div
               role="dialog"
               className="fixed inset-x-4 top-1/2 z-50 mx-auto max-w-sm -translate-y-1/2 rounded-3xl bg-[#141417] p-6 text-center shadow-2xl ring-1 ring-white/10"
@@ -106,7 +106,7 @@ export default function Results({ data, me, onReplay }: { data: Room; me: RoomTe
               exit={{ opacity: 0, scale: 0.95 }}
               transition={{ duration: 0.25, ease }}
             >
-              <div className="mx-auto w-24 -rotate-3"><PlayerCard p={ask.player} /></div>
+              <div className="mx-auto w-24 -rotate-3"><PlayerCard p={ask.player} size="thumb" /></div>
               <h2 className="font-display mt-5 text-4xl leading-none">Renounce {ask.player.name.split(" ").slice(-1)[0]}?</h2>
               <p className="mt-2 text-sm text-white/60">He goes to the next highest bidder. {me.renouncesLeft - 1} left after this.</p>
               <div className="mt-6 grid grid-cols-2 gap-2">

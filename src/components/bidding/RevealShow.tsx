@@ -1,9 +1,10 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { animate, AnimatePresence, motion, useIsPresent, useMotionValue, useTransform } from "motion/react";
+import { animate, AnimatePresence, motion, MotionConfig, useIsPresent, useMotionValue, useReducedMotion, useTransform } from "motion/react";
 import type { CardPlayer, Room, RoomTeam } from "@/lib/bidding";
 import { BID_STEP, money, type RevealItem } from "@/lib/rules";
-import PlayerCard, { CardBack } from "./PlayerCard";
+import PlayerCard, { CardBack, cardImages } from "./PlayerCard";
+import { preload, ready } from "./preload";
 import { ease, Gm, reasonText, roundName } from "./ui";
 
 const HOLD = 6500; // ms each player stays on screen unless tapped on
@@ -13,11 +14,16 @@ const HOLD = 6500; // ms each player stays on screen unless tapped on
 export default function RevealShow({ data, onDone }: { data: Room; onDone: () => void }) {
   const items = data.reveal ?? [];
   const [i, setI] = useState(0);
+  const [started, setStarted] = useState(-1); // the player whose clock is running (his photo is decoded)
   const next = () => (i + 1 < items.length ? setI(i + 1) : onDone());
   const item = items[i];
   const player = item && data.players.find((p) => p.id === item.playerId);
+  // Start decoding every photo of the round now, so each player is ready by the time he's up.
+  const photos = data.players.flatMap((p) => Object.values(cardImages(p, "large"))).join("\n");
+  useEffect(() => preload(photos.split("\n")), [photos]);
   return (
     <motion.div
+      data-overlay
       className="fixed inset-0 z-[60] touch-none overflow-hidden bg-[#050507] text-white"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
@@ -26,46 +32,77 @@ export default function RevealShow({ data, onDone }: { data: Room; onDone: () =>
       <div className="pointer-events-none absolute inset-0" style={{ background: "radial-gradient(40rem 28rem at 50% 32%, rgba(255,255,255,0.06), transparent 70%)" }} />
       <div className="absolute inset-x-0 top-0 z-10 flex items-center gap-3 px-5 pt-[max(1rem,env(safe-area-inset-top))]">
         <div className="shrink-0 text-[11px] font-semibold uppercase tracking-[0.3em] text-white/55">{roundName(data.round)}</div>
-        <div className="flex flex-1 gap-1">
-          {items.map((it, k) => (
-            <div key={it.playerId} className="h-1 flex-1 overflow-hidden rounded-full bg-white/15">
-              <motion.div
-                className="h-full bg-white"
-                initial={{ width: "0%" }}
-                animate={{ width: k <= i ? "100%" : "0%" }}
-                transition={{ duration: k === i ? HOLD / 1000 : 0.25, ease: "linear" }}
-              />
-            </div>
-          ))}
-        </div>
+        {/* Progress: done players are a plain full bar, only the current one fills (a transform, so it stays off the main thread).
+            It's a timer the show depends on, so it still runs when the device asks for less motion. */}
+        <MotionConfig reducedMotion="never">
+          <div className="flex flex-1 gap-1">
+            {items.map((it, k) => (
+              <div key={it.playerId} className="h-1 flex-1 overflow-hidden rounded-full bg-white/15">
+                {k < i && <div className="h-full bg-white" />}
+                {k === i && (
+                  <motion.div
+                    key={i}
+                    className="h-full origin-left bg-white"
+                    initial={{ scaleX: 0 }}
+                    animate={{ scaleX: started === i ? 1 : 0 }}
+                    transition={{ duration: HOLD / 1000, ease: "linear" }}
+                  />
+                )}
+              </div>
+            ))}
+          </div>
+        </MotionConfig>
         <button onClick={onDone} className="shrink-0 text-xs font-semibold uppercase tracking-widest text-white/60 hover:text-white">Skip</button>
       </div>
       <AnimatePresence>
         {item && player && (
-          <Stage key={item.playerId} item={item} player={player} teams={data.teams} meId={data.meId} leftovers={data.round?.kind === "leftovers"} onFinish={next} />
+          <Stage
+            key={item.playerId}
+            item={item}
+            player={player}
+            teams={data.teams}
+            meId={data.meId}
+            leftovers={data.round?.kind === "leftovers"}
+            onStart={() => setStarted(i)}
+            onFinish={next}
+          />
         )}
       </AnimatePresence>
     </motion.div>
   );
 }
 
-function Stage({ item, player, teams, meId, leftovers, onFinish }: {
-  item: RevealItem; player: CardPlayer; teams: RoomTeam[]; meId: string; leftovers: boolean; onFinish: () => void;
+function Stage({ item, player, teams, meId, leftovers, onStart, onFinish }: {
+  item: RevealItem; player: CardPlayer; teams: RoomTeam[]; meId: string; leftovers: boolean; onStart: () => void; onFinish: () => void;
 }) {
   // 0 face down, 1 flipped, 2 winner, 3 rejected bids
   const [stage, setStage] = useState(0);
   const finish = useRef(onFinish);
+  const begin = useRef(onStart);
   const present = useIsPresent();
   const live = useRef(present);
+  const reduce = useReducedMotion();
   useEffect(() => {
     finish.current = onFinish;
+    begin.current = onStart;
     live.current = present;
   });
+  // The clock starts once his photo and logo are decoded (0.8 s at most), so the card never flips onto a blank face.
+  const { face, logo } = cardImages(player, "large");
   useEffect(() => {
-    const at = (ms: number, s: number) => setTimeout(() => setStage((x) => Math.max(x, s)), ms);
-    const ts = [at(650, 1), at(1500, 2), at(2500, 3), setTimeout(() => live.current && finish.current(), HOLD)];
-    return () => ts.forEach(clearTimeout);
-  }, []);
+    let alive = true;
+    let ts: ReturnType<typeof setTimeout>[] = [];
+    ready([face, logo], 800).then(() => {
+      if (!alive || !live.current) return; // already tapped past him
+      begin.current();
+      const at = (ms: number, s: number) => setTimeout(() => setStage((x) => Math.max(x, s)), ms);
+      ts = [at(650, 1), at(1500, 2), at(2500, 3), setTimeout(() => live.current && finish.current(), HOLD)];
+    });
+    return () => {
+      alive = false;
+      ts.forEach(clearTimeout);
+    };
+  }, [face, logo]);
   const tap = () => {
     if (!live.current) return;
     if (stage < 3) setStage(3);
@@ -85,7 +122,7 @@ function Stage({ item, player, teams, meId, leftovers, onFinish }: {
       exit={{ x: "-75vw", rotate: -6, opacity: 0 }}
       transition={{ type: "spring", stiffness: 120, damping: 20 }}
     >
-      <div className="relative w-[min(60vw,260px,38vh)] [perspective:1400px]">
+      <div className="relative w-[min(60vw,260px,34svh)] [perspective:1400px]">
         {stage >= 2 && w && (
           <>
             <motion.div
@@ -95,7 +132,7 @@ function Stage({ item, player, teams, meId, leftovers, onFinish }: {
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.9, ease }}
             />
-            <Burst />
+            {!reduce && <Burst />}
           </>
         )}
         <motion.div

@@ -54,7 +54,7 @@ export default function Contracts({ data }: { data: Room }) {
                   transition={{ delay: i * 0.04, ease }}
                   className="flex items-center gap-3 rounded-2xl bg-white/[0.025] p-2.5"
                 >
-                  <div className="w-14 shrink-0"><PlayerCard p={s.player} /></div>
+                  <div className="w-14 shrink-0"><PlayerCard p={s.player} size="thumb" /></div>
                   <div className="min-w-0 flex-1">
                     <div className="truncate font-semibold">{s.player.name}</div>
                     <div className="font-display mt-0.5 text-2xl leading-none text-[var(--gold)]">{money(s.salary)}</div>

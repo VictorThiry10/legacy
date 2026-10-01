@@ -1,48 +1,133 @@
 "use client";
-import { useEffect, useState, useSyncExternalStore, useTransition } from "react";
+import { memo, useCallback, useContext, useEffect, useOptimistic, useRef, useState, useSyncExternalStore, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { AnimatePresence, motion, useSpring } from "motion/react";
+import { AnimatePresence, motion, MotionConfig, PresenceContext, useReducedMotion, useSpring } from "motion/react";
 import type { CardPlayer, Room as Data, RoomTeam } from "@/lib/bidding";
 import { money, ROUND_SECONDS } from "@/lib/rules";
 import * as A from "@/app/bidding/actions";
-import PlayerCard, { CardBack } from "./PlayerCard";
+import PlayerCard, { CardBack, cardImages } from "./PlayerCard";
 import BidSheet from "./BidSheet";
 import RevealShow from "./RevealShow";
 import Results from "./Results";
 import Contracts from "./Contracts";
 import Portal from "./Portal";
-import { useNow } from "./clock";
+import { useClock } from "./clock";
+import { ready } from "./preload";
 import { ease, Gm, Kicker, Label, roundName } from "./ui";
 
 // The live bidding room. One page that changes with the round: waiting, bidding (cards and a clock), the reveal,
 // then contract lengths. Polls a tiny fingerprint every 2 seconds and refreshes when anything moves.
 export default function Room({ data, me: who }: { data: Data; me: { id: string; name: string } }) {
-  const skew = usePulse();
+  const router = useRouter();
+  const skew = usePulse(data.v);
   const me = data.teams.find((t) => t.id === data.meId) ?? { ...who, manager: null, capSpace: 0, maxBid: 0, roster: 0, renouncesLeft: 0, hasBid: false };
-  const [open, setOpen] = useState<CardPlayer | null>(null);
+
+  // The bid sheet belongs to the round it was opened in: it never shows up again in a later one.
+  const [open, setOpen] = useState<{ p: CardPlayer; round: string } | null>(null);
+  const roundId = data.round?.id ?? "";
+  const onOpen = useCallback((p: CardPlayer) => setOpen({ p, round: roundId }), [roundId]);
+
+  // My bids show at once; if the server says no, the bid goes back to what it was and a message says why.
+  const [myBids, showBid] = useOptimistic(data.myBids, (bids, b: { playerId: string; amount: number | null }) => {
+    const next = { ...bids };
+    if (b.amount === null) delete next[b.playerId];
+    else next[b.playerId] = b.amount;
+    return next;
+  });
+  const [, startBid] = useTransition();
+  const [toast, setToast] = useState("");
+  const placeBid = (round: string, playerId: string, amount: number | null) => {
+    setOpen(null);
+    setToast("");
+    startBid(async () => {
+      showBid({ playerId, amount });
+      const r = await A.bid(round, playerId, amount === null ? null : amount / 1e6);
+      if (r?.error) setToast(r.error);
+    });
+  };
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(""), 4000);
+    return () => clearTimeout(t);
+  }, [toast]);
+
+  // Time's up: lock the room and refresh until the server agrees and sends the reveal.
+  // This only re-renders the room when the answer flips, not on every tick.
+  const closes = data.phase === "bidding" ? Date.parse(data.round?.closesAt ?? "") : NaN;
+  const ended = useClock((now) => now + skew >= closes, data.now);
+  const locked = data.phase === "bidding" && ended;
+  useEffect(() => {
+    if (!locked) return;
+    const t = setInterval(() => router.refresh(), 1500);
+    const first = setTimeout(() => router.refresh(), 400);
+    return () => {
+      clearInterval(t);
+      clearTimeout(first);
+    };
+  }, [locked, router]);
+
+  // The reveal show lives here, outside the page that changes with the phase, so moving on fades it out
+  // instead of cutting it. The first time through, the results wait underneath until it's over.
+  const revealRound = data.phase === "reveal" ? (data.round?.id ?? null) : null;
+  const seen = useSeen(revealRound);
+  const [replay, setReplay] = useState<string | null>(null); // the round being replayed
+  const replaying = revealRound !== null && replay === revealRound;
+  const showing = revealRound !== null && (seen === false || replaying);
+  const showDone = () => {
+    if (revealRound) markSeen(revealRound);
+    setReplay(null);
+  };
+
   return (
-    <>
+    <MotionConfig reducedMotion="user">
       <Header data={data} me={me} />
-      <AnimatePresence mode="wait">
+      {/* A cold open shows the room straight away; only the reveal fades in (it sits under the show). */}
+      <AnimatePresence mode="wait" initial={data.phase === "reveal"} onExitComplete={() => window.scrollTo({ top: 0, behavior: "instant" })}>
         <motion.div
           key={`${data.phase}:${data.round?.id ?? ""}`}
-          initial={{ opacity: 0, y: 20, filter: "blur(6px)" }}
-          animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-          exit={{ opacity: 0, y: -10, filter: "blur(4px)" }}
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -10 }}
           transition={{ duration: 0.5, ease }}
         >
           {data.phase === "waiting" && <Waiting data={data} />}
-          {data.phase === "bidding" && <Bidding data={data} me={me} skew={skew} onOpen={setOpen} />}
-          {data.phase === "reveal" && <RevealPhase data={data} me={me} />}
+          {data.phase === "bidding" && <Bidding data={data} me={me} myBids={myBids} skew={skew} onOpen={onOpen} />}
+          {data.phase === "reveal" && (seen || replaying) && <Results data={data} me={me} onReplay={() => setReplay(revealRound)} />}
           {(data.phase === "contracts" || data.phase === "done") && <Contracts data={data} />}
         </motion.div>
       </AnimatePresence>
       <AnimatePresence>
-        {open && data.phase === "bidding" && data.round && (
-          <BidSheet key={open.id} player={open} roundId={data.round.id} current={data.myBids[open.id]} max={me.maxBid} min={data.minSalary} onClose={() => setOpen(null)} />
+        {open && data.phase === "bidding" && open.round === data.round?.id && (
+          <BidSheet
+            key={open.p.id}
+            player={open.p}
+            current={myBids[open.p.id]}
+            max={me.maxBid}
+            min={data.minSalary}
+            onClose={() => setOpen(null)}
+            onBid={(amount) => placeBid(open.round, open.p.id, amount)}
+          />
         )}
       </AnimatePresence>
+      <AnimatePresence>
+        {toast && (
+          <motion.div
+            role="status"
+            onClick={() => setToast("")}
+            className={`fixed inset-x-0 z-[45] mx-auto w-fit max-w-[calc(100%-2rem)] rounded-full bg-[#1c1c20] px-4 py-2 text-center text-sm text-[var(--bad)] shadow-lg ring-1 ring-white/10 ${data.isCommish ? "bottom-24" : "bottom-[max(1.25rem,env(safe-area-inset-bottom))]"}`}
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 12 }}
+          >
+            {toast}
+          </motion.div>
+        )}
+      </AnimatePresence>
+      <Portal>
+        <AnimatePresence>{locked && <Locked key="locked" />}</AnimatePresence>
+        <AnimatePresence>{showing && <RevealShow key="show" data={data} onDone={showDone} />}</AnimatePresence>
+      </Portal>
       <footer className={`mx-auto max-w-5xl px-4 pt-8 text-center text-xs text-white/30 ${data.isCommish ? "pb-28" : "pb-10"}`}>
         {me.name} ·{" "}
         <form action={A.signOut} className="inline">
@@ -50,16 +135,22 @@ export default function Room({ data, me: who }: { data: Data; me: { id: string; 
         </form>
       </footer>
       {data.isCommish && <CommishBar data={data} />}
-    </>
+    </MotionConfig>
   );
 }
 
-// Polls the room's fingerprint; refreshes the page when it changes. Also learns how far this clock is from the server's.
-function usePulse() {
+// Polls the room's fingerprint and refreshes the page when it differs from the one on screen (and that refresh
+// wasn't already asked for), so nothing is missed between the page loading and the first poll, and my own
+// moves (which refresh the page themselves) don't refresh it twice. Also learns how far this clock is from the server's.
+function usePulse(v: string) {
   const router = useRouter();
   const [skew, setSkew] = useState(0);
+  const shown = useRef(v);
   useEffect(() => {
-    let last = "", alive = true, busy = false;
+    shown.current = v;
+  }, [v]);
+  useEffect(() => {
+    let alive = true, busy = false, requested = "", best = Infinity;
     let t: ReturnType<typeof setTimeout> | undefined;
     const tick = async () => {
       if (busy) return;
@@ -67,12 +158,19 @@ function usePulse() {
       clearTimeout(t);
       try {
         if (document.visibilityState === "visible") {
-          const sent = Date.now();
-          const j = (await (await fetch("/api/bidding/pulse", { cache: "no-store" })).json()) as { v: string; now: number };
-          const s = j.now - (sent + Date.now()) / 2;
-          if (alive) setSkew((old) => (Math.abs(old - s) > 300 ? s : old));
-          if (alive && last && j.v !== last) router.refresh();
-          last = j.v;
+          const t0 = Date.now();
+          const j = (await (await fetch("/api/bidding/pulse", { cache: "no-store" })).json()) as { v: string; t1: number; t2: number };
+          const t3 = Date.now();
+          // NTP style: the network time is the round trip minus the server's own time. Only trust samples about
+          // as quick as the best one seen (which slowly relaxes, in case the network got slower for good).
+          const rtt = t3 - t0 - (j.t2 - j.t1);
+          const offset = (j.t1 - t0 + (j.t2 - t3)) / 2;
+          best = Math.min(best + 2, rtt);
+          if (alive && rtt <= best + 50) setSkew((old) => (Math.abs(old - offset) > 150 ? offset : old));
+          if (alive && j.v !== shown.current && j.v !== requested) {
+            requested = j.v;
+            router.refresh();
+          }
         }
       } catch {
         // offline for a moment: try again next tick
@@ -93,6 +191,7 @@ function usePulse() {
 }
 
 function Header({ data, me }: { data: Data; me: RoomTeam }) {
+  const reduce = useReducedMotion();
   return (
     <header className="glass sticky top-0 z-30 border-b border-white/[0.06] pt-[env(safe-area-inset-top)]">
       <div className="mx-auto flex h-14 max-w-5xl items-center gap-3 px-4">
@@ -112,7 +211,8 @@ function Header({ data, me }: { data: Data; me: RoomTeam }) {
           {data.rounds.map((r) => (
             <div key={r.id} className="relative h-[3px] flex-1 overflow-hidden rounded-full bg-white/10" title={roundName(r)}>
               {r.status === "final" && <motion.div className="absolute inset-0 bg-white/60" initial={{ scaleX: 0 }} animate={{ scaleX: 1 }} style={{ originX: 0 }} transition={{ duration: 0.8, ease }} />}
-              {r.status === "open" && <motion.div className="absolute inset-0 bg-white" animate={{ opacity: [0.3, 1, 0.3] }} transition={{ duration: 1.8, repeat: Infinity }} />}
+              {/* the live round pulses, or stays lit when the device asks for less motion */}
+              {r.status === "open" && <motion.div className="absolute inset-0 bg-white" animate={reduce ? undefined : { opacity: [0.3, 1, 0.3] }} transition={{ duration: 1.8, repeat: Infinity }} />}
             </div>
           ))}
         </div>
@@ -132,9 +232,11 @@ function Waiting({ data }: { data: Data }) {
           {Array.from({ length: data.cardsWaiting }, (_, i) => (
             <motion.div
               key={i}
+              className="bid-float"
+              style={{ animationDelay: `${i * 0.25}s` }}
               initial={{ opacity: 0, y: 24 }}
-              animate={{ opacity: 1, y: [0, -4, 0] }}
-              transition={{ opacity: { delay: i * 0.05 }, y: { duration: 4, repeat: Infinity, delay: i * 0.25, ease: "easeInOut" } }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.05, duration: 0.5, ease }}
             >
               <CardBack />
             </motion.div>
@@ -161,23 +263,22 @@ function Waiting({ data }: { data: Data }) {
   );
 }
 
-function Bidding({ data, me, skew, onOpen }: { data: Data; me: RoomTeam; skew: number; onOpen: (p: CardPlayer) => void }) {
-  const router = useRouter();
-  const now = useNow(data.now) + skew;
-  const left = Math.max(0, Date.parse(data.round?.closesAt ?? "") - now);
-  const ended = left <= 0;
-  // Time's up: refresh until the server agrees and sends the reveal.
+function Bidding({ data, me, myBids, skew, onOpen }: {
+  data: Data; me: RoomTeam; myBids: Record<string, number>; skew: number; onOpen: (p: CardPlayer) => void;
+}) {
+  const closes = Date.parse(data.round?.closesAt ?? "");
+  // The cards flip once their photos and logos are decoded (1.2 s at most), never onto a blank face.
+  const photos = data.players.flatMap((p) => Object.values(cardImages(p, "large"))).join("\n");
+  const [go, setGo] = useState(false);
   useEffect(() => {
-    if (!ended) return;
-    const t = setInterval(() => router.refresh(), 1500);
-    const first = setTimeout(() => router.refresh(), 400);
+    let alive = true;
+    ready(photos.split("\n"), 1200).then(() => alive && setGo(true));
     return () => {
-      clearInterval(t);
-      clearTimeout(first);
+      alive = false;
     };
-  }, [ended, router]);
+  }, [photos]);
 
-  const bids = Object.values(data.myBids);
+  const bids = Object.values(myBids);
   const total = bids.reduce((a, b) => a + b, 0);
   const over = total > me.capSpace;
   const inCount = data.teams.filter((t) => t.hasBid).length;
@@ -189,14 +290,9 @@ function Bidding({ data, me, skew, onOpen }: { data: Data; me: RoomTeam; skew: n
           <Kicker>{data.round?.kind === "leftovers" ? "Nobody bid on these" : `Round ${data.round?.number} of ${regular}`}</Kicker>
           <h1 className="font-display mt-1 text-6xl leading-[0.85]">{data.round?.kind === "leftovers" ? "Last chance" : `Round ${data.round?.number}`}</h1>
         </div>
-        <Countdown left={left} />
+        <Countdown closes={closes} skew={skew} serverNow={data.now} />
       </div>
-      <div className="mt-4 h-[2px] overflow-hidden rounded-full bg-white/10">
-        <div
-          className={`h-full transition-[width,background-color] duration-300 ease-linear ${left <= 10_000 ? "bg-[var(--crimson)]" : "bg-white/80"}`}
-          style={{ width: `${Math.min(100, (left / (ROUND_SECONDS * 1000)) * 100)}%` }}
-        />
-      </div>
+      <TimeBar closes={closes} skew={skew} serverNow={data.now} />
 
       <div className="mt-5 flex items-end gap-7">
         <div>
@@ -222,19 +318,19 @@ function Bidding({ data, me, skew, onOpen }: { data: Data; me: RoomTeam; skew: n
 
       <div className="mt-7 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
         {data.players.map((p, i) => (
-          <DealtCard key={p.id} p={p} i={i} bid={data.myBids[p.id]} onClick={() => onOpen(p)} />
+          <DealtCard key={p.id} p={p} i={i} bid={myBids[p.id]} go={go} onOpen={onOpen} />
         ))}
       </div>
-
-      <Portal>
-        <AnimatePresence>{ended && <Locked />}</AnimatePresence>
-      </Portal>
     </section>
   );
 }
 
-function Countdown({ left }: { left: number }) {
-  const secs = Math.ceil(left / 1000);
+// Whole seconds left on the clock: what the countdown and the time bar draw, so they re-render once a second.
+const useSecondsLeft = (closes: number, skew: number, serverNow: number) =>
+  useClock((now) => Math.max(0, Math.ceil((closes - now - skew) / 1000)) || 0, serverNow);
+
+function Countdown({ closes, skew, serverNow }: { closes: number; skew: number; serverNow: number }) {
+  const secs = useSecondsLeft(closes, skew, serverNow);
   const mm = Math.floor(secs / 60), ss = secs % 60;
   return (
     <div className="text-right">
@@ -244,6 +340,20 @@ function Countdown({ left }: { left: number }) {
         <Digit d={Math.floor(ss / 10)} />
         <Digit d={ss % 10} />
       </div>
+    </div>
+  );
+}
+
+// Each second the bar slides (a transform, linear over that second) to where it will be when the next one ticks.
+function TimeBar({ closes, skew, serverNow }: { closes: number; skew: number; serverNow: number }) {
+  const secs = useSecondsLeft(closes, skew, serverNow);
+  const to = Math.min(1, Math.max(0, (secs - 1) / ROUND_SECONDS));
+  return (
+    <div className="mt-4 h-[2px] overflow-hidden rounded-full bg-white/10">
+      <div
+        className={`h-full origin-left [transition:transform_1s_linear,background-color_300ms_linear] ${secs <= 10 ? "bg-[var(--crimson)]" : "bg-white/80"}`}
+        style={{ transform: `scaleX(${to})` }}
+      />
     </div>
   );
 }
@@ -260,47 +370,93 @@ function Digit({ d }: { d: number }) {
   );
 }
 
-// A card dealt face down that flips over and tilts under the mouse.
-function DealtCard({ p, i, bid, onClick }: { p: CardPlayer; i: number; bid?: number; onClick: () => void }) {
-  const rx = useSpring(0, { stiffness: 220, damping: 18 });
-  const ry = useSpring(0, { stiffness: 220, damping: 18 });
-  return (
-    <motion.button
-      type="button"
-      onClick={onClick}
-      className="relative block w-full text-left [perspective:1000px]"
-      initial={{ opacity: 0, y: 32 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: i * 0.05, duration: 0.5, ease }}
-      whileTap={{ scale: 0.97 }}
-      onPointerMove={(e) => {
-        if (e.pointerType !== "mouse") return;
-        const r = e.currentTarget.getBoundingClientRect();
-        ry.set(((e.clientX - r.left) / r.width - 0.5) * 12);
-        rx.set(-((e.clientY - r.top) / r.height - 0.5) * 12);
-      }}
-      onPointerLeave={() => {
-        rx.set(0);
-        ry.set(0);
-      }}
-    >
-      <motion.div style={{ rotateX: rx, rotateY: ry, transformStyle: "preserve-3d" }}>
-        <motion.div className="relative" style={{ transformStyle: "preserve-3d" }} initial={{ rotateY: 180 }} animate={{ rotateY: 0 }} transition={{ delay: 0.25 + i * 0.08, duration: 0.8, ease }}>
-          <div className="face">
-            <PlayerCard p={p} bid={bid} />
-          </div>
+// Mouse tilt only where there is a real mouse (not on phones, where it would just cost layers).
+const FINE = "(hover: hover) and (pointer: fine)";
+function subscribeFine(cb: () => void) {
+  const m = window.matchMedia(FINE);
+  m.addEventListener("change", cb);
+  return () => m.removeEventListener("change", cb);
+}
+const useFinePointer = () => useSyncExternalStore(subscribeFine, () => window.matchMedia(FINE).matches, () => false);
+
+type DealtProps = { p: CardPlayer; i: number; bid?: number; go: boolean; onOpen: (p: CardPlayer) => void };
+
+// A card dealt face down that flips over (once `go`) and tilts under the mouse. Once it has flipped it is a plain
+// card: no back face, no 3D. Polls bring fresh copies of the same players, so cards compare them by content.
+const DealtCard = memo(
+  function DealtCard({ p, i, bid, go, onOpen }: DealtProps) {
+    const rx = useSpring(0, { stiffness: 220, damping: 18 });
+    const ry = useSpring(0, { stiffness: 220, damping: 18 });
+    const tilt = useFinePointer();
+    // On a cold open the room's first page skips its entrance (and so do the cards in it): they're dealt face up.
+    const dealt = useContext(PresenceContext)?.initial === false;
+    const [flipped, setFlipped] = useState(dealt);
+    // The wrappers stay put after the flip (just without their 3D), so the photo isn't loaded and drawn again.
+    const card = (
+      <motion.div
+        className="relative"
+        style={flipped ? undefined : { transformStyle: "preserve-3d" }}
+        initial={flipped ? false : { rotateY: 180 }}
+        animate={go ? { rotateY: 0 } : undefined}
+        transition={{ delay: 0.25 + i * 0.08, duration: 0.8, ease }}
+        onAnimationComplete={() => go && setFlipped(true)}
+      >
+        <div className={flipped ? undefined : "face"}>
+          <PlayerCard p={p} bid={bid} />
+        </div>
+        {!flipped && (
           <div className="face absolute inset-0 [transform:rotateY(180deg)]">
             <CardBack />
           </div>
-        </motion.div>
+        )}
       </motion.div>
-    </motion.button>
-  );
-}
+    );
+    return (
+      <motion.button
+        type="button"
+        onClick={() => onOpen(p)}
+        className={`relative block w-full text-left ${flipped && !tilt ? "" : "[perspective:1000px]"}`}
+        initial={{ opacity: 0, y: 32 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: i * 0.05, duration: 0.5, ease }}
+        whileTap={{ scale: 0.97 }}
+        onPointerMove={
+          tilt
+            ? (e) => {
+                if (e.pointerType !== "mouse") return;
+                const r = e.currentTarget.getBoundingClientRect();
+                ry.set(((e.clientX - r.left) / r.width - 0.5) * 12);
+                rx.set(-((e.clientY - r.top) / r.height - 0.5) * 12);
+              }
+            : undefined
+        }
+        onPointerLeave={
+          tilt
+            ? () => {
+                rx.set(0);
+                ry.set(0);
+              }
+            : undefined
+        }
+      >
+        {tilt ? <motion.div style={{ rotateX: rx, rotateY: ry, transformStyle: flipped ? undefined : "preserve-3d" }}>{card}</motion.div> : card}
+      </motion.button>
+    );
+  },
+  (a, b) =>
+    a.i === b.i && a.bid === b.bid && a.go === b.go && a.onOpen === b.onOpen && (a.p === b.p || JSON.stringify(a.p) === JSON.stringify(b.p)),
+);
 
 function Locked() {
+  // Stays fully dark a moment after the reveal arrives, so the show fades in over it rather than over the cards.
   return (
-    <motion.div className="fixed inset-0 z-50 grid touch-none place-items-center bg-black/75 backdrop-blur-md" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+    <motion.div
+      data-overlay
+      className="fixed inset-0 z-50 grid touch-none place-items-center bg-black/85"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0, transition: { delay: 0.6, duration: 0.35 } }}
+    >
       <motion.div initial={{ scale: 1.3, opacity: 0, filter: "blur(10px)" }} animate={{ scale: 1, opacity: 1, filter: "blur(0px)" }} transition={{ duration: 0.6, ease }} className="text-center">
         <div className="font-display text-7xl leading-none">Bids locked</div>
         <Kicker className="mt-3">The reveal is coming</Kicker>
@@ -311,9 +467,12 @@ function Locked() {
 
 // ---------- the reveal ----------
 
+// Whether I've watched a round's reveal show. Unknown (null) on the server: the show and the results both wait for the browser.
 const seenSubs = new Set<() => void>();
+const seenHere = new Set<string>(); // in case storage is off: at least don't replay it on this page
 const seenKey = (round: string) => `bid-reveal-seen:${round}`;
 function readSeen(round: string) {
+  if (seenHere.has(round)) return true;
   try {
     return localStorage.getItem(seenKey(round)) === "1";
   } catch {
@@ -321,6 +480,7 @@ function readSeen(round: string) {
   }
 }
 function markSeen(round: string) {
+  seenHere.add(round);
   try {
     localStorage.setItem(seenKey(round), "1");
   } catch {
@@ -328,37 +488,14 @@ function markSeen(round: string) {
   }
   seenSubs.forEach((f) => f());
 }
-
-function RevealPhase({ data, me }: { data: Data; me: RoomTeam }) {
-  const round = data.round!.id;
-  const seen = useSyncExternalStore(
-    (cb) => {
-      seenSubs.add(cb);
-      return () => seenSubs.delete(cb);
-    },
-    () => readSeen(round),
-    () => true,
-  );
-  const [replay, setReplay] = useState(false);
-  return (
-    <>
-      <Results data={data} me={me} onReplay={() => setReplay(true)} />
-      <Portal>
-        <AnimatePresence>
-          {(!seen || replay) && (
-            <RevealShow
-              key="show"
-              data={data}
-              onDone={() => {
-                markSeen(round);
-                setReplay(false);
-              }}
-            />
-          )}
-        </AnimatePresence>
-      </Portal>
-    </>
-  );
+function subscribeSeen(cb: () => void) {
+  seenSubs.add(cb);
+  return () => {
+    seenSubs.delete(cb);
+  };
+}
+function useSeen(round: string | null) {
+  return useSyncExternalStore(subscribeSeen, () => (round ? readSeen(round) : true), () => (round ? null : true));
 }
 
 // ---------- commissioner ----------

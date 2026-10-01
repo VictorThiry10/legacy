@@ -1,45 +1,39 @@
 "use client";
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { motion, useDragControls } from "motion/react";
 import type { CardPlayer } from "@/lib/bidding";
+import { headshot } from "@/lib/names";
 import { BID_STEP, money } from "@/lib/rules";
-import * as A from "@/app/bidding/actions";
 
 const STEP = BID_STEP; // whole millions
 
 // Slides up from the bottom: the amount (type it, slide it or nudge it), then place or take back the bid.
-export default function BidSheet({ player, roundId, current, max, min, onClose }: {
-  player: CardPlayer; roundId: string; current?: number; max: number; min: number; onClose: () => void;
+// onBid (dollars, or null to take it back) closes the sheet straight away: the room shows the bid at once
+// and puts it back, with a message, if the server says no.
+export default function BidSheet({ player, current, max, min, onClose, onBid }: {
+  player: CardPlayer; current?: number; max: number; min: number; onClose: () => void; onBid: (amount: number | null) => void;
 }) {
   const clamp = (v: number) => Math.min(max, Math.max(min, Math.round(v / STEP) * STEP));
   const [amt, setAmt] = useState(() => clamp(current ?? min));
   const [text, setText] = useState<string | null>(null); // while typing
-  const [err, setErr] = useState("");
-  const [pending, start] = useTransition();
   const drag = useDragControls();
   const canBid = max >= min;
   const value = text !== null ? clamp(Number(text) * 1e6 || min) : amt;
   const shown = text ?? String(amt / 1e6);
+  const face = headshot(player.headshot, 150);
 
   const set = (v: number) => {
     setText(null);
-    setErr("");
     setAmt(clamp(v));
   };
-  const send = (v: number | null) =>
-    start(async () => {
-      const r = await A.bid(roundId, player.id, v === null ? null : v / 1e6);
-      if (r?.error) setErr(r.error);
-      else onClose();
-    });
 
   return (
     <>
-      <motion.div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} />
+      <motion.div data-overlay className="fixed inset-0 z-50 touch-none bg-black/70" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} />
       <motion.div
         role="dialog"
         aria-label={`Bid on ${player.name}`}
-        className="fixed inset-x-0 bottom-0 z-50 mx-auto max-w-lg rounded-t-[28px] border-t border-white/10 bg-[#141417] px-6 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-2"
+        className="fixed inset-x-0 bottom-0 z-50 mx-auto max-w-lg touch-pan-x rounded-t-[28px] border-t border-white/10 bg-[#141417] px-6 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-2"
         initial={{ y: "100%" }}
         animate={{ y: 0 }}
         exit={{ y: "100%" }}
@@ -55,7 +49,7 @@ export default function BidSheet({ player, roundId, current, max, min, onClose }
           <div className="h-1 w-9 rounded-full bg-white/20" />
         </div>
         <div className="flex items-center gap-3">
-          {player.headshot && <img src={player.headshot} alt="" className="h-12 w-12 shrink-0 rounded-full bg-white/[0.06] object-cover object-top" />}
+          {face && <img src={face} alt="" decoding="async" className="h-12 w-12 shrink-0 rounded-full bg-white/[0.06] object-cover object-top" />}
           <div className="min-w-0">
             <div className="font-display truncate text-3xl leading-none">{player.name}</div>
             <div className="mt-1 text-xs text-white/45">
@@ -96,19 +90,18 @@ export default function BidSheet({ player, roundId, current, max, min, onClose }
               <button onClick={() => set(min)} className="hover:text-white/70">{money(min)}</button>
               <button onClick={() => set(max)} className="hover:text-white/70">Max {money(max)}</button>
             </div>
-            <button disabled={pending} onClick={() => send(value)} className="btn-primary mt-7 h-14 w-full rounded-2xl text-base font-semibold transition active:scale-[0.98] disabled:opacity-50">
-              {pending ? "Saving…" : current !== undefined ? "Update bid" : "Place bid"}
+            <button onClick={() => onBid(value)} className="btn-primary mt-7 h-14 w-full rounded-2xl text-base font-semibold transition active:scale-[0.98]">
+              {current !== undefined ? "Update bid" : "Place bid"}
             </button>
           </>
         ) : (
           <p className="mt-8 text-center text-sm text-white/50">Your roster is full.</p>
         )}
         {current !== undefined && (
-          <button disabled={pending} onClick={() => send(null)} className="mt-2 h-11 w-full text-sm text-white/45 hover:text-white">
+          <button onClick={() => onBid(null)} className="mt-2 h-11 w-full text-sm text-white/45 hover:text-white">
             Take back my bid
           </button>
         )}
-        {err && <p className="mt-2 text-center text-sm text-[var(--bad)]">{err}</p>}
       </motion.div>
     </>
   );

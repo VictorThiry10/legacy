@@ -1,6 +1,6 @@
 import type { CardPlayer } from "@/lib/bidding";
 import { teamColors } from "@/lib/nba-colors";
-import { nbaLogo } from "@/lib/names";
+import { headshot, nbaLogo } from "@/lib/names";
 import { money } from "@/lib/rules";
 
 // The bidding site's player card: dark, a soft glow in the NBA team's colour, headshot, fantasy points per game.
@@ -8,18 +8,30 @@ import { money } from "@/lib/rules";
 
 const INJURY: Record<string, string> = { OUT: "OUT", "DAY-TO-DAY": "DTD", QUESTIONABLE: "Q", DOUBTFUL: "D", SUSPENSION: "SUS" };
 
-export default function PlayerCard({ p, bid, className = "", children }: { p: CardPlayer; bid?: number; className?: string; children?: React.ReactNode }) {
+// large: the grid and the reveal, with the original photo. thumb: small cards in lists, a resized photo loaded lazily.
+export type CardSize = "large" | "thumb";
+
+// The exact images a card draws, so they can be decoded before it's shown (preload.ts). p.headshot stays ESPN's raw address.
+export const cardImages = (p: CardPlayer, size: CardSize) => ({
+  face: headshot(p.headshot, size === "thumb" ? 160 : 0),
+  logo: nbaLogo(p.nbaTeam, 96),
+});
+
+export default function PlayerCard({ p, bid, size = "large", className = "", children }: {
+  p: CardPlayer; bid?: number; size?: CardSize; className?: string; children?: React.ReactNode;
+}) {
   const [c1] = teamColors(p.nbaTeam);
   const [first, ...rest] = p.name.split(" ");
   const last = rest.join(" ") || first;
   const pos = (p.position ?? "").split(",").map((s) => s.trim()).filter(Boolean).join(" / ");
-  const logo = nbaLogo(p.nbaTeam);
+  const { face, logo } = cardImages(p, size);
+  const loading = size === "thumb" ? "lazy" : undefined;
   const injury = p.injury ? (INJURY[p.injury.toUpperCase()] ?? p.injury.slice(0, 3).toUpperCase()) : null;
   return (
     <div className={`@container relative aspect-[5/7] overflow-hidden rounded-[7%/5%] bg-[#121215] ring-1 ring-inset ring-white/10 ${className}`}>
       <div className="absolute inset-0" style={{ background: `radial-gradient(120% 70% at 50% 0%, color-mix(in oklab, ${c1} 42%, transparent) 0%, transparent 72%)` }} />
-      {p.headshot && (
-        <img src={p.headshot} alt="" className="pointer-events-none absolute left-1/2 top-[10%] w-[126%] max-w-none -translate-x-1/2" />
+      {face && (
+        <img src={face} alt="" loading={loading} decoding="async" className="pointer-events-none absolute left-1/2 top-[10%] w-[126%] max-w-none -translate-x-1/2" />
       )}
       <div className="absolute inset-x-0 bottom-0 h-[60%]" style={{ background: "linear-gradient(to top, #121215 46%, rgba(18,18,21,0.85) 62%, transparent)" }} />
       <div className="card-sheen pointer-events-none absolute inset-0" />
@@ -28,7 +40,7 @@ export default function PlayerCard({ p, bid, className = "", children }: { p: Ca
         {pos}
         {injury && <span className="ml-[2cqw] text-red-400">{injury}</span>}
       </div>
-      {logo && <img src={logo} alt="" className="absolute right-[6%] top-[4.5%] w-[13%] opacity-90" />}
+      {logo && <img src={logo} alt="" loading={loading} decoding="async" className="absolute right-[6%] top-[4.5%] w-[13%] opacity-90" />}
 
       <div className="absolute inset-x-[7%] bottom-[6%]">
         <div className="truncate text-[5cqw] font-medium uppercase tracking-[0.22em] text-white/45">{rest.length ? first : ""}</div>
