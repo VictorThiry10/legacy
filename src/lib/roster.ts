@@ -24,7 +24,7 @@ type Change = { teamId: string; add: { player_id?: string; salary: number; years
 
 // Would these teams still be legal with these contract changes? Throws with every problem, unless overridden.
 // Trades only need every team under the cap (capOnly); signings also check roster spots and contract slots.
-async function check(changes: Change[], override: boolean, capOnly = false) {
+async function check(changes: Change[], override: boolean, capOnly = false, commish = true) {
   const { season, rules } = await getSettings();
   const ids = changes.map((c) => c.teamId);
   const [{ data: contracts }, { data: adj }, { data: teams }] = await Promise.all([
@@ -43,7 +43,7 @@ async function check(changes: Change[], override: boolean, capOnly = false) {
     const found = capOnly ? (state.salary > rules.cap ? [`over the ${money(rules.cap)} cap by ${money(state.salary - rules.cap)}`] : []) : rosterProblems(state, rules);
     problems.push(...found.map((p) => `${name}: ${p}`));
   }
-  if (problems.length && !override) throw new Error(`Not allowed: ${problems.join("; ")}. Tick "override" to do it anyway.`);
+  if (problems.length && !override) throw new Error(`Not allowed: ${problems.join("; ")}.${commish ? ' Tick "override" to do it anyway.' : ""}`);
   return { season, note: problems.length ? `Rules overridden (${problems.join("; ")})` : "" };
 }
 
@@ -64,6 +64,32 @@ export async function signPlayer(o: {
     p_season: season, p_via: o.via ?? "manual", p_note: join(o.note, note),
   });
   return `Signed for ${money(o.salary)}, ${o.years} year${o.years > 1 ? "s" : ""}.`;
+}
+
+// Free agent pickup: $min salary for 1 year, first come first served. A full roster must drop someone in the same step.
+export async function pickUp(o: { teamId: string; playerId: string; dropContractId?: string }) {
+  const { season, rules } = await getSettings();
+  const { data: taken } = await db().from("contracts").select("id").eq("player_id", o.playerId).eq("active", true).maybeSingle();
+  if (taken) throw new Error("Someone just picked him up.");
+  const mine = await rosters([o.teamId]);
+  const ir = await onIR([o.teamId]);
+  const onRoster = mine.filter((p) => !ir.has(p.id)).length;
+  if (o.dropContractId && !mine.some((p) => p.contract_id === o.dropContractId)) throw new Error("That player is no longer on your team.");
+  if (!o.dropContractId && onRoster >= rules.rosterMax) throw new Error(`Your roster is full (${rules.rosterMax}). Pick a player to drop.`);
+  await check([{ teamId: o.teamId, add: [{ player_id: o.playerId, salary: rules.minSalary, years: 1, season_signed: season }], remove: o.dropContractId ? [o.dropContractId] : [] }], false, false, false);
+  const { data: who } = await db().from("players").select("name").eq("id", o.playerId).single();
+  const dropped = mine.find((p) => p.contract_id === o.dropContractId);
+  try {
+    await rpc("roster_pickup", {
+      p_team: o.teamId, p_player: o.playerId, p_salary: rules.minSalary, p_season: season, p_drop: o.dropContractId ?? null,
+      p_note: dropped ? `Free agent pickup, dropped ${dropped.name}` : "Free agent pickup",
+    });
+  } catch (e) {
+    // two people tapped Add at once: the database lets only one contract per player exist
+    if (e instanceof Error && /one_active_contract_per_player|duplicate key/i.test(e.message)) throw new Error("Someone just picked him up.");
+    throw e;
+  }
+  return `${who?.name ?? "Player"} added${dropped ? `, ${dropped.name} dropped` : ""}.`;
 }
 
 export async function releaseContract(contractId: string, note?: string) {

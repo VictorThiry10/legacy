@@ -111,7 +111,7 @@ async function StatsTable({ sp }: { sp: Params }) {
                       <span className="block text-xs text-muted">{p.nba_team} · {p.position}</span>
                     </Link>
                   </td>
-                  <td className="text-xs font-semibold">{o ? <Link href={`/teams/${o.id}`} title={o.name} className="hover:underline">{initials(o.name)}</Link> : <span className="text-muted font-normal">FA</span>}</td>
+                  <td className="text-xs font-semibold">{o ? <Link href={`/teams/${o.id}`} title={o.name} className="hover:underline">{initials(o.name)}</Link> : <Link href={`/players/${p.id}/add`} transitionTypes={["nav-forward"]} className="inline-flex h-6 w-6 items-center justify-center rounded-full border-[1.5px] border-accent text-accent font-bold" aria-label={`Add ${p.name}`}>+</Link>}</td>
                   <td className="border-l border-line text-accent">{g?.opp ?? <span className="text-muted">–</span>}</td>
                   <td className="text-xs text-muted">{g ? <><LocalTime iso={g.start} mode="day" /> <LocalTime iso={g.start} /></> : "–"}</td>
                   {STAT_COLS.map((c, i) => (

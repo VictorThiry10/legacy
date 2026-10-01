@@ -55,7 +55,14 @@ export default async function PlayerPage({ params }: PageProps<"/players/[id]">)
               <dl className="grid grid-cols-[6rem_1fr] gap-y-1 text-sm">
                 <dt className="label self-center">Position</dt><dd>{p.position ?? "–"}</dd>
                 <dt className="label self-center">Manager</dt>
-                <dd>{c ? <Link href={`/teams/${c.team.id}`} className="hover:underline">{c.team.name}</Link> : "Free agent"}</dd>
+                <dd>
+                  {c ? <Link href={`/teams/${c.team.id}`} className="hover:underline">{c.team.name}</Link> : (
+                    <span className="flex items-center gap-3">
+                      Free agent
+                      <Link href={`/players/${p.id}/add`} transitionTypes={["nav-forward"]} className="rounded-full border-[1.5px] border-accent px-3 py-0.5 text-xs font-semibold text-accent hover:bg-accent/10">+ Add</Link>
+                    </span>
+                  )}
+                </dd>
                 {c && (<><dt className="label self-center">Contract</dt><dd className="num">{money(Number(c.salary))} · {c.years}yr · ends {seasonLabel(c.season_signed + c.years)}</dd></>)}
                 <dt className="label self-center">Status</dt>
                 <dd className="flex items-center gap-2">
