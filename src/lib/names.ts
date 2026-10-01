@@ -12,6 +12,22 @@ export const shortName = (name: string) => {
   return rest.length ? `${first[0]}. ${rest.join(" ")}` : name;
 };
 
-// ESPN's NBA team logo for an abbreviation (BOS, GS, UTAH...).
-export const nbaLogo = (abbr: string | null | undefined) =>
-  abbr ? `https://a.espncdn.com/i/teamlogos/nba/500/${abbr.toLowerCase()}.png` : null;
+const ESPN = "https://a.espncdn.com";
+
+// ESPN resizes its own images on its CDN (the "combiner"): a 36 px avatar doesn't need a 260 KB photo.
+const resized = (path: string, w: number, h: number) => `${ESPN}/combiner/i?img=${path}&w=${w}&h=${h}`;
+
+// A player's ESPN headshot, `h` pixels tall (the originals are 600 x 436). h = 0 keeps the original.
+// Pick about 3x the size it's drawn at. Addresses that aren't ESPN images pass through.
+export const headshot = (url: string | null | undefined, h: number) => {
+  if (!url) return null;
+  if (!h || !url.startsWith(`${ESPN}/i/`)) return url;
+  return resized(url.slice(ESPN.length), Math.round((h * 600) / 436), h);
+};
+
+// ESPN's NBA team logo for an abbreviation (BOS, GS, UTAH...), `px` square. px = 0 keeps the 500 px original.
+export const nbaLogo = (abbr: string | null | undefined, px = 64) => {
+  if (!abbr) return null;
+  const path = `/i/teamlogos/nba/500/${abbr.toLowerCase()}.png`;
+  return px ? resized(path, px, px) : ESPN + path;
+};
