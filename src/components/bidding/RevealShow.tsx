@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { animate, AnimatePresence, motion, useIsPresent, useMotionValue, useTransform } from "motion/react";
 import type { CardPlayer, Room, RoomTeam } from "@/lib/bidding";
-import { money, type RevealItem } from "@/lib/rules";
+import { BID_STEP, money, type RevealItem } from "@/lib/rules";
 import PlayerCard, { CardBack } from "./PlayerCard";
 import { ease, Gm, reasonText, roundName } from "./ui";
 
@@ -203,7 +203,7 @@ function Stage({ item, player, teams, meId, leftovers, onFinish }: {
 
 function CountUp({ to }: { to: number }) {
   const v = useMotionValue(0);
-  const text = useTransform(v, (x) => money(Math.round(x / 100_000) * 100_000));
+  const text = useTransform(v, (x) => money(Math.round(x / BID_STEP) * BID_STEP));
   useEffect(() => {
     const c = animate(v, to, { duration: 1.2, ease: [0.16, 1, 0.3, 1] });
     return () => c.stop();

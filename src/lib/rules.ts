@@ -138,8 +138,9 @@ export function resolveRound(
   throw new Error("resolveRound did not settle");
 }
 
-// Free agency rounds: 3 minutes of sealed bids each.
+// Free agency rounds: 3 minutes of sealed bids each, bids in whole millions.
 export const ROUND_SECONDS = 180;
+export const BID_STEP = 1_000_000;
 
 // Renounce Rights: each GM can give up 3 signings per season, in any rounds. The player goes to the next bidder.
 export const RENOUNCE_RIGHTS = 3;
