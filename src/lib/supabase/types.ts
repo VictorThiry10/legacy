@@ -112,6 +112,7 @@ export type Database = {
       >;
     };
     Views: {
+      nba_teams: { Row: { abbr: string | null; id: string | null }; Relationships: [] };
       team_day_points: { Row: { day: string | null; pts: number | null; team_id: string | null }; Relationships: [FK<"lineup_points_team_id_fkey", "team_id", "teams">] };
     };
     Functions: {

@@ -17,10 +17,10 @@ export async function gamesBetween(from: string, to: string): Promise<Game[]> {
   return rows.filter((g) => etDay(g.start) >= from && etDay(g.start) <= to) as Game[];
 }
 
-// ESPN team id -> abbreviation (BOS), taken from the players table.
+// ESPN team id -> abbreviation (BOS): 30 rows from the nba_teams view.
 export async function teamAbbrs(): Promise<Map<string, string>> {
-  const rows = await all((a, b) => db().from("players").select("nba_team_id, nba_team").not("nba_team_id", "is", null).range(a, b));
-  return new Map(rows.map((r) => [r.nba_team_id!, r.nba_team ?? "?"]));
+  const { data } = await db().from("nba_teams").select("id, abbr");
+  return new Map((data ?? []).map((r) => [r.id!, r.abbr ?? "?"]));
 }
 
 export type BoxLine = {
@@ -44,4 +44,11 @@ export async function boxLines(playerIds: string[]): Promise<BoxLine[]> {
     }
   }
   return out;
+}
+
+// Box score lines for some players in some games only (e.g. one day's games): much lighter than a whole season.
+export async function linesIn(playerIds: string[], gameIds: string[]): Promise<{ playerId: string; fpts: number }[]> {
+  if (!playerIds.length || !gameIds.length) return [];
+  const { data } = await db().from("player_games").select("player_id, fpts").in("player_id", [...new Set(playerIds)]).in("game_id", gameIds).eq("played", true);
+  return (data ?? []).map((r) => ({ playerId: r.player_id, fpts: Number(r.fpts) }));
 }

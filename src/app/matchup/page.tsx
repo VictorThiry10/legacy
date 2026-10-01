@@ -5,7 +5,7 @@ import { currentOf, matchups, scores, standings, type Matchup, type Standing } f
 import { rosters, type RosterPlayer } from "@/lib/roster";
 import { lineupsOn } from "@/lib/lineup-store";
 import { SLOTS, isStarter, slotLabel, type LineupRow } from "@/lib/lineup";
-import { boxLines, gamesBetween, teamAbbrs, type Game } from "@/lib/nba";
+import { gamesBetween, linesIn, teamAbbrs, type Game } from "@/lib/nba";
 import { addDays, isDay, monthDay, today, weekday } from "@/lib/dates";
 import { nbaLogo, shortName } from "@/lib/names";
 import TeamAvatar from "@/components/TeamAvatar";
@@ -13,6 +13,7 @@ import { load } from "@/lib/guard";
 import AutoRefresh from "@/components/AutoRefresh";
 import Slide, { BACK, FORWARD } from "@/components/Slide";
 import { GameStatus, oppLabel } from "@/components/GameInfo";
+import MatchupSwipe from "@/components/MatchupSwipe";
 
 export const dynamic = "force-dynamic";
 
@@ -37,9 +38,9 @@ export default async function MatchupPage({ searchParams }: PageProps<"/matchup"
     const [s, table, roster, games, abbr] = await Promise.all([
       scores(weekMs), standings(teams.map((t) => t.id)), rosters(ids), gamesBetween(day, day), teamAbbrs(),
     ]);
-    const [lineups, lines] = await Promise.all([lineupsOn(ids, day, roster), boxLines(roster.map((p) => p.id))]);
+    const [lineups, lines] = await Promise.all([lineupsOn(ids, day, roster), linesIn(roster.map((p) => p.id), games.map((g) => g.id))]);
     const pts = new Map<string, number>();
-    for (const l of lines.filter((l) => l.day === day)) pts.set(l.playerId, (pts.get(l.playerId) ?? 0) + l.fpts);
+    for (const l of lines) pts.set(l.playerId, (pts.get(l.playerId) ?? 0) + l.fpts);
     const weeks = [...new Set(all.map((x) => x.week))];
     return { m, L, R, day, s, table, roster, games, abbr, pts, lineups, weekMs, weeks };
   });
@@ -61,6 +62,9 @@ export default async function MatchupPage({ searchParams }: PageProps<"/matchup"
   const href = (o: { week?: number; m?: string; d?: string }) =>
     `/matchup?${new URLSearchParams({ ...(o.m ? { m: o.m } : { week: String(o.week ?? m.week) }), ...(o.d ? { d: o.d } : {}) })}`;
   const players = new Map(roster.map((p) => [p.id, p]));
+  const at = weekMs.findIndex((x) => x.id === m.id);
+  const prevHref = at > 0 ? href({ m: weekMs[at - 1].id }) : undefined;
+  const nextHref = at >= 0 && at < weekMs.length - 1 ? href({ m: weekMs[at + 1].id }) : undefined;
   const gameOf = (p?: RosterPlayer) => (p?.nba_team_id ? games.find((g) => g.home_team_id === p.nba_team_id || g.away_team_id === p.nba_team_id) : undefined);
   const nice = (d: string) => `${weekday(d).charAt(0)}${weekday(d).slice(1).toLowerCase()}, ${monthDay(d)}`;
 
@@ -105,7 +109,9 @@ export default async function MatchupPage({ searchParams }: PageProps<"/matchup"
               <Link
                 key={x.id}
                 href={href({ m: x.id })}
-                transitionTypes={FORWARD}
+                prefetch={true}
+                id={x.id === m.id ? "current-matchup" : undefined}
+                transitionTypes={weekMs.indexOf(x) < weekMs.indexOf(m) ? BACK : FORWARD}
                 className={`flex shrink-0 snap-start items-center gap-2 rounded-full px-3 py-1.5 text-sm ${x.id === m.id ? "border-2 border-fg" : "border-2 border-transparent bg-line/70"}`}
                 aria-current={x.id === m.id ? "true" : undefined}
               >
@@ -119,6 +125,7 @@ export default async function MatchupPage({ searchParams }: PageProps<"/matchup"
           })}
         </div>
 
+        <MatchupSwipe prev={prevHref} next={nextHref}>
         {/* score, pinned under the tabs while scrolling */}
         <div className="sticky top-11 z-20 grid grid-cols-2 items-center bg-card px-4 py-3">
           <div className="flex items-center gap-3"><TeamAvatar name={team(L)?.name} size="lg" /><span className="num text-4xl font-black leading-none">{scoreOf(m, L).toFixed(1)}</span></div>
@@ -150,6 +157,7 @@ export default async function MatchupPage({ searchParams }: PageProps<"/matchup"
             <div className="opacity-80">{benchAndIR.map((x, k) => row(x, `${x.slot}-b${k}`))}</div>
           </div>
         </Slide>
+        </MatchupSwipe>
       </div>
     </Slide>
   );
