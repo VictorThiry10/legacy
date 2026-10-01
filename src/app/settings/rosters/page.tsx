@@ -57,7 +57,6 @@ export default async function Rosters({ searchParams }: PageProps<"/settings/ros
           </ActionForm>
         ))}
         {q && !found?.length && <p className="text-sm text-muted">No player matches “{q}”.</p>}
-        <p className="text-xs text-muted">Signed in an earlier season keeps the contract&apos;s real end date and doesn&apos;t use this season&apos;s 2, 3 or 4 year slots.</p>
       </section>
 
       <section className="space-y-2">

@@ -127,7 +127,6 @@ export default async function PlayerPage({ params, searchParams }: PageProps<"/p
                     </table>
                   </div>
                 ) : <p className="text-sm text-muted">No NBA games yet.</p>}
-                <p className="text-xs text-muted">Per game. Last season&apos;s fantasy points leave out the +1 win bonus.</p>
               </Section>
               {overview?.outlook && (
                 <Section title="Outlook">
@@ -230,7 +229,6 @@ function NewsList({ note, news }: { note: { headline: string; story: string | nu
         <div className="space-y-1">
           <p className="font-semibold">{note.headline}</p>
           {note.story && <p className="text-sm text-muted">{note.story}</p>}
-          <p className="text-xs text-muted">RotoWire via ESPN</p>
         </div>
       )}
       {news.map((n, i) => (

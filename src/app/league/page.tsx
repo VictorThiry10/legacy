@@ -73,7 +73,6 @@ export default async function League() {
             </tbody>
           </table>
         </div>
-        <p className="text-xs text-muted">Max bid keeps $1m for every other open roster spot, per league rules.</p>
       </section>
       <section className="space-y-2">
         <h2 className="font-semibold">Recent moves</h2>
@@ -81,7 +80,6 @@ export default async function League() {
       </section>
       <section className="flex flex-wrap items-center gap-3 border-t border-line pt-4 text-sm">
         {me?.team?.is_commish && <Link href="/settings" className="btn-ghost">Commissioner settings</Link>}
-        <span className="text-muted">Signed in as {me?.email}</span>
         <form action="/auth/signout" method="post" className="ml-auto">
           <button className="btn-ghost">Sign out</button>
         </form>

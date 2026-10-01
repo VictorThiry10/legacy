@@ -119,10 +119,10 @@ async function StatsTable({ sp }: { sp: Params }) {
             })}
           </tbody>
         </table>
-        {!players.length && <p className="text-muted text-sm p-4">No players loaded yet. The commissioner loads them from ESPN.</p>}
+        {!players.length && <p className="text-muted text-sm p-4">No players yet.</p>}
       </div>
       <div className="flex flex-wrap justify-between gap-2 text-xs text-muted">
-        <span>{shown.length} of {list.length} players. Fantasy points leave out the +1 win bonus (ESPN doesn&apos;t say which games a player&apos;s team won).</span>
+        <span />
         {!sp.all && list.length > shown.length && <Link href={href(sp, { all: "1" })} className="text-accent hover:underline">Show all</Link>}
       </div>
     </>

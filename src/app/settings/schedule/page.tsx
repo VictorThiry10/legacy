@@ -29,19 +29,15 @@ export default async function Schedule() {
       <section className="space-y-2 max-w-xl">
         <h2 className="font-semibold">Build the schedule</h2>
         {started ? (
-          <p className="card text-sm text-muted">The season has started, so the schedule is locked.</p>
+          <p className="card text-sm text-muted">Season started: schedule locked.</p>
         ) : !full ? (
-          <p className="card text-sm text-muted">{teams.length} of {leagueSize} teams have joined. The schedule can be built once everyone is in.</p>
+          <p className="card text-sm text-muted">{teams.length} of {leagueSize} teams have joined.</p>
         ) : (
           <ActionForm action={buildSeason} className="card grid gap-4 sm:grid-cols-2 items-end" confirm={ms.length ? "Replace the current schedule?" : undefined}>
             <Field label="Opening night"><input name="first_day" type="date" required className="input" /></Field>
             <button className="btn">{ms.length ? "Rebuild" : "Build"}</button>
           </ActionForm>
         )}
-        <p className="text-xs text-muted">
-          Every team plays every other team twice (home and away), one matchup per week. Week 1 runs from opening night to Sunday,
-          then Monday to Sunday. The top 4 go to the semifinals (1 v 4, 2 v 3) and the winners to the final, each over two weeks.
-        </p>
       </section>
       {!!ms.length && (
         <>
