@@ -60,7 +60,7 @@ export default async function AddPlayer({ params, searchParams }: PageProps<"/pl
             <p className="text-sm text-muted">{p.nba_team} · {p.position}</p>
             {w && !owned ? (
               <p className="text-sm">
-                <span className="rounded-full bg-accent px-2 py-0.5 text-xs font-semibold text-bg">On waivers</span>{" "}
+                <span className="rounded-full bg-orange px-2 py-0.5 text-xs font-semibold text-bg">On waivers</span>{" "}
                 bids close <LocalTime iso={w.closes_at} mode="day" /> <LocalTime iso={w.closes_at} />
               </p>
             ) : (
