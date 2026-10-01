@@ -7,7 +7,7 @@ The commissioner also gets Settings: League (rules, scoring), Rosters (sign, rel
 
 ## Code map (`src/lib`)
 Pure rules (no database, unit tested with `npm test`):
-- `rules.ts` cap, roster and contract-slot checks, scoring, draft bidding, lottery
+- `rules.ts` cap, roster and contract-slot checks, scoring, draft bidding, waiver bid order, lottery
 - `lineup.ts` lineup slots and who can play where · `schedule.ts` round robin weeks · `dates.ts` US Eastern days
 
 Database (server only):
@@ -15,6 +15,7 @@ Database (server only):
 - `auth.ts` who is signed in, team and commissioner checks
 - `league.ts` settings and team cap summaries
 - `roster.ts` rosters and every roster move (checked, logged in `transactions`)
+- `waivers.ts` every dropped player goes on waivers for 48 hours of sealed bids, then to the best legal bid or free agency
 - `lineup-store.ts` saved lineups · `season.ts` matchups, frozen daily lineup points, scores, standings
 - `nba.ts` games and box scores · `espn.ts` + `espn-parse.ts` the ESPN feed and the 10 minute refresh
 

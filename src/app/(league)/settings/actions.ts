@@ -30,6 +30,7 @@ export async function saveSettings(f: FormData) {
     const roster_max = num(f, "roster_max");
     const min_salary = Math.round(num(f, "min_salary") * 1e6);
     const league_size = num(f, "league_size");
+    const waiver_hours = num(f, "waiver_hours");
     const { count } = await db().from("teams").select("id", { count: "exact", head: true });
     if (!league_name || league_name.length > 40) throw new Error("League name: 1 to 40 characters.");
     if (!Number.isInteger(season) || season < 2000 || season > 2100) throw new Error("Season start year looks wrong.");
@@ -38,7 +39,8 @@ export async function saveSettings(f: FormData) {
     if (!(min_salary > 0) || min_salary * roster_max > cap) throw new Error("Min salary must be above $0m and fit a full roster under the cap.");
     if (!Number.isInteger(league_size) || league_size < 2 || league_size > 20) throw new Error("League size: 2 to 20 teams.");
     if (league_size < (count ?? 0)) throw new Error(`There are already ${count} teams.`);
-    const { error } = await db().from("settings").update({ league_name, season, cap, roster_max, min_salary, league_size }).eq("id", 1);
+    if (!Number.isInteger(waiver_hours) || waiver_hours < 1 || waiver_hours > 168) throw new Error("Waivers: 1 to 168 hours.");
+    const { error } = await db().from("settings").update({ league_name, season, cap, roster_max, min_salary, league_size, waiver_hours }).eq("id", 1);
     if (error) throw new Error(error.message);
     return "Settings saved.";
   });

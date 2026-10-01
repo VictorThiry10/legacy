@@ -101,7 +101,7 @@ export default async function Rosters({ searchParams }: PageProps<"/settings/ros
                 <span className="ml-auto text-xs text-muted">{t.state.rosterCount}/{rules.rosterMax} · {money(t.state.salary)} · {money(t.capSpace)} space</span>
               </div>
               {roster.filter((p) => p.team_id === t.id).map((p) => (
-                <ActionForm key={p.contract_id} action={release} className="flex gap-2 items-center" confirm={`Release ${p.name} from ${t.name}?`}>
+                <ActionForm key={p.contract_id} action={release} className="flex gap-2 items-center" confirm={`Release ${p.name} from ${t.name}? He goes on waivers.`}>
                   <input type="hidden" name="contract_id" value={p.contract_id} />
                   <span className="flex-1">{p.name} <span className="text-xs text-muted">{money(p.salary)} · ends {p.season_signed + p.years - 1}–{String(p.season_signed + p.years).slice(2)}</span></span>
                   <button className="text-xs text-muted hover:text-bad">release</button>

@@ -22,10 +22,9 @@ export async function rosters(teamIds: string[]): Promise<RosterPlayer[]> {
 
 export type Change = { teamId: string; add: { player_id?: string; salary: number; years: number; season_signed: number }[]; remove: string[] };
 
-// What would break if these contract changes happened? Trades only need every team under the cap (capOnly);
-// signings also check roster spots and contract slots.
-export async function problemsFor(changes: Change[], capOnly = false): Promise<string[]> {
-  const { season, rules } = await getSettings();
+// Each team's cap picture after these contract changes, read fresh from the database (no page cache).
+async function statesAfter(changes: Change[]) {
+  const { season } = await getSettings();
   const ids = changes.map((c) => c.teamId);
   const [{ data: contracts }, { data: adj }, { data: teams }] = await Promise.all([
     db().from("contracts").select("id, team_id, player_id, salary, years, season_signed, active").in("team_id", ids),
@@ -33,17 +32,32 @@ export async function problemsFor(changes: Change[], capOnly = false): Promise<s
     db().from("teams").select("id, name").in("id", ids),
   ]);
   const ir = await onIR(ids);
-  const problems: string[] = [];
-  for (const c of changes) {
+  return changes.map((c) => {
     const mine = (contracts ?? []).filter((x) => x.team_id === c.teamId && !c.remove.includes(x.id));
     const after = [...mine, ...c.add.map((a) => ({ ...a, active: true }))];
     const extra = (adj ?? []).filter((a) => a.team_id === c.teamId).reduce((s, a) => s + Number(a.amount), 0);
-    const name = teams?.find((t) => t.id === c.teamId)?.name ?? "Team";
-    const state = teamState(c.teamId, after, extra, season, ir);
+    return { name: teams?.find((t) => t.id === c.teamId)?.name ?? "Team", state: teamState(c.teamId, after, extra, season, ir) };
+  });
+}
+
+// What would break if these contract changes happened? Trades only need every team under the cap (capOnly);
+// signings also check roster spots and contract slots.
+export async function problemsFor(changes: Change[], capOnly = false): Promise<string[]> {
+  const { rules } = await getSettings();
+  const problems: string[] = [];
+  for (const { name, state } of await statesAfter(changes)) {
     const found = capOnly ? (state.salary > rules.cap ? [`over the ${money(rules.cap)} cap by ${money(state.salary - rules.cap)}`] : []) : rosterProblems(state, rules);
     problems.push(...found.map((p) => `${name}: ${p}`));
   }
   return problems;
+}
+
+// Cap space per team right now.
+export async function capSpaces(teamIds: string[]): Promise<Map<string, number>> {
+  if (!teamIds.length) return new Map();
+  const { rules } = await getSettings();
+  const states = await statesAfter(teamIds.map((teamId) => ({ teamId, add: [], remove: [] })));
+  return new Map(states.map(({ state }) => [state.id, rules.cap - state.salary]));
 }
 
 // Same, but throws with every problem unless overridden.
@@ -74,10 +88,13 @@ export async function signPlayer(o: {
 }
 
 // Free agent pickup: $min salary for 1 year, first come first served. A full roster must drop someone in the same step.
+// The dropped player goes on waivers (lib/waivers.ts), and so a player on waivers can't be picked up this way.
 export async function pickUp(o: { teamId: string; playerId: string; dropContractId?: string }) {
   const { season, rules } = await getSettings();
   const { data: taken } = await db().from("contracts").select("id").eq("player_id", o.playerId).eq("active", true).maybeSingle();
   if (taken) throw new Error("Someone just picked him up.");
+  const { data: waived } = await db().from("waivers").select("id").eq("player_id", o.playerId).eq("status", "open").maybeSingle();
+  if (waived) throw new Error("He is on waivers: place a bid instead.");
   const mine = await rosters([o.teamId]);
   const ir = await onIR([o.teamId]);
   const onRoster = mine.filter((p) => !ir.has(p.id)).length;
@@ -96,13 +113,13 @@ export async function pickUp(o: { teamId: string; playerId: string; dropContract
     if (e instanceof Error && /one_active_contract_per_player|duplicate key/i.test(e.message)) throw new Error("Someone just picked him up.");
     throw e;
   }
-  return `${who?.name ?? "Player"} added${dropped ? `, ${dropped.name} dropped` : ""}.`;
+  return `${who?.name ?? "Player"} added${dropped ? `, ${dropped.name} dropped to waivers` : ""}.`;
 }
 
 export async function releaseContract(contractId: string, note?: string) {
   const { season } = await getSettings();
   await rpc("roster_release", { p_contract: contractId, p_season: season, p_note: note ?? "" });
-  return "Released.";
+  return "Released. He's on waivers now.";
 }
 
 // Contracts from team A go to team B and the other way round, in one step.

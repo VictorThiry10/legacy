@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { resolveRound, revealRound, maxBid, yearsLeft, DEFAULT_SETTINGS as S, drawLottery, lotteryOdds, fantasyPoints, rosterProblems, teamState, type TeamState, type Bid } from "./rules";
+import { resolveRound, revealRound, maxBid, yearsLeft, DEFAULT_SETTINGS as S, drawLottery, lotteryOdds, fantasyPoints, rosterProblems, teamState, rankWaiverBids, type TeamState, type Bid } from "./rules";
 
 const M = 1_000_000;
 const team = (id: string, salary = 0, rosterCount = 0): TeamState => ({ id, salary, rosterCount, slotsUsed: {} });
@@ -124,4 +124,20 @@ test("team state: every contract counts against the cap, IR doesn't take a roste
   assert.equal(t.salary, 16_000_000); // released p3 doesn't count, the $1m adjustment does
   assert.equal(t.rosterCount, 1); // p2 is on IR
   assert.deepEqual(t.slotsUsed, { 2: 1 }); // only this season's signing uses a slot
+});
+
+test("waivers: highest sealed bid first, ties to more cap space, then the earlier bid", () => {
+  const space: Record<string, number> = { A: 10 * M, B: 30 * M, C: 30 * M };
+  const w = (id: string, teamId: string, amount: number, createdAt: string) => ({ id, teamId, amount: amount * M, createdAt });
+  const ranked = rankWaiverBids(
+    [w("1", "A", 5, "2026-10-01T10:00"), w("2", "B", 5, "2026-10-01T12:00"), w("3", "C", 5, "2026-10-01T11:00"), w("4", "A", 7, "2026-10-01T13:00")],
+    (t) => space[t],
+    S.minSalary,
+  );
+  assert.deepEqual(ranked.map((b) => b.id), ["4", "3", "2", "1"]);
+});
+
+test("waivers: bids under the minimum salary don't count", () => {
+  const ranked = rankWaiverBids([{ id: "1", teamId: "A", amount: 500_000, createdAt: "" }], () => 0, S.minSalary);
+  assert.equal(ranked.length, 0);
 });

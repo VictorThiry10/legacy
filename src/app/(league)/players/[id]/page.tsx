@@ -7,6 +7,7 @@ import { getSettings, type Player } from "@/lib/league";
 import { money, yearsLeft } from "@/lib/rules";
 import { seasonLabel } from "@/lib/player-stats";
 import { nbaLogo } from "@/lib/names";
+import { waiverFor } from "@/lib/waivers";
 import LocalTime from "@/components/LocalTime";
 import Slide, { BACK, FORWARD } from "@/components/Slide";
 
@@ -20,7 +21,7 @@ export default async function PlayerPage({ params, searchParams }: PageProps<"/p
   const [{ id }, sp] = await Promise.all([params, searchParams]);
   const tab = TABS.some(([k]) => k === sp.tab) ? (sp.tab as string) : "overview";
   const d = db();
-  const [{ data: player }, { data: contract }, { data: logs }, { data: moves }, overview, me, { season }] = await Promise.all([
+  const [{ data: player }, { data: contract }, { data: logs }, { data: moves }, overview, me, { season }, onWaivers] = await Promise.all([
     d.from("players").select("*").eq("id", id).maybeSingle(),
     d.from("contracts").select("id, salary, years, season_signed, team:teams(id, name)").eq("player_id", id).eq("active", true).maybeSingle(),
     d.from("player_games").select("*, game:games(start, home_team_id, away_team_id, home_score, away_score)").eq("player_id", id).eq("played", true),
@@ -28,10 +29,12 @@ export default async function PlayerPage({ params, searchParams }: PageProps<"/p
     playerOverview(id),
     getMe(),
     getSettings(),
+    getMe().then((m) => waiverFor(id, m?.team?.id)),
   ]);
   if (!player) notFound();
   const p = player as unknown as Player & { injury_note: string | null };
   const c = contract as unknown as { id: string; salary: number; years: number; season_signed: number; team: { id: string; name: string } } | null;
+  const w = c ? null : onWaivers;
 
   // This season so far (our box scores), and last season (ESPN totals).
   type Log = { pts: number; reb: number; ast: number; stl: number; blk: number; tov: number; min: number; fpts: number; game: { start: string } };
@@ -67,12 +70,21 @@ export default async function PlayerPage({ params, searchParams }: PageProps<"/p
                   <Link href={`/teams/${c.team.id}`} className="font-medium hover:underline">{c.team.name}</Link>
                   <div className="text-xs text-muted num">{money(Number(c.salary))} · {yearsLeft(c, season)} {yearsLeft(c, season) === 1 ? "yr" : "yrs"} left · ends {seasonLabel(c.season_signed + c.years)}</div>
                 </>
+              ) : w ? (
+                <>
+                  <span className="font-medium text-accent">On waivers</span>
+                  <div className="text-xs text-muted">Bids close <LocalTime iso={w.waiver.closes_at} mode="day" /> <LocalTime iso={w.waiver.closes_at} /></div>
+                </>
               ) : "Free Agent"}
             </div>
             <div className="flex flex-wrap items-center gap-2 pt-1">
-              {!c && me?.team && (
+              {!c && me?.team && (w ? (
+                <Link href={`/players/${p.id}/add`} transitionTypes={FORWARD} className="rounded-full bg-accent px-5 py-1.5 text-sm font-semibold text-bg">
+                  {w.myBid ? `Your bid ${money(Number(w.myBid.amount))}` : "Bid"}
+                </Link>
+              ) : (
                 <Link href={`/players/${p.id}/add`} transitionTypes={FORWARD} className="rounded-full border-[1.5px] border-accent bg-card px-5 py-1.5 text-sm font-semibold text-accent hover:bg-accent/10">+ Add</Link>
-              )}
+              ))}
               {c && me?.team?.id === c.team.id && <span className="rounded-full bg-line px-3 py-1.5 text-xs font-semibold">On your team</span>}
               {c && me?.team && me.team.id !== c.team.id && (
                 <Link href={`/trade/${c.team.id}?get=${c.id}`} transitionTypes={FORWARD} className="rounded-full bg-blue px-5 py-1.5 text-sm font-semibold text-white">Trade</Link>
