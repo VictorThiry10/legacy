@@ -3,6 +3,7 @@ import { cache } from "react";
 import { cookies } from "next/headers";
 import { createHash, randomBytes } from "node:crypto";
 import { db } from "./supabase/server";
+import { getMe } from "./auth";
 import { fail, rpc } from "./db";
 import { getSettings, teamSummaries, type Team } from "./league";
 import { BID_STEP, maxBid, money, revealRound, RENOUNCE_RIGHTS, ROUND_SECONDS, type Bid, type RevealItem } from "./rules";
@@ -19,13 +20,15 @@ const COOKIE = "bid_session";
 
 // ---------- sign in: email only, no code ----------
 
+// Joined rows come back as an object or a one item list depending on the relation: always one or null.
+const one = <T,>(x: T | T[] | null): T | null => (Array.isArray(x) ? (x[0] ?? null) : x);
+
 export const bidTeam = cache(async (): Promise<Team | null> => {
   const token = (await cookies()).get(COOKIE)?.value;
   if (!token) return null;
-  const { data: s } = await db().from("bid_sessions").select("team_id").eq("token", token).maybeSingle();
-  if (!s) return null;
-  const { data: team } = await db().from("teams").select("*").eq("id", s.team_id).maybeSingle();
-  return team ?? null;
+  // The session and its team in one read, through the team_id foreign key.
+  const { data: s } = await db().from("bid_sessions").select("team:teams(*)").eq("token", token).maybeSingle();
+  return one(s?.team ?? null);
 });
 
 export async function signIn(email: string) {
@@ -76,7 +79,8 @@ export type Room = {
   now: number; // server clock, so every countdown agrees
   phase: Phase;
   meId: string;
-  isCommish: boolean;
+  isCommish: boolean; // commissioner, signed in to the league app too
+  needsLeagueLogin: boolean; // commissioner by email only: controls stay hidden until the league login
   teams: RoomTeam[];
   rounds: RoundInfo[];
   round: RoundInfo | null; // live round, or the next one while waiting
@@ -87,22 +91,26 @@ export type Room = {
   signings: Signing[];
   limits: Record<number, number>; // contract lengths: years -> how many per season
   minSalary: number;
+  v: string; // the room's fingerprint (what pulse() returns), so the page knows if a poll brings news
 };
 
 const roundInfo = (r: Row<"rounds">): RoundInfo => ({
   id: r.id, number: r.number, kind: r.kind === "leftovers" ? "leftovers" : "regular", status: r.status, closesAt: r.closes_at,
 });
 
-const one = <T,>(x: T | T[] | null): T | null => (Array.isArray(x) ? (x[0] ?? null) : x);
-
 export async function room(team: Team): Promise<Room> {
-  const { season, rules } = await getSettings();
+  const verified = commishVerified(team); // league login check, only does work for the commissioner
+  const { season, rules, faLocked } = await getSettings();
   const d = db();
-  const [summaries, rs, st, ren] = await Promise.all([
+  // Everything in one wave of reads: the open round's players and bids come through an inner join on the
+  // round (status and season), so they don't wait for the rounds list.
+  const [summaries, rs, ren, rp, bidRows, lens] = await Promise.all([
     teamSummaries(),
-    d.from("rounds").select("*").eq("season", season).order("number"),
-    d.from("settings").select("fa_locked").eq("id", 1).single(),
+    d.from("rounds").select("*, round_players(count)").eq("season", season).order("number"),
     d.from("renounces").select("team_id, bid_id").eq("season", season),
+    d.from("round_players").select("round_id, pos, player:players(*), round:rounds!inner(status, season)").eq("round.status", "open").eq("round.season", season).order("pos"),
+    d.from("bids").select("*, round:rounds!inner(status, season)").eq("round.status", "open").eq("round.season", season),
+    d.from("contracts").select("years").eq("season_signed", season).eq("acquired_via", "draft"),
   ]);
   if (rs.error) fail(rs.error);
   const rounds = rs.data ?? [];
@@ -111,17 +119,16 @@ export async function room(team: Team): Promise<Room> {
   const next = rounds.find((r) => r.status === "setup") ?? null;
   const phase: Phase = live
     ? Date.parse(live.closes_at ?? "") > now ? "bidding" : "reveal"
-    : next || !rounds.length ? "waiting" : st.data?.fa_locked ? "done" : "contracts";
+    : next || !rounds.length ? "waiting" : faLocked ? "done" : "contracts";
   const current = live ?? (phase === "waiting" ? next : null);
 
-  const [rp, bidRows, signed] = await Promise.all([
-    current ? d.from("round_players").select("pos, player:players(*)").eq("round_id", current.id).order("pos") : null,
-    live ? d.from("bids").select("*").eq("round_id", live.id) : null,
-    phase === "contracts" || phase === "done"
-      ? d.from("contracts").select("id, team_id, salary, years, player:players(*)").eq("season_signed", season).eq("acquired_via", "draft").eq("active", true)
-      : null,
-  ]);
-  const bids: Bid[] = (bidRows?.data ?? []).map((b) => ({ id: b.id, teamId: b.team_id, playerId: b.player_id, amount: Number(b.amount), years: b.years, createdAt: b.created_at }));
+  // Only the contracts screens need the signings: a second read once the phase is known (nothing is live then).
+  const signed = phase === "contracts" || phase === "done"
+    ? await d.from("contracts").select("id, team_id, salary, years, player:players(*)").eq("season_signed", season).eq("acquired_via", "draft").eq("active", true)
+    : null;
+  // Rows of the live round only (the reads ran side by side, so check they agree on which round that is).
+  const bids: Bid[] = (bidRows.data ?? []).filter((b) => b.round_id === live?.id)
+    .map((b) => ({ id: b.id, teamId: b.team_id, playerId: b.player_id, amount: Number(b.amount), years: b.years, createdAt: b.created_at }));
   const used = new Map<string, number>();
   (ren.data ?? []).forEach((r) => used.set(r.team_id, (used.get(r.team_id) ?? 0) + 1));
   const bidders = new Set(bids.map((b) => b.teamId));
@@ -130,7 +137,7 @@ export async function room(team: Team): Promise<Room> {
     id: t.id, name: t.name, manager: t.manager_name, capSpace: t.capSpace, maxBid: Math.floor(maxBid(t.state, rules) / BID_STEP) * BID_STEP, roster: t.state.rosterCount,
     renouncesLeft: RENOUNCE_RIGHTS - (used.get(t.id) ?? 0), hasBid: phase === "bidding" && bidders.has(t.id),
   }));
-  const players = phase === "waiting" ? [] : (rp?.data ?? []).map((x) => one(x.player)).filter((p) => !!p).map(cardOf);
+  const players = phase === "waiting" || !live ? [] : (rp.data ?? []).filter((x) => x.round_id === live.id).map((x) => one(x.player)).filter((p) => !!p).map(cardOf);
 
   let reveal: RevealItem[] | null = null;
   if (phase === "reveal" && live) {
@@ -139,10 +146,10 @@ export async function room(team: Team): Promise<Room> {
   }
 
   return {
-    now, phase, meId: team.id, isCommish: team.is_commish, teams,
+    now, phase, meId: team.id, isCommish: await verified, needsLeagueLogin: team.is_commish && !(await verified), teams,
     rounds: rounds.map(roundInfo),
     round: current ? roundInfo(current) : null,
-    cardsWaiting: phase === "waiting" ? (rp?.data?.length ?? 0) : 0,
+    cardsWaiting: phase === "waiting" ? (current?.round_players[0]?.count ?? 0) : 0,
     players,
     myBids: Object.fromEntries(bids.filter((b) => b.teamId === team.id).map((b) => [b.playerId, b.amount])),
     reveal,
@@ -152,25 +159,37 @@ export async function room(team: Team): Promise<Room> {
     }),
     limits: rules.slotLimits,
     minSalary: rules.minSalary,
+    v: fingerprint({
+      rounds, faLocked, bidders: [...bidders], renounces: ren.data?.length ?? 0, years: (lens.data ?? []).map((l) => l.years), teams: summaries.length,
+    }),
   };
 }
 
 // A short fingerprint of everything that changes the room. Screens poll it and refresh when it moves.
-// It never contains bids, so it gives nothing away.
+// It never contains bids, so it gives nothing away. room() and pulse() both build it here, from the same reads.
+function fingerprint(x: {
+  rounds: { id: string; status: string; closes_at: string | null }[]; faLocked: boolean; bidders: string[]; renounces: number; years: number[]; teams: number;
+}) {
+  const key = JSON.stringify([
+    x.rounds.map((r) => [r.id, r.status, r.closes_at]), x.faLocked, [...new Set(x.bidders)].sort(), x.renounces, [...x.years].sort((a, b) => a - b), x.teams,
+  ]);
+  return createHash("sha1").update(key).digest("base64url").slice(0, 16);
+}
+
+// Polled every couple of seconds by every screen: one wave of small reads once the season is known.
 export async function pulse(): Promise<string> {
-  const { season } = await getSettings();
+  const { season, faLocked } = await getSettings();
   const d = db();
-  const [{ data: rounds }, { data: st }, { count: ren }, { data: lens }, { count: teams }] = await Promise.all([
+  const [{ data: rounds }, { count: ren }, { data: lens }, { count: teams }, { data: bidders }] = await Promise.all([
     d.from("rounds").select("id, status, closes_at").eq("season", season).order("number"),
-    d.from("settings").select("fa_locked").eq("id", 1).single(),
     d.from("renounces").select("id", { count: "exact", head: true }).eq("season", season),
     d.from("contracts").select("years").eq("season_signed", season).eq("acquired_via", "draft"),
     d.from("teams").select("id", { count: "exact", head: true }),
+    d.from("bids").select("team_id, round:rounds!inner(status, season)").eq("round.status", "open").eq("round.season", season),
   ]);
-  const live = rounds?.find((r) => r.status === "open");
-  const { data: bidders } = live ? await d.from("bids").select("team_id").eq("round_id", live.id) : { data: [] };
-  const key = JSON.stringify([rounds, st?.fa_locked, [...new Set((bidders ?? []).map((b) => b.team_id))].sort(), ren, (lens ?? []).map((l) => l.years).sort(), teams]);
-  return createHash("sha1").update(key).digest("base64url").slice(0, 16);
+  return fingerprint({
+    rounds: rounds ?? [], faLocked, bidders: (bidders ?? []).map((b) => b.team_id), renounces: ren ?? 0, years: (lens ?? []).map((l) => l.years), teams: teams ?? 0,
+  });
 }
 
 // ---------- GM moves ----------
@@ -205,14 +224,24 @@ export async function setLengths(team: Team, rows: { contractId: string; years: 
 
 // ---------- commissioner ----------
 
-function commish(team: Team) {
-  if (!team.is_commish) throw new Error("Commissioner only.");
+// Commissioner powers need both the commissioner's team here and the league app login (email plus a 6 digit
+// code) in the same browser, so knowing the commissioner's email isn't enough to run the draft.
+export async function commishVerified(team: Team) {
+  if (!team.is_commish) return false;
+  const me = await getMe().catch(() => null);
+  return !!me?.team?.is_commish;
+}
+
+async function commish(team: Team) {
+  if (!(await commishVerified(team))) {
+    throw new Error(team.is_commish ? "Sign in to the league app in this browser to run the draft." : "Commissioner only.");
+  }
 }
 
 const closesIn = (seconds: number) => new Date(Date.now() + seconds * 1000).toISOString();
 
 export async function startNext(team: Team) {
-  commish(team);
+  await commish(team);
   const { season } = await getSettings();
   const { data: rounds } = await db().from("rounds").select("id, status, number").eq("season", season).order("number");
   if (rounds?.some((r) => r.status === "open")) throw new Error("A round is already running.");
@@ -223,7 +252,7 @@ export async function startNext(team: Team) {
 }
 
 export async function changeClock(team: Team, seconds: number | "now") {
-  commish(team);
+  await commish(team);
   const { season } = await getSettings();
   const { data: live } = await db().from("rounds").select("id, closes_at").eq("season", season).eq("status", "open").maybeSingle();
   if (!live?.closes_at || Date.parse(live.closes_at) <= Date.now()) throw new Error("Bidding is already closed.");
@@ -234,7 +263,7 @@ export async function changeClock(team: Team, seconds: number | "now") {
 
 // Sign this round's winners and open the next round (or the last chance round, or finish).
 export async function nextRound(team: Team) {
-  commish(team);
+  await commish(team);
   const r = await room(team);
   if (r.phase !== "reveal" || !r.round || !r.reveal) throw new Error("Wait for the reveal first.");
   const { count } = await db().from("renounces").select("id", { count: "exact", head: true }).eq("round_id", r.round.id);
@@ -243,13 +272,13 @@ export async function nextRound(team: Team) {
 }
 
 export async function lockContracts(team: Team, locked: boolean) {
-  commish(team);
+  await commish(team);
   const { error } = await db().from("settings").update({ fa_locked: locked }).eq("id", 1);
   if (error) fail(error);
 }
 
 export async function restart(team: Team) {
-  commish(team);
+  await commish(team);
   const { season } = await getSettings();
   await rpc("bidding_restart", { p_season: season });
 }
@@ -296,7 +325,7 @@ async function roundRow(season: number, number: number) {
 }
 
 export async function addToRound(team: Team, number: number, playerId: string) {
-  commish(team);
+  await commish(team);
   const { season } = await getSettings();
   if (!(number >= 1 && number <= REGULAR_ROUNDS)) throw new Error("Pick a round.");
   const t = await taken(season);
@@ -310,7 +339,7 @@ export async function addToRound(team: Team, number: number, playerId: string) {
 }
 
 export async function removeFromRound(team: Team, number: number, playerId: string) {
-  commish(team);
+  await commish(team);
   const { season } = await getSettings();
   const id = await roundRow(season, number);
   await db().from("round_players").delete().eq("round_id", id).eq("player_id", playerId);
@@ -320,7 +349,7 @@ export async function removeFromRound(team: Team, number: number, playerId: stri
 
 // Fill every open spot in rounds 1-8 with the best free agents left, by last season's fantasy points per game.
 export async function autoFill(team: Team) {
-  commish(team);
+  await commish(team);
   const { season } = await getSettings();
   const [{ data: players }, t, rounds] = await Promise.all([db().from("players").select("id, last_season"), taken(season), setupRounds()]);
   const pool = (players ?? [])
@@ -339,7 +368,7 @@ export async function autoFill(team: Team) {
 
 // GMs who haven't joined the league app yet can be added here so they can sign in to bid.
 export async function addTeam(team: Team, name: string, manager: string, email: string) {
-  commish(team);
+  await commish(team);
   const { leagueSize } = await getSettings();
   const clean = { name: name.trim(), manager_name: manager.trim() || null, manager_email: email.trim().toLowerCase() };
   if (!clean.name || clean.name.length > 40) throw new Error("Team name: 1 to 40 characters.");

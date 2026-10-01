@@ -26,7 +26,7 @@ export default async function League({ searchParams }: PageProps<"/league">) {
       <div className="bg-card px-4 py-3 sm:rounded-t-2xl">
         <div className="grid grid-cols-4 rounded-full bg-line/80 p-1 text-sm">
           {VIEWS.map(([k, label]) => (
-            <Link key={k} href={k === "standings" ? "/league" : `/league?view=${k}`} scroll={false}
+            <Link key={k} href={k === "standings" ? "/league" : `/league?view=${k}`} prefetch={true} scroll={false}
               className={`rounded-full py-2 text-center font-medium ${view === k ? "bg-card shadow-sm" : "text-fg/80"}`}>
               {label}
             </Link>
@@ -59,7 +59,7 @@ const pct = (r: Standing) => {
 function TeamCell({ t }: { t?: TeamSummary }) {
   if (!t) return <span className="text-muted">To be decided</span>;
   return (
-    <Link href={`/teams/${t.id}`} className="flex min-w-0 items-center gap-3">
+    <Link href={`/teams/${t.id}`} prefetch={false} transitionTypes={["nav-forward"]} className="flex min-w-0 items-center gap-3">
       <TeamAvatar name={t.name} />
       <span className="min-w-0 leading-tight">
         <span className="block truncate font-semibold text-blue">{t.name}</span>

@@ -11,6 +11,8 @@ import Field from "@/components/Field";
 import LocalTime from "@/components/LocalTime";
 import Slide, { BACK } from "@/components/Slide";
 import { addPlayer, bid, unbid } from "./actions";
+import { headshot } from "@/lib/names";
+import SubmitButton from "@/components/SubmitButton";
 
 export const dynamic = "force-dynamic";
 
@@ -54,7 +56,7 @@ export default async function AddPlayer({ params, searchParams }: PageProps<"/pl
       <div className="mx-auto max-w-md space-y-4">
         <Link href={`/players/${p.id}`} transitionTypes={BACK} className="text-sm text-muted hover:text-fg">← {p.name}</Link>
         <div className="card flex items-center gap-4">
-          {p.headshot ? <img src={p.headshot} alt="" className="h-16 w-16 rounded-full object-cover bg-line" /> : <span className="h-16 w-16 rounded-full bg-line" />}
+          {p.headshot ? <img src={headshot(p.headshot, 192)!} alt="" decoding="async" className="h-16 w-16 rounded-full object-cover bg-line" /> : <span className="h-16 w-16 rounded-full bg-line" />}
           <div>
             <h1 className="text-xl font-semibold">{w && !owned ? "Bid on" : "Add"} {p.name}</h1>
             <p className="text-sm text-muted">{p.nba_team} · {p.position}</p>
@@ -97,12 +99,12 @@ export default async function AddPlayer({ params, searchParams }: PageProps<"/pl
                 />
               </Field>
               {full && dropPicker(`Your roster is full (${rules.rosterMax}). Pick a player to drop if you win:`, myBid?.drop_contract)}
-              <button className="btn w-full">{myBid ? "Change bid" : "Place bid"}</button>
+              <SubmitButton className="btn w-full">{myBid ? "Change bid" : "Place bid"}</SubmitButton>
             </form>
             {myBid && (
               <form action={unbid}>
                 <input type="hidden" name="player_id" value={p.id} />
-                <button className="btn-ghost w-full">Withdraw bid</button>
+                <SubmitButton className="btn-ghost w-full">Withdraw bid</SubmitButton>
               </form>
             )}
           </>
@@ -110,7 +112,7 @@ export default async function AddPlayer({ params, searchParams }: PageProps<"/pl
           <form action={addPlayer} className="space-y-3">
             <input type="hidden" name="player_id" value={p.id} />
             {full && dropPicker(`Your roster is full (${rules.rosterMax}). Pick a player to drop (he goes on waivers):`)}
-            <button className="btn w-full">{full ? "Drop and add" : `Add ${p.name}`}</button>
+            <SubmitButton className="btn w-full">{full ? "Drop and add" : `Add ${p.name}`}</SubmitButton>
           </form>
         )}
       </div>

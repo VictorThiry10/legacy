@@ -8,6 +8,8 @@ import { money, yearsLeft } from "@/lib/rules";
 import { load } from "@/lib/guard";
 import Slide, { BACK } from "@/components/Slide";
 import { sendOffer } from "../actions";
+import { headshot } from "@/lib/names";
+import SubmitButton from "@/components/SubmitButton";
 
 export const dynamic = "force-dynamic";
 
@@ -79,7 +81,7 @@ function PlayerPick({ p, season, name, checked }: { p: RosterPlayer; season: num
           <span className="plus">+</span>
           <span className="tick hidden text-base">✓</span>
         </span>
-        {p.headshot ? <img src={p.headshot} alt="" className="h-9 w-9 shrink-0 rounded-full bg-line object-cover" /> : <span className="h-9 w-9 shrink-0 rounded-full bg-line" />}
+        {p.headshot ? <img src={headshot(p.headshot, 110)!} alt="" loading="lazy" decoding="async" className="h-9 w-9 shrink-0 rounded-full bg-line object-cover" /> : <span className="h-9 w-9 shrink-0 rounded-full bg-line" />}
         <span className="min-w-0 flex-1 leading-tight">
           <span className="block truncate text-[15px] font-medium">{p.name}</span>
           <span className="block truncate text-[11px] text-muted">
@@ -134,7 +136,7 @@ function Summary({ review, them, me, get, give, closeHref }: {
         {get.map((g) => <input key={g} type="hidden" name="get" value={g} />)}
         {give.map((g) => <input key={g} type="hidden" name="give" value={g} />)}
         <Link href={closeHref} transitionTypes={BACK} className="flex-1 rounded-full border border-line py-3 text-center font-semibold">Back</Link>
-        <button disabled={!!problems.length} className="flex-1 rounded-full bg-blue py-3 font-semibold text-white disabled:opacity-40">Confirm</button>
+        <SubmitButton disabled={!!problems.length} className="flex-1 rounded-full bg-blue py-3 font-semibold text-white">Confirm</SubmitButton>
       </form>
       <p className="text-center text-xs text-muted">{them.name} gets the offer to accept or decline.</p>
     </Modal>

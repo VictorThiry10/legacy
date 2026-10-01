@@ -4,7 +4,7 @@ import { getSettings, type Player } from "@/lib/league";
 import { STAT_COLS, fmt, seasonLabel, stat, type StatKey } from "@/lib/player-stats";
 import LocalTime from "@/components/LocalTime";
 import SearchBar from "@/components/SearchBar";
-import { initials } from "@/lib/names";
+import { headshot, initials } from "@/lib/names";
 import { openWaivers } from "@/lib/waivers";
 
 export const dynamic = "force-dynamic";
@@ -60,7 +60,8 @@ async function StatsTable({ sp }: { sp: Params }) {
     .filter((p) => (show === "fa" ? !owner.has(p.id) : show === "wa" ? waivers.has(p.id) : show === "owned" ? owner.has(p.id) : true))
     .map((p) => ({ p, v: stat(p.last_season, sort, perGame) }))
     .sort((a, b) => (a.v == null ? 1 : b.v == null ? -1 : asc ? a.v - b.v : b.v - a.v) || a.p.name.localeCompare(b.p.name));
-  const shown = sp.all ? list : list.slice(0, 100);
+  const count = Math.max(50, Number(sp.n) || 50);
+  const shown = list.slice(0, count);
   const lastYear = players.find((p) => p.last_season?.season)?.last_season?.season ?? season;
 
   return (
@@ -77,7 +78,7 @@ async function StatsTable({ sp }: { sp: Params }) {
               <th colSpan={2} className="text-center border-l border-line">Fantasy pts</th>
             </tr>
             <tr>
-              <th className="sticky left-0 z-10 bg-card [transform:translateZ(0)] shadow-[2px_0_3px_-2px_rgba(0,0,0,0.25)] w-12 min-w-12" aria-label="Photo" />
+              <th className="stick" aria-label="Photo" />
               <th>Player</th>
               <th className="text-center">Team</th>
               <th className="border-l border-line">Opp</th>
@@ -96,30 +97,30 @@ async function StatsTable({ sp }: { sp: Params }) {
               const g = p.nba_team_id ? nextGame.get(p.nba_team_id) : undefined;
               return (
                 <tr key={p.id}>
-                  <td className="sticky left-0 z-10 bg-card [transform:translateZ(0)] shadow-[2px_0_3px_-2px_rgba(0,0,0,0.25)] w-12 min-w-12 pr-0">
-                    <Link href={`/players/${p.id}`} aria-label={p.name}>
-                      {p.headshot ? <img src={p.headshot} alt="" className="block h-9 w-9 max-w-none rounded-full object-cover bg-line" /> : <span className="block h-9 w-9 rounded-full bg-line" />}
+                  <td className="stick pr-0">
+                    <Link href={`/players/${p.id}`} prefetch={false} transitionTypes={["nav-forward"]} aria-label={p.name}>
+                      {p.headshot ? <img src={headshot(p.headshot, 110)!} alt="" loading="lazy" decoding="async" className="block h-9 w-9 max-w-none rounded-full object-cover bg-line" /> : <span className="block h-9 w-9 rounded-full bg-line" />}
                     </Link>
                   </td>
                   <td>
-                    <Link href={`/players/${p.id}`} className="group">
+                    <Link href={`/players/${p.id}`} prefetch={false} transitionTypes={["nav-forward"]} className="group">
                       <span className="text-accent group-hover:underline">{p.name}</span>
                       {p.injury_status && <span className="ml-2 text-[10px] font-semibold uppercase text-bad" title={p.injury_note ?? ""}>{p.injury_status}</span>}
                       <span className="block text-xs text-muted">{p.nba_team} · {p.position}</span>
                     </Link>
                   </td>
                   <td className="text-center text-xs font-semibold">
-                    {o ? <Link href={`/teams/${o.id}`} title={o.name} className="hover:underline">{initials(o.name)}</Link>
-                      : waivers.has(p.id) ? <Link href={`/players/${p.id}/add`} transitionTypes={["nav-forward"]} className="inline-flex h-6 w-6 items-center justify-center rounded-full border-[1.5px] border-orange text-orange font-bold" title="On waivers: sealed bids" aria-label={`Bid on ${p.name}`}>+</Link>
-                      : <Link href={`/players/${p.id}/add`} transitionTypes={["nav-forward"]} className="inline-flex h-6 w-6 items-center justify-center rounded-full border-[1.5px] border-good text-good font-bold" title="Free agent" aria-label={`Add ${p.name}`}>+</Link>}
+                    {o ? <Link href={`/teams/${o.id}`} prefetch={false} transitionTypes={["nav-forward"]} title={o.name} className="hover:underline">{initials(o.name)}</Link>
+                      : waivers.has(p.id) ? <Link href={`/players/${p.id}/add`} prefetch={false} transitionTypes={["nav-forward"]} className="inline-flex h-6 w-6 items-center justify-center rounded-full border-[1.5px] border-orange text-orange font-bold" title="On waivers: sealed bids" aria-label={`Bid on ${p.name}`}>+</Link>
+                      : <Link href={`/players/${p.id}/add`} prefetch={false} transitionTypes={["nav-forward"]} className="inline-flex h-6 w-6 items-center justify-center rounded-full border-[1.5px] border-good text-good font-bold" title="Free agent" aria-label={`Add ${p.name}`}>+</Link>}
                   </td>
                   <td className="border-l border-line text-accent">{g?.opp ?? <span className="text-muted">–</span>}</td>
                   <td className="text-xs text-muted">{g ? <><LocalTime iso={g.start} mode="day" /> <LocalTime iso={g.start} /></> : "–"}</td>
                   {STAT_COLS.map((c, i) => (
-                    <td key={c.key} className={`num text-right ${i === 0 ? "border-l border-line" : ""}`}>{fmt(stat(ls, c.key, perGame && c.key !== "gp"), perGame, c.key)}</td>
+                    <td key={c.key} className={i === 0 ? "n bl" : "n"}>{fmt(stat(ls, c.key, perGame && c.key !== "gp"), perGame, c.key)}</td>
                   ))}
-                  <td className="num text-right border-l border-line">{fmt(stat(ls, "tot", false), false, "tot")}</td>
-                  <td className="num text-right font-semibold">{fmt(stat(ls, "avg", false), false, "avg")}</td>
+                  <td className="n bl">{fmt(stat(ls, "tot", false), false, "tot")}</td>
+                  <td className="n font-semibold">{fmt(stat(ls, "avg", false), false, "avg")}</td>
                 </tr>
               );
             })}
@@ -129,7 +130,7 @@ async function StatsTable({ sp }: { sp: Params }) {
       </div>
       <div className="flex flex-wrap justify-between gap-2 text-xs text-muted">
         <span />
-        {!sp.all && list.length > shown.length && <Link href={href(sp, { all: "1" })} className="text-accent hover:underline">Show all</Link>}
+        {list.length > shown.length && <Link href={href(sp, { n: String(count + 50) })} prefetch={false} scroll={false} className="py-2 text-accent hover:underline">Show 50 more</Link>}
       </div>
     </>
   );
@@ -148,7 +149,7 @@ function SortTh({ sp, sort, asc, k, label, title, className = "" }: { sp: Params
   const on = sort === k;
   return (
     <th className={`text-right ${className}`} title={title}>
-      <Link href={href(sp, { sort: k, dir: on && !asc ? "asc" : undefined })} className={`underline-offset-4 hover:underline ${on ? "text-fg" : ""}`}>
+      <Link href={href(sp, { sort: k, dir: on && !asc ? "asc" : undefined, n: undefined })} prefetch={false} scroll={false} className={`underline-offset-4 hover:underline ${on ? "text-fg" : ""}`}>
         {label}{on ? (asc ? " ↑" : " ↓") : ""}
       </Link>
     </th>
@@ -156,7 +157,7 @@ function SortTh({ sp, sort, asc, k, label, title, className = "" }: { sp: Params
 }
 
 const pill = "h-10 min-w-12 px-4 inline-flex items-center justify-center rounded-full text-sm font-semibold whitespace-nowrap";
-const chip = (on: boolean) => `${pill} ${on ? "border-2 border-fg text-fg bg-card" : "bg-line/70 text-muted hover:text-fg"}`;
+const chip = (on: boolean) => `${pill} transition-colors active:opacity-70 ${on ? "border-2 border-fg text-fg bg-card" : "bg-line/70 text-muted hover:text-fg"}`;
 
 // ESPN style filter row: search and filter buttons, then position chips. Search opens a full width box instead.
 function FilterBar({ sp, show, perGame }: { sp: Params; show: string; perGame: boolean }) {
@@ -169,7 +170,7 @@ function FilterBar({ sp, show, perGame }: { sp: Params; show: string; perGame: b
     // Dropdowns are placed against the outer box, so the sideways-scrolling chip row doesn't clip them.
     <div className="relative">
     <div className="flex items-center gap-2 overflow-x-auto pb-1 -mx-4 px-4 sm:mx-0 sm:px-0">
-      <Link href={href(sp, { search: "1" })} className={`${chip(false)} shrink-0`} aria-label="Search"><SearchIcon /></Link>
+      <Link href={href(sp, { search: "1" })} prefetch={false} scroll={false} className={`${chip(false)} shrink-0`} aria-label="Search"><SearchIcon /></Link>
       <details className="shrink-0">
         <summary className={`${chip(filtered)} list-none cursor-pointer`} aria-label="Filters"><FilterIcon /></summary>
         <div className="absolute left-0 top-full z-20 mt-1 card p-3 shadow-lg space-y-3 text-sm">
@@ -179,7 +180,7 @@ function FilterBar({ sp, show, perGame }: { sp: Params; show: string; perGame: b
       </details>
       <span className="h-8 w-px bg-line shrink-0 mx-1" />
       {[["", "All"], ...POSITIONS.map((p) => [p, p])].map(([v, label]) => (
-        <Link key={label} href={href(sp, { pos: v || undefined })} className={`${chip((sp.pos ?? "") === v)} shrink-0`}>{label}</Link>
+        <Link key={label} href={href(sp, { pos: v || undefined, n: undefined })} prefetch={false} scroll={false} className={`${chip((sp.pos ?? "") === v)} shrink-0`}>{label}</Link>
       ))}
     </div>
     </div>
@@ -190,7 +191,7 @@ function Options({ sp, name, value, options }: { sp: Params; name: string; value
   return (
     <div className="flex gap-2">
       {options.map(([v, label]) => (
-        <Link key={v} href={href(sp, { [name]: v || undefined })} className={`${chip(value === v)} h-9 text-xs`}>{label}</Link>
+        <Link key={v} href={href(sp, { [name]: v || undefined, n: undefined })} prefetch={false} scroll={false} className={`${chip(value === v)} h-9 text-xs`}>{label}</Link>
       ))}
     </div>
   );

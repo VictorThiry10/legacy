@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { bidTeam, PER_ROUND, searchFreeAgents, setupRounds } from "@/lib/bidding";
+import { bidTeam, commishVerified, PER_ROUND, searchFreeAgents, setupRounds } from "@/lib/bidding";
 import { getSettings, teamSummaries } from "@/lib/league";
 import { money } from "@/lib/rules";
 import ActionForm from "@/components/ActionForm";
@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
 // Commissioner: which free agents go in which round, the GMs who can sign in, and a restart for test runs.
 export default async function Setup({ searchParams }: PageProps<"/bidding/setup">) {
   const team = await bidTeam();
-  if (!team?.is_commish) redirect("/bidding");
+  if (!team || !(await commishVerified(team))) redirect("/bidding");
   const sp = await searchParams;
   const q = typeof sp.q === "string" ? sp.q : "";
   const [rounds, results, { leagueSize }, teams] = await Promise.all([setupRounds(), searchFreeAgents(q), getSettings(), teamSummaries()]);
@@ -44,7 +44,7 @@ export default async function Setup({ searchParams }: PageProps<"/bidding/setup"
         <div className="mt-3 space-y-2">
           {results.map((p) => (
             <div key={p.id} className="flex flex-wrap items-center gap-3 rounded-2xl bg-white/[0.025] p-2.5">
-              <div className="w-12 shrink-0"><PlayerCard p={p} /></div>
+              <div className="w-12 shrink-0"><PlayerCard p={p} size="thumb" /></div>
               <div className="min-w-0 flex-1">
                 <div className="truncate font-semibold">{p.name}</div>
                 <div className="text-xs text-white/45">{[p.position, p.nbaTeam, p.stats && `${p.stats.fppg} fpts`].filter(Boolean).join(" · ")}</div>
@@ -78,7 +78,7 @@ export default async function Setup({ searchParams }: PageProps<"/bidding/setup"
             <ul className="mt-3 space-y-1.5">
               {r.players.map((p) => (
                 <li key={p.id} className="flex items-center gap-3">
-                  <div className="w-8 shrink-0"><PlayerCard p={p} /></div>
+                  <div className="w-8 shrink-0"><PlayerCard p={p} size="thumb" /></div>
                   <span className="min-w-0 flex-1 truncate text-sm">{p.name}</span>
                   <span className="text-xs text-white/40">{p.stats ? `${p.stats.fppg}` : ""}</span>
                   {r.status === "setup" && (

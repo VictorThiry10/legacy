@@ -15,7 +15,7 @@ export const viewport: Viewport = { themeColor: "#1c1917" };
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en">
-      <body className="min-h-screen">{children}</body>
+      <body className="min-h-dvh">{children}</body>
     </html>
   );
 }

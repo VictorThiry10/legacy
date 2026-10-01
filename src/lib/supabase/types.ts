@@ -140,6 +140,10 @@ export type Database = {
       bidding_renounce: { Args: { p_bid: string; p_team: string; p_max: number }; Returns: undefined };
       bidding_restart: { Args: { p_season: number }; Returns: undefined };
       bidding_set_lengths: { Args: { p_team: string; p_season: number; p_rows: Json; p_limits: Json }; Returns: undefined };
+      current_lineups: {
+        Args: { p_teams: string[] | null; p_day: string };
+        Returns: { day: string; player_id: string; slot: string; team_id: string }[];
+      };
       rescore_all: { Args: { w: Json }; Returns: undefined };
       roster_pickup: {
         Args: { p_team: string; p_player: string; p_salary: number; p_season: number; p_drop: string | null; p_note: string };

@@ -22,7 +22,9 @@ function subscribe(cb: () => void) {
   };
 }
 
-// Milliseconds since 1970. The server's time is used while the page first loads, so both render the same.
-export function useNow(serverNow: number) {
-  return useSyncExternalStore(subscribe, () => now, () => serverNow);
+// Something worked out from the time (milliseconds since 1970): whole seconds left, "is it over"...
+// The component only re-renders when that answer changes, not on every tick. Return a plain value
+// (number, string, boolean), not an object. The server's time is used while the page first loads, so both render the same.
+export function useClock<T extends number | string | boolean | null>(sel: (now: number) => T, serverNow: number): T {
+  return useSyncExternalStore(subscribe, () => sel(now), () => sel(serverNow));
 }

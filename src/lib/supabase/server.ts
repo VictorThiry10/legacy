@@ -34,7 +34,9 @@ export function linkClient() {
   return createClient<Database>(URL, ANON, { auth: { flowType: "implicit", persistSession: false, autoRefreshToken: false } });
 }
 
-// Full database access. Server only, never sent to the browser.
+// Full database access. Server only, never sent to the browser. One client per server instance (it holds no user state).
+let admin: ReturnType<typeof createClient<Database>> | undefined;
 export function db() {
-  return createClient<Database>(URL, SERVICE, { auth: { persistSession: false } });
+  admin ??= createClient<Database>(URL, SERVICE, { auth: { persistSession: false } });
+  return admin;
 }
