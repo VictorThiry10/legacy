@@ -8,6 +8,7 @@
   --line: #e7e5e4;
   --accent: #9a3412;
   --crimson: #b4122d;
+  --blue: #1d5bd8;
   --good: #15803d;
   --bad: #b91c1c;
 }
@@ -20,6 +21,7 @@
     --line: #292524;
     --accent: #fb923c;
     --crimson: #e8475f;
+    --blue: #4c8dff;
     --good: #4ade80;
     --bad: #f87171;
   }
@@ -32,6 +34,7 @@
   --color-line: var(--line);
   --color-accent: var(--accent);
   --color-crimson: var(--crimson);
+  --color-blue: var(--blue);
   --color-good: var(--good);
   --color-bad: var(--bad);
 }

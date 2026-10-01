@@ -88,6 +88,17 @@ export type Database = {
         { created_at: string; id: string; is_commish: boolean; manager_email: string; manager_name: string | null; name: string; user_id: string | null },
         { created_at?: string; id?: string; is_commish?: boolean; manager_email: string; manager_name?: string | null; name: string; user_id?: string | null }
       >;
+      trade_offers: Table<
+        {
+          created_at: string; decided_at: string | null; from_team: string; get: string[]; give: string[]; id: string;
+          season: number; status: string; to_team: string;
+        },
+        {
+          created_at?: string; decided_at?: string | null; from_team: string; get?: string[]; give?: string[]; id?: string;
+          season: number; status?: string; to_team: string;
+        },
+        [FK<"trade_offers_from_team_fkey", "from_team", "teams">, FK<"trade_offers_to_team_fkey", "to_team", "teams">]
+      >;
       transactions: Table<
         {
           contract_id: string | null; created_at: string; group_id: string | null; id: string; kind: string; note: string | null;
@@ -118,6 +129,7 @@ export type Database = {
         Args: { p_from_a: string[]; p_from_b: string[]; p_note: string; p_season: number; p_team_a: string; p_team_b: string };
         Returns: string;
       };
+      trade_offer_accept: { Args: { p_offer: string; p_season: number }; Returns: undefined };
       save_lineup: { Args: { p_day: string; p_rows: Json; p_team: string }; Returns: undefined };
       score_lineup_points: { Args: { p_from: string; p_to: string }; Returns: undefined };
       snapshot_lineups: { Args: { p_day: string; p_rows: Json }; Returns: undefined };
