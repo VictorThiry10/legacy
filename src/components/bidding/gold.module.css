@@ -1,0 +1,79 @@
+/* Gold foil for the bidding site: card backs, the player cards' frame, gold lettering and the reveal's light. */
+
+/* Brushed gold: fine diagonal grain over a metal gradient. */
+.foil {
+  background:
+    repeating-linear-gradient(45deg, rgb(255 255 255 / 0.06) 0 1px, transparent 1px 5px),
+    linear-gradient(135deg, #6b4a12 0%, #c4933a 18%, #f7df92 33%, #b8892f 50%, #7a5617 64%, #e4bf64 82%, #6f5017 100%);
+}
+
+/* Engraved lettering on the foil: dark gold with a light edge underneath. */
+.engraved {
+  color: #4f360b;
+  text-shadow: 0 0.35cqw 0 rgb(255 241 196 / 0.55), 0 -0.25cqw 0 rgb(40 26 4 / 0.35);
+}
+
+/* Shiny gold lettering on dark. */
+.goldText {
+  background: linear-gradient(180deg, #fff4c8 0%, #f0cd75 42%, #b8862b 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* A gold rim around a card: the gradient shows only in the padding (a mask cuts the middle out). */
+.frame {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  padding: 2.2cqw;
+  background: linear-gradient(140deg, #8a6420 0%, #f3d27c 22%, #fff3c4 38%, #c9973a 56%, #8a6420 74%, #ecc76c 100%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+}
+
+/* ---------- the reveal ---------- */
+
+/* Slow turning rays behind the card. */
+.rays {
+  background: repeating-conic-gradient(from 0deg, var(--ray, rgb(233 196 106 / 0.16)) 0deg 5deg, transparent 5deg 20deg);
+  -webkit-mask: radial-gradient(closest-side, #000 12%, transparent 100%);
+  mask: radial-gradient(closest-side, #000 12%, transparent 100%);
+  animation: turn 48s linear infinite;
+}
+@keyframes turn { to { rotate: 360deg; } }
+
+/* The card shaking just before it flips. */
+.tremble { animation: tremble 0.11s linear infinite; }
+@keyframes tremble {
+  0% { translate: 0 0; rotate: 0deg; }
+  25% { translate: 1.5px -1px; rotate: -0.8deg; }
+  50% { translate: -1px 1.5px; rotate: 0.6deg; }
+  75% { translate: -1.5px -0.5px; rotate: -0.4deg; }
+  100% { translate: 0 0; rotate: 0deg; }
+}
+
+/* Specks of gold dust drifting up the screen. */
+.mote {
+  position: absolute;
+  bottom: -2%;
+  border-radius: 999px;
+  background: #f3d27c;
+  box-shadow: 0 0 6px rgb(243 210 124 / 0.8);
+  opacity: 0;
+  animation: rise var(--d, 9s) linear var(--delay, 0s) infinite;
+}
+@keyframes rise {
+  0% { transform: translate3d(0, 0, 0); opacity: 0; }
+  15% { opacity: var(--o, 0.6); }
+  85% { opacity: var(--o, 0.6); }
+  100% { transform: translate3d(var(--x, 0px), -104vh, 0); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rays, .tremble, .mote { animation: none; }
+  .mote { display: none; }
+}

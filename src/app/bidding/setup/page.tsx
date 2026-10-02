@@ -10,13 +10,16 @@ import * as A from "../actions";
 
 export const dynamic = "force-dynamic";
 
+// The round lengths the commissioner can pick (seconds, label). It applies from the next round that opens.
+const ROUND_LENGTHS = [[30, "30 s"], [60, "1 min"], [120, "2 min"], [180, "3 min"], [300, "5 min"]] as const;
+
 // Commissioner: which free agents go in which round, the GMs who can sign in, and a restart for test runs.
 export default async function Setup({ searchParams }: PageProps<"/bidding/setup">) {
   const team = await bidTeam();
   if (!team || !(await commishVerified(team))) redirect("/bidding");
   const sp = await searchParams;
   const q = typeof sp.q === "string" ? sp.q : "";
-  const [rounds, results, { leagueSize }, teams] = await Promise.all([setupRounds(), searchFreeAgents(q), getSettings(), teamSummaries()]);
+  const [rounds, results, { leagueSize, roundSeconds }, teams] = await Promise.all([setupRounds(), searchFreeAgents(q), getSettings(), teamSummaries()]);
   const open = (n: number) => rounds.find((r) => r.number === n)!;
   const canAdd = (n: number) => open(n).status === "setup" && open(n).players.length < PER_ROUND;
   const btn = "rounded-full px-4 py-2 text-sm font-semibold transition active:scale-95 disabled:opacity-40";
@@ -37,6 +40,16 @@ export default async function Setup({ searchParams }: PageProps<"/bidding/setup"
         <ActionForm action={A.restart} confirm="Restart free agency? Every bid and free agency signing is deleted. The player lists stay.">
           <button className={`${btn} text-red-400 hover:bg-white/[0.05]`}>Restart</button>
         </ActionForm>
+      </div>
+
+      <Label className="mt-6">Bidding time per round</Label>
+      <div className="mt-2 flex flex-wrap gap-1.5">
+        {ROUND_LENGTHS.map(([secs, label]) => (
+          <ActionForm key={secs} action={A.setRoundSeconds}>
+            <input type="hidden" name="seconds" value={secs} />
+            <button className={`${btn} ${secs === roundSeconds ? "btn-primary" : "bg-white/[0.06] text-white/70 hover:text-white"}`}>{label}</button>
+          </ActionForm>
+        ))}
       </div>
 
       <form className="mt-6 flex gap-2">

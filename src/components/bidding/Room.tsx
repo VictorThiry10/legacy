@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion, MotionConfig, PresenceContext, useReducedMotion, useSpring } from "motion/react";
 import type { CardPlayer, Room as Data, RoomTeam } from "@/lib/bidding";
-import { money, ROUND_SECONDS } from "@/lib/rules";
+import { money } from "@/lib/rules";
 import * as A from "@/app/bidding/actions";
 import PlayerCard, { CardBack, cardImages } from "./PlayerCard";
 import BidSheet from "./BidSheet";
@@ -311,7 +311,7 @@ function Bidding({ data, me, myBids, skew, onOpen }: {
         </div>
         <Countdown closes={closes} skew={skew} serverNow={data.now} />
       </div>
-      <TimeBar closes={closes} skew={skew} serverNow={data.now} />
+      <TimeBar closes={closes} skew={skew} serverNow={data.now} total={data.roundSeconds} />
 
       <div className="mt-5 flex items-end gap-7">
         <div>
@@ -364,9 +364,9 @@ function Countdown({ closes, skew, serverNow }: { closes: number; skew: number; 
 }
 
 // Each second the bar slides (a transform, linear over that second) to where it will be when the next one ticks.
-function TimeBar({ closes, skew, serverNow }: { closes: number; skew: number; serverNow: number }) {
+function TimeBar({ closes, skew, serverNow, total }: { closes: number; skew: number; serverNow: number; total: number }) {
   const secs = useSecondsLeft(closes, skew, serverNow);
-  const to = Math.min(1, Math.max(0, (secs - 1) / ROUND_SECONDS));
+  const to = Math.min(1, Math.max(0, (secs - 1) / total));
   return (
     <div className="mt-4 h-[2px] overflow-hidden rounded-full bg-white/10">
       <div

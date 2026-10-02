@@ -6,11 +6,12 @@ import { db } from "./supabase/server";
 import { getMe } from "./auth";
 import { fail, rpc } from "./db";
 import { getSettings, teamSummaries, type Team } from "./league";
-import { BID_STEP, maxBid, money, revealRound, RENOUNCE_RIGHTS, ROUND_SECONDS, type Bid, type RevealItem } from "./rules";
+import { BID_STEP, maxBid, money, revealRound, RENOUNCE_RIGHTS, type Bid, type RevealItem } from "./rules";
 import type { Row } from "./supabase/types";
 import type { SeasonLine } from "./espn-parse";
 
-// Free agency bidding (/bidding). Rounds of players open for ROUND_SECONDS of sealed bids, then everyone sees the
+// Free agency bidding (/bidding). Rounds of players open for a few minutes of sealed bids (settings.round_seconds,
+// set on the Rounds page), then everyone sees the
 // reveal at once. Winners can renounce until the commissioner moves on, which signs the winners and opens the next
 // round. The pure rules (who wins, ties, over the cap) are resolveRound / revealRound in rules.ts.
 
@@ -99,6 +100,7 @@ export type Room = {
   signings: Signing[];
   limits: Record<number, number>; // contract lengths: years -> how many per season
   minSalary: number;
+  roundSeconds: number; // how long a round's bidding lasts (the time bar's full width)
   v: string; // the room's fingerprint (what pulse() returns), so the page knows if a poll brings news
 };
 
@@ -118,7 +120,7 @@ function phaseOf<R extends { status: string; closes_at: string | null }>(rounds:
 
 export async function room(team: Team): Promise<Room> {
   const verified = commishVerified(team); // league login check, only does work for the commissioner
-  const { season, rules, faLocked } = await getSettings();
+  const { season, rules, faLocked, roundSeconds } = await getSettings();
   const d = db();
   // Everything in one wave of reads: the open round's players and bids come through an inner join on the
   // round (status and season), so they don't wait for the rounds list.
@@ -176,6 +178,7 @@ export async function room(team: Team): Promise<Room> {
     }),
     limits: rules.slotLimits,
     minSalary: rules.minSalary,
+    roundSeconds,
     v: fingerprint({
       rounds, faLocked, bidders: [...bidders], renounces: ren.data?.length ?? 0, years: (lens.data ?? []).map((l) => l.years), teams: summaries.length,
     }),
@@ -276,12 +279,12 @@ const closesIn = (seconds: number) => new Date(Date.now() + seconds * 1000).toIS
 
 export async function startNext(team: Team) {
   await commish(team);
-  const { season } = await getSettings();
+  const { season, roundSeconds } = await getSettings();
   const { data: rounds } = await db().from("rounds").select("id, status, number").eq("season", season).order("number");
   if (rounds?.some((r) => r.status === "open")) throw new Error("A round is already running.");
   const next = rounds?.find((r) => r.status === "setup");
   if (!next) throw new Error("Set up a round first.");
-  const { error } = await db().from("rounds").update({ status: "open", closes_at: closesIn(ROUND_SECONDS) }).eq("id", next.id).eq("status", "setup");
+  const { error } = await db().from("rounds").update({ status: "open", closes_at: closesIn(roundSeconds) }).eq("id", next.id).eq("status", "setup");
   if (error) fail(error);
 }
 
@@ -298,11 +301,19 @@ export async function changeClock(team: Team, seconds: number | "now") {
 // Sign this round's winners and open the next round (or the last chance round, or finish).
 export async function nextRound(team: Team) {
   await commish(team);
-  const r = await room(team);
+  const [r, { roundSeconds }] = await Promise.all([room(team), getSettings()]);
   if (r.phase !== "reveal" || !r.round || !r.reveal) throw new Error("Wait for the reveal first.");
   const { count } = await db().from("renounces").select("id", { count: "exact", head: true }).eq("round_id", r.round.id);
   const awards = r.reveal.flatMap((i) => (i.winner ? [{ player_id: i.playerId, team_id: i.winner.teamId, amount: i.winner.amount }] : []));
-  await rpc("bidding_finalize", { p_round: r.round.id, p_awards: awards, p_result: r.reveal, p_renounces: count ?? 0, p_seconds: ROUND_SECONDS });
+  await rpc("bidding_finalize", { p_round: r.round.id, p_awards: awards, p_result: r.reveal, p_renounces: count ?? 0, p_seconds: roundSeconds });
+}
+
+// How long each round's bidding lasts, from the next round on.
+export async function setRoundSeconds(team: Team, seconds: number) {
+  await commish(team);
+  if (!Number.isInteger(seconds) || seconds < 15 || seconds > 900) throw new Error("Rounds last 15 seconds to 15 minutes.");
+  const { error } = await db().from("settings").update({ round_seconds: seconds }).eq("id", 1);
+  if (error) fail(error);
 }
 
 export async function lockContracts(team: Team, locked: boolean) {
