@@ -8,7 +8,7 @@ import { getMe } from "@/lib/auth";
 import { getSettings, type Player } from "@/lib/league";
 import { money, yearsLeft } from "@/lib/rules";
 import { seasonLabel } from "@/lib/player-stats";
-import { nbaLogo } from "@/lib/names";
+import TeamLogo from "@/components/TeamLogo";
 import { waiverFor } from "@/lib/waivers";
 import LocalTime from "@/components/LocalTime";
 import Slide, { FORWARD } from "@/components/Slide";
@@ -55,8 +55,6 @@ export default async function PlayerPage({ params, searchParams }: PageProps<"/p
   const ls = p.last_season;
   if (ls?.gp) lines.push({ label: seasonLabel(ls.season), gp: ls.gp, min: ls.min, pts: ls.pts, reb: ls.reb, ast: ls.ast, stl: ls.stl, blk: ls.blk, to: ls.to, fpts: ls.fpts });
   const main = lines[0];
-  const logo = nbaLogo(p.nba_team, 48);
-  const bigLogo = nbaLogo(p.nba_team, 0);
   const tabHref = (k: string) => (k === "overview" ? `/players/${id}` : `/players/${id}?tab=${k}`);
 
   return (
@@ -64,13 +62,13 @@ export default async function PlayerPage({ params, searchParams }: PageProps<"/p
       <div className="mx-auto max-w-3xl">
         {/* header card */}
         <div className="relative -mx-4 -mt-6 overflow-hidden bg-gradient-to-b from-line/80 to-card px-4 pb-4 pt-14 sm:mx-0 sm:mt-0 sm:rounded-2xl">
-          {bigLogo && <img src={bigLogo} alt="" className="pointer-events-none absolute -right-6 -top-4 h-56 w-56 max-w-none opacity-[0.08]" />}
+          <TeamLogo abbr={p.nba_team} px={0} className="pointer-events-none absolute -right-6 -top-4 h-56 w-56 max-w-none opacity-[0.08]" />
           {p.headshot && <img src={p.headshot} alt="" className="pointer-events-none absolute bottom-0 right-0 h-40 max-w-none object-contain sm:h-48" />}
           <BackLink href="/players" className="absolute left-1.5 top-2 z-10 bg-card/60 backdrop-blur" />
           <div className="relative w-[62%] space-y-2">
             <h1 className="text-[26px] font-black uppercase leading-[1.05] tracking-tight">{p.name}</h1>
             <div className="flex items-center gap-1.5 text-sm">
-              {logo && <img src={logo} alt="" className="h-5 w-5" />}
+              <TeamLogo abbr={p.nba_team} px={48} className="h-5 w-5" />
               <span>{p.nba_team}</span><span className="text-muted">•</span><span>{p.position ?? "–"}</span>
             </div>
             <div className="text-sm">
@@ -99,10 +97,10 @@ export default async function PlayerPage({ params, searchParams }: PageProps<"/p
                 <Link href={`/players/${p.id}/add`} transitionTypes={FORWARD} className="rounded-full border-[1.5px] border-good bg-card px-5 py-1.5 text-sm font-semibold text-good hover:bg-good/10">+ Add</Link>
               ))}
               {c && me?.team?.id === c.team.id && (
-                <Link href={`/players/${p.id}/drop`} transitionTypes={FORWARD} className="rounded-full bg-bad px-5 py-1.5 text-sm font-semibold text-white">Drop</Link>
+                <Link href={`/players/${p.id}/drop`} transitionTypes={FORWARD} className="rounded-full bg-bad-fill px-5 py-1.5 text-sm font-semibold text-white">Drop</Link>
               )}
               {c && me?.team && me.team.id !== c.team.id && (
-                <Link href={`/trade/${c.team.id}?get=${c.id}`} transitionTypes={FORWARD} className="rounded-full bg-blue px-5 py-1.5 text-sm font-semibold text-white">Trade</Link>
+                <Link href={`/trade/${c.team.id}?get=${c.id}`} transitionTypes={FORWARD} className="rounded-full bg-blue-fill px-5 py-1.5 text-sm font-semibold text-white">Trade</Link>
               )}
               <span className={`rounded-full px-3 py-1.5 text-xs font-semibold ${p.injury_status ? "bg-bad/15 text-bad" : "bg-good/15 text-good"}`} title={p.injury_note ?? ""}>
                 {p.injury_status ?? "Healthy"}

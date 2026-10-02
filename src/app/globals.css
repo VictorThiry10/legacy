@@ -12,6 +12,12 @@
   --good: #15803d;
   --orange: #ea580c; /* players on waivers */
   --bad: #b91c1c;
+  /* solid buttons with white text (Accept, Drop, Trade): the same as the colours above in light mode, deeper in dark
+     mode, where the colours above are lightened for text and white on them would be hard to read */
+  --good-fill: var(--good);
+  --bad-fill: var(--bad);
+  --blue-fill: var(--blue);
+  color-scheme: light dark; /* the phone's own controls (date pickers, selects, checkboxes, scrollbars) follow too */
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -26,6 +32,9 @@
     --good: #4ade80;
     --orange: #fb923c;
     --bad: #f87171;
+    --good-fill: #15803d;
+    --bad-fill: #dc2626;
+    --blue-fill: #2563eb;
   }
 }
 @theme inline {
@@ -40,6 +49,9 @@
   --color-good: var(--good);
   --color-orange: var(--orange);
   --color-bad: var(--bad);
+  --color-good-fill: var(--good-fill);
+  --color-bad-fill: var(--bad-fill);
+  --color-blue-fill: var(--blue-fill);
 }
 /* The page never scrolls sideways on a phone; wide tables scroll inside their own box. clip, not hidden, so the
    sticky tab bar keeps working. */
@@ -94,6 +106,8 @@ html[data-nav="back"]::view-transition-new(root) { --slide-offset: -60px; animat
 ::view-transition-group(back-bar) { z-index: 90; animation-duration: 340ms; animation-timing-function: var(--slide-ease); }
 ::view-transition-old(back-bar) { animation: 120ms ease-in both fade reverse; }
 ::view-transition-new(back-bar) { animation: 220ms ease-out 60ms both fade; }
+/* a loading skeleton fades out as its page fades in (components/PageSkeleton.tsx; the page comes in with the root) */
+::view-transition-old(.skeleton-out) { animation: 160ms ease-out both fade reverse; }
 ::view-transition { pointer-events: none; }
 /* Calmer for people who ask their phone for less motion */
 @media (prefers-reduced-motion: reduce) {

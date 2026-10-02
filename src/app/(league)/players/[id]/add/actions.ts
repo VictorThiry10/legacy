@@ -23,19 +23,18 @@ export async function addPlayer(f: FormData) {
   redirect("/team", RedirectType.replace);
 }
 
-// Place, change or withdraw a sealed bid on a player on waivers, then back to the same page.
+// Place, change or withdraw a sealed bid on a player on waivers, then back to the same page (it shows the bid).
 async function onBid(f: FormData, fn: (teamId: string, playerId: string) => Promise<string>) {
   const playerId = String(f.get("player_id") ?? "");
-  let msg = "";
   let err = "";
   try {
     const team = await requireTeam();
-    msg = await fn(team.id, playerId);
+    await fn(team.id, playerId);
   } catch (e) {
     err = e instanceof Error ? e.message : "Something went wrong.";
   }
   revalidatePath("/", "layout");
-  redirect(`/players/${encodeURIComponent(playerId)}/add?${err ? `err=${encodeURIComponent(err)}` : `ok=${encodeURIComponent(msg)}`}`, RedirectType.replace);
+  redirect(`/players/${encodeURIComponent(playerId)}/add${err ? `?err=${encodeURIComponent(err)}` : ""}`, RedirectType.replace);
 }
 
 export async function bid(f: FormData) {

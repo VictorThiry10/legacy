@@ -9,7 +9,8 @@ import { gamesBetween, linesIn, teamAbbrs, type Game } from "@/lib/nba";
 import { addDays, ago, isDay, minutesSince, monthDay, today, weekday } from "@/lib/dates";
 import { lastRuns } from "@/lib/espn";
 import { STALE_MINUTES } from "@/lib/health";
-import { nbaLogo, shortName } from "@/lib/names";
+import { shortName } from "@/lib/names";
+import TeamLogo from "@/components/TeamLogo";
 import TeamAvatar from "@/components/TeamAvatar";
 import { load } from "@/lib/guard";
 import AutoRefresh from "@/components/AutoRefresh";
@@ -209,13 +210,12 @@ const INJ: Record<string, string> = { "day-to-day": "DTD", out: "O", questionabl
 
 function PlayerCell({ p, g, abbr, right }: { p?: RosterPlayer; g?: Game; abbr: Map<string, string>; right?: boolean }) {
   if (!p) return <div className={`flex items-center px-3 py-4 text-sm text-muted ${right ? "justify-end" : ""}`}>Empty</div>;
-  const logo = nbaLogo(p.nba_team, 48);
   const inj = p.injury_status ? INJ[p.injury_status.toLowerCase()] ?? p.injury_status : null;
   return (
     <Link href={`/players/${p.id}`} prefetch={false} transitionTypes={FORWARD} className={`flex min-w-0 flex-col justify-center px-3 py-2.5 leading-tight active:bg-line/50 ${right ? "items-end text-right" : ""}`}>
       <span className={`flex min-w-0 max-w-full items-center gap-1.5 ${right ? "flex-row-reverse" : ""}`}>
         <span className="truncate text-[15px] font-medium">{shortName(p.name)}</span>
-        {logo && <img src={logo} alt={p.nba_team ?? ""} className="h-4 w-4 shrink-0" />}
+        <TeamLogo abbr={p.nba_team} px={48} alt={p.nba_team ?? ""} className="h-4 w-4 shrink-0" />
         {inj && <span className="shrink-0 text-[11px] font-bold text-bad">{inj}</span>}
       </span>
       {g && <span className="mt-0.5 truncate text-[11px] text-muted">{oppLabel(g, p.nba_team_id!, abbr)} <GameStatus g={g} teamId={p.nba_team_id!} /></span>}
