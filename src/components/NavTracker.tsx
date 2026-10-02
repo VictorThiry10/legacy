@@ -1,27 +1,38 @@
 "use client";
-import { addTransitionType, startTransition } from "react";
 
 // History bookkeeping for the back arrows (BackLink).
 // 1. Every history entry the app makes records how deep it is, so a back arrow knows whether the page behind it is
 //    one of ours (then it steps back in history: instant, and that page keeps its scroll position) or not (the page
 //    was opened from an email, say: then it opens the page above instead).
-// 2. A step back in history carries no direction, so pages wouldn't slide. React only ties a direction to a
-//    navigation when it's added in the same event handler that starts it, and Next starts history steps in its own
-//    popstate listener. So popstate listeners are wrapped: when a back arrow started the step, "nav-back" is added
-//    right after Next's listener runs. The phone's own back gesture keeps its native animation.
+// 2. React draws a step back in history straight away so the browser can put the scroll back, and that path never
+//    animates. So goBack runs the slide itself with the browser's view transition: the page slides back in while the
+//    tab bar stays put (the CSS is under html[data-nav="back"] in globals.css). The phone's own back gesture keeps
+//    its native animation.
 
 const DEPTH = "__legacyDepth";
 const depth = () => Number(window.history.state?.[DEPTH] ?? 0);
 export const canGoBack = () => depth() > 0;
 
-let stepping = 0; // when a back arrow last asked for a step back
-let then: (() => void) | null = null;
+let popped: (() => void) | null = null; // runs once the page behind is on screen
 
 // One step back in history, sliding back. `after` runs once the page behind is showing.
 export function goBack(after?: () => void) {
-  stepping = Date.now();
-  then = after ?? null;
-  window.history.back();
+  const shown = new Promise<void>((resolve) => {
+    popped = resolve;
+    setTimeout(resolve, 1500); // in case no step happens
+  });
+  if (after) shown.then(after);
+  const doc = document as Document & { startViewTransition?: (update: () => Promise<void>) => { finished: Promise<void> } };
+  if (!doc.startViewTransition || matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    window.history.back();
+    return;
+  }
+  const html = document.documentElement;
+  html.dataset.nav = "back";
+  doc.startViewTransition(() => {
+    window.history.back();
+    return shown;
+  }).finished.finally(() => delete html.dataset.nav);
 }
 
 if (typeof window !== "undefined" && !("__legacyHistory" in window)) {
@@ -31,36 +42,14 @@ if (typeof window !== "undefined" && !("__legacyHistory" in window)) {
   const replace = h.replaceState.bind(h);
   h.pushState = (data, unused, url) => push({ ...data, [DEPTH]: depth() + 1 }, unused, url);
   h.replaceState = (data, unused, url) => replace({ ...data, [DEPTH]: depth() }, unused, url);
-
-  // Added before Next's listener, so it runs first: it clears the flag once every listener has had its turn.
+  // The router redraws the page behind during the popstate event; by the next task it's on screen.
   window.addEventListener("popstate", () => setTimeout(() => {
-    const ours = Date.now() - stepping < 1000;
-    const after = then;
-    stepping = 0;
-    then = null;
-    if (ours) after?.();
+    popped?.();
+    popped = null;
   }));
-
-  const add = window.addEventListener.bind(window);
-  const remove = window.removeEventListener.bind(window);
-  const wrapped = new WeakMap<object, EventListener>();
-  window.addEventListener = ((type: string, fn: EventListenerOrEventListenerObject, opts?: boolean | AddEventListenerOptions) => {
-    if (type !== "popstate" || typeof fn !== "function") return add(type, fn, opts);
-    let w = wrapped.get(fn);
-    if (!w) {
-      w = (e: Event) => {
-        fn.call(window, e);
-        if (Date.now() - stepping < 1000) startTransition(() => addTransitionType("nav-back"));
-      };
-      wrapped.set(fn, w);
-    }
-    add(type, w, opts);
-  }) as typeof window.addEventListener;
-  window.removeEventListener = ((type: string, fn: EventListenerOrEventListenerObject, opts?: boolean | EventListenerOptions) =>
-    remove(type, (type === "popstate" && wrapped.get(fn)) || fn, opts)) as typeof window.removeEventListener;
 }
 
-// Rendered once in the league layout, so this module loads before the router starts listening.
+// Rendered once in the league layout, so this module loads on every page of the app.
 export default function NavTracker() {
   return null;
 }

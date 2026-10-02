@@ -83,6 +83,10 @@ table.players .bl { border-left: 1px solid var(--line); }
 ::view-transition-group(site-header) { animation: none; z-index: 100; }
 ::view-transition-old(site-header) { display: none; }
 ::view-transition-new(site-header) { animation: none; }
+/* back arrows (NavTracker.goBack) step back in history and run this slide themselves: the whole page under the
+   tab bar slides back in, the same move as a back link */
+html[data-nav="back"]::view-transition-old(root) { --slide-offset: 60px; animation: 150ms ease-in both fade reverse, 340ms var(--slide-ease) both slide reverse; }
+html[data-nav="back"]::view-transition-new(root) { --slide-offset: -60px; animation: 200ms ease-out 100ms both fade, 340ms var(--slide-ease) both slide; }
 /* the back bar (components/BackBar.tsx) stays put and cross-fades while the page under it slides */
 ::view-transition-group(back-bar) { z-index: 90; animation-duration: 340ms; animation-timing-function: var(--slide-ease); }
 ::view-transition-old(back-bar) { animation: 120ms ease-in both fade reverse; }
