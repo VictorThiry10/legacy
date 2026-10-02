@@ -6,7 +6,7 @@ import { db } from "./supabase/server";
 import { getMe } from "./auth";
 import { fail, rpc } from "./db";
 import { getSettings, teamSummaries, type Team } from "./league";
-import { BID_STEP, maxBid, money, revealRound, RENOUNCE_RIGHTS, type Bid, type RevealItem } from "./rules";
+import { BID_STEP, maxBid, money, revealRound, RENOUNCE_RIGHTS, yearsLeft, type Bid, type RevealItem } from "./rules";
 import type { Row } from "./supabase/types";
 import type { SeasonLine } from "./espn-parse";
 
@@ -98,7 +98,8 @@ export type Room = {
   myBids: Record<string, number>;
   reveal: RevealItem[] | null;
   signings: Signing[];
-  limits: Record<number, number>; // contract lengths: years -> how many per season
+  held: Signing[]; // my other contracts with 2+ seasons left (years = seasons left): they use length slots too
+  limits: Record<number, number>; // contract lengths: years left -> how many a team can have
   minSalary: number;
   roundSeconds: number; // how long a round's bidding lasts (the time bar's full width)
   v: string; // the room's fingerprint (what pulse() returns), so the page knows if a poll brings news
@@ -138,10 +139,14 @@ export async function room(team: Team): Promise<Room> {
   const { phase, live, next } = phaseOf(rounds, faLocked, now);
   const current = live ?? (phase === "waiting" ? next : null);
 
-  // Only the contracts screens need the signings: a second read once the phase is known (nothing is live then).
-  const signed = phase === "contracts" || phase === "done"
-    ? await d.from("contracts").select("id, team_id, salary, years, player:players(*)").eq("season_signed", season).eq("acquired_via", "draft").eq("active", true)
-    : null;
+  // Only the contracts screens need these: a second wave once the phase is known (nothing is live then). The signings,
+  // and my other contracts, since the ones with 2+ seasons left count against the length limits too.
+  const [signed, myContracts] = phase === "contracts" || phase === "done"
+    ? await Promise.all([
+        d.from("contracts").select("id, team_id, salary, years, player:players(*)").eq("season_signed", season).eq("acquired_via", "draft").eq("active", true),
+        d.from("contracts").select("id, team_id, salary, years, season_signed, acquired_via, player:players(*)").eq("team_id", team.id).eq("active", true),
+      ])
+    : [null, null];
   // Rows of the live round only (the reads ran side by side, so check they agree on which round that is).
   const bids: Bid[] = (bidRows.data ?? []).filter((b) => b.round_id === live?.id)
     .map((b) => ({ id: b.id, teamId: b.team_id, playerId: b.player_id, amount: Number(b.amount), years: b.years, createdAt: b.created_at }));
@@ -176,6 +181,12 @@ export async function room(team: Team): Promise<Room> {
       const p = one(c.player);
       return p ? [{ contractId: c.id, teamId: c.team_id, salary: Number(c.salary), years: c.years, player: cardOf(p) }] : [];
     }),
+    held: (myContracts?.data ?? []).flatMap((c) => {
+      const p = one(c.player);
+      const left = yearsLeft(c, season);
+      const signing = c.acquired_via === "draft" && c.season_signed === season;
+      return p && !signing && left >= 2 ? [{ contractId: c.id, teamId: c.team_id, salary: Number(c.salary), years: left, player: cardOf(p) }] : [];
+    }).sort((a, b) => b.years - a.years || b.salary - a.salary),
     limits: rules.slotLimits,
     minSalary: rules.minSalary,
     roundSeconds,

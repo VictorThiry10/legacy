@@ -18,10 +18,12 @@ const INTRO = 2800; // the round's title card
 // Stages a player goes through (the AT moments in order).
 const TREMBLE = 1, FLIPPED = 2, TEAM = 3, AMOUNT = 4, LANDED = 5, OTHERS = 6;
 
-// Full screen, one player at a time, after a title card for the round. Skip jumps to the results.
+// Full screen, one player at a time, after a title card for the round. Everyone watches every signing to the end;
+// only the last chance round (dozens of leftovers) can be tapped through or skipped.
 export default function RevealShow({ data, onDone }: { data: Room; onDone: () => void }) {
   const items = data.reveal ?? [];
   const reduce = useReducedMotion();
+  const skippable = data.round?.kind === "leftovers";
   const [intro, setIntro] = useState(true);
   const [i, setI] = useState(0);
   const [started, setStarted] = useState(-1); // the player whose clock is running (his photo is decoded)
@@ -68,11 +70,11 @@ export default function RevealShow({ data, onDone }: { data: Room; onDone: () =>
             ))}
           </div>
         </MotionConfig>
-        <button onClick={onDone} className="shrink-0 text-xs font-semibold uppercase tracking-widest text-white/60 hover:text-white">Skip</button>
+        {skippable && <button onClick={onDone} className="shrink-0 text-xs font-semibold uppercase tracking-widest text-white/60 hover:text-white">Skip</button>}
       </div>
       <AnimatePresence>
         {intro ? (
-          <Intro key="intro" title={roundName(data.round)} count={items.length} onTap={() => setIntro(false)} />
+          <Intro key="intro" title={roundName(data.round)} count={items.length} onTap={skippable ? () => setIntro(false) : undefined} />
         ) : (
           item && player && (
             <Stage
@@ -81,7 +83,7 @@ export default function RevealShow({ data, onDone }: { data: Room; onDone: () =>
               player={player}
               teams={data.teams}
               meId={data.meId}
-              leftovers={data.round?.kind === "leftovers"}
+              leftovers={skippable}
               onStart={() => setStarted(i)}
               onFinish={next}
             />
@@ -93,7 +95,7 @@ export default function RevealShow({ data, onDone }: { data: Room; onDone: () =>
 }
 
 // The round's title card: "The reveal", the round in gold, a line of light.
-function Intro({ title, count, onTap }: { title: string; count: number; onTap: () => void }) {
+function Intro({ title, count, onTap }: { title: string; count: number; onTap?: () => void }) {
   return (
     <motion.div
       className="absolute inset-0 grid place-items-center px-6"
@@ -167,8 +169,9 @@ function Stage({ item, player, teams, meId, leftovers, onStart, onFinish }: {
       ts.forEach(clearTimeout);
     };
   }, [face, logo]);
+  // Only in the last chance round: tap to jump to the end of a player, tap again for the next.
   const tap = () => {
-    if (!live.current) return;
+    if (!live.current || !leftovers) return;
     if (stage < OTHERS) {
       setJumped(true);
       setStage(OTHERS);
@@ -354,7 +357,7 @@ function Stage({ item, player, teams, meId, leftovers, onStart, onFinish }: {
           </ul>
         )}
       </div>
-      {stage >= OTHERS && (
+      {leftovers && stage >= OTHERS && (
         <motion.div
           className="absolute bottom-[max(1.25rem,env(safe-area-inset-bottom))] text-[10px] uppercase tracking-[0.35em] text-white/30"
           initial={{ opacity: 0 }}
