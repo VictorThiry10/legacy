@@ -1,6 +1,6 @@
 "use server";
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
+import { redirect, RedirectType } from "next/navigation";
 import { requireTeam } from "@/lib/auth";
 import { pickUp } from "@/lib/roster";
 import { placeBid, settleWaivers, withdrawBid } from "@/lib/waivers";
@@ -19,8 +19,8 @@ export async function addPlayer(f: FormData) {
     err = e instanceof Error ? e.message : "Something went wrong.";
   }
   revalidatePath("/", "layout");
-  if (err) redirect(`/players/${encodeURIComponent(playerId)}/add?err=${encodeURIComponent(err)}`);
-  redirect("/team");
+  if (err) redirect(`/players/${encodeURIComponent(playerId)}/add?err=${encodeURIComponent(err)}`, RedirectType.replace);
+  redirect("/team", RedirectType.replace);
 }
 
 // Place, change or withdraw a sealed bid on a player on waivers, then back to the same page.
@@ -35,7 +35,7 @@ async function onBid(f: FormData, fn: (teamId: string, playerId: string) => Prom
     err = e instanceof Error ? e.message : "Something went wrong.";
   }
   revalidatePath("/", "layout");
-  redirect(`/players/${encodeURIComponent(playerId)}/add?${err ? `err=${encodeURIComponent(err)}` : `ok=${encodeURIComponent(msg)}`}`);
+  redirect(`/players/${encodeURIComponent(playerId)}/add?${err ? `err=${encodeURIComponent(err)}` : `ok=${encodeURIComponent(msg)}`}`, RedirectType.replace);
 }
 
 export async function bid(f: FormData) {

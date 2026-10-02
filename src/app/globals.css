@@ -72,16 +72,21 @@ table.players td.n { text-align: right; font-variant-numeric: tabular-nums; }
 table.players .bl { border-left: 1px solid var(--line); }
 
 /* ---------- page slides (React ViewTransition, see components/Slide.tsx) ---------- */
-::view-transition-old(.nav-forward) { --slide-offset: -60px; animation: 150ms ease-in both fade reverse, 300ms ease-in-out both slide reverse; }
-::view-transition-new(.nav-forward) { --slide-offset: 60px; animation: 200ms ease-out 100ms both fade, 300ms ease-in-out both slide; }
-::view-transition-old(.nav-back) { --slide-offset: 60px; animation: 150ms ease-in both fade reverse, 300ms ease-in-out both slide reverse; }
-::view-transition-new(.nav-back) { --slide-offset: -60px; animation: 200ms ease-out 100ms both fade, 300ms ease-in-out both slide; }
+::view-transition-old(.nav-forward) { --slide-offset: -60px; animation: 150ms ease-in both fade reverse, 340ms var(--slide-ease) both slide reverse; }
+::view-transition-new(.nav-forward) { --slide-offset: 60px; animation: 200ms ease-out 100ms both fade, 340ms var(--slide-ease) both slide; }
+::view-transition-old(.nav-back) { --slide-offset: 60px; animation: 150ms ease-in both fade reverse, 340ms var(--slide-ease) both slide reverse; }
+::view-transition-new(.nav-back) { --slide-offset: -60px; animation: 200ms ease-out 100ms both fade, 340ms var(--slide-ease) both slide; }
+:root { --slide-ease: cubic-bezier(0.32, 0.72, 0, 1); } /* quick off the mark, soft landing, like iOS */
 @keyframes slide { from { translate: var(--slide-offset); } to { translate: 0; } }
 @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
 /* the tab bar stays put while pages slide */
 ::view-transition-group(site-header) { animation: none; z-index: 100; }
 ::view-transition-old(site-header) { display: none; }
 ::view-transition-new(site-header) { animation: none; }
+/* the back bar (components/BackBar.tsx) stays put and cross-fades while the page under it slides */
+::view-transition-group(back-bar) { z-index: 90; animation-duration: 340ms; animation-timing-function: var(--slide-ease); }
+::view-transition-old(back-bar) { animation: 120ms ease-in both fade reverse; }
+::view-transition-new(back-bar) { animation: 220ms ease-out 60ms both fade; }
 ::view-transition { pointer-events: none; }
 /* Calmer for people who ask their phone for less motion */
 @media (prefers-reduced-motion: reduce) {

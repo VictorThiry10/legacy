@@ -9,6 +9,7 @@ import { load } from "@/lib/guard";
 import Moves from "@/components/Moves";
 import TeamAvatar from "@/components/TeamAvatar";
 import PickMenu from "@/components/PickMenu";
+import Slide from "@/components/Slide";
 
 export const dynamic = "force-dynamic";
 
@@ -23,30 +24,32 @@ export default async function League({ searchParams }: PageProps<"/league">) {
   const team = (id: string | null) => (id ? teams.find((t) => t.id === id) : undefined);
 
   return (
-    <div className="-mx-4 -mt-6 sm:mx-0 sm:mt-0">
-      <div className="bg-card px-4 py-3 sm:rounded-t-2xl">
-        <div className="grid grid-cols-4 rounded-full bg-line/80 p-1 text-sm">
-          {VIEWS.map(([k, label]) => (
-            <Link key={k} href={k === "standings" ? "/league" : `/league?view=${k}`} prefetch={true} scroll={false}
-              className={`rounded-full py-2 text-center font-medium ${view === k ? "bg-card shadow-sm" : "text-fg/80"}`}>
-              {label}
-            </Link>
-          ))}
+    <Slide>
+      <div className="-mx-4 -mt-6 sm:mx-0 sm:mt-0">
+        <div className="bg-card px-4 py-3 sm:rounded-t-2xl">
+          <div className="grid grid-cols-4 rounded-full bg-line/80 p-1 text-sm">
+            {VIEWS.map(([k, label]) => (
+              <Link key={k} href={k === "standings" ? "/league" : `/league?view=${k}`} prefetch={true} scroll={false}
+                className={`rounded-full py-2 text-center font-medium ${view === k ? "bg-card shadow-sm" : "text-fg/80"}`}>
+                {label}
+              </Link>
+            ))}
+          </div>
+        </div>
+
+        {view === "standings" && <Standings teams={teams} myId={myId} />}
+        {view === "scoreboard" && <Scoreboard team={team} pick={typeof sp.week === "string" ? sp.week : undefined} />}
+        {view === "playoffs" && <Playoffs team={team} />}
+        {view === "cap" && <Cap teams={teams} myId={myId} rosterMax={rules.rosterMax} />}
+
+        <div className="flex flex-wrap items-center gap-3 border-t border-line bg-card px-4 py-4 text-sm sm:rounded-b-2xl">
+          {me?.team?.is_commish && <Link href="/settings" transitionTypes={["nav-forward"]} className="btn-ghost">Commissioner settings</Link>}
+          <form action="/auth/signout" method="post" className="ml-auto">
+            <button className="btn-ghost">Sign out</button>
+          </form>
         </div>
       </div>
-
-      {view === "standings" && <Standings teams={teams} myId={myId} />}
-      {view === "scoreboard" && <Scoreboard team={team} pick={typeof sp.week === "string" ? sp.week : undefined} />}
-      {view === "playoffs" && <Playoffs team={team} />}
-      {view === "cap" && <Cap teams={teams} myId={myId} rosterMax={rules.rosterMax} />}
-
-      <div className="flex flex-wrap items-center gap-3 border-t border-line bg-card px-4 py-4 text-sm sm:rounded-b-2xl">
-        {me?.team?.is_commish && <Link href="/settings" className="btn-ghost">Commissioner settings</Link>}
-        <form action="/auth/signout" method="post" className="ml-auto">
-          <button className="btn-ghost">Sign out</button>
-        </form>
-      </div>
-    </div>
+    </Slide>
   );
 }
 

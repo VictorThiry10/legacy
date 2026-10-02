@@ -10,11 +10,15 @@ import Slide, { BACK } from "@/components/Slide";
 import { sendOffer } from "../actions";
 import { headshot } from "@/lib/names";
 import SubmitButton from "@/components/SubmitButton";
+import BackBar from "@/components/BackBar";
+import StepForm from "@/components/StepForm";
+import TradeSheet from "@/components/TradeSheet";
 
 export const dynamic = "force-dynamic";
 
 // Trade in three steps: pick their players, pick mine, then confirm in a summary pop-up.
-// Selections travel in the address (?get=...&give=...), so each step is a page you can go back to.
+// Selections travel in the address (?get=...&give=...). Each step takes the previous one's place in history, so the
+// back arrow walks back through the steps and the phone's back gesture leaves the trade.
 export default async function Trade({ params, searchParams }: PageProps<"/trade/[teamId]">) {
   const [{ teamId }, sp, me, teams, { season }] = await Promise.all([params, searchParams, myTeamOrWelcome(), teamSummaries(), getSettings()]);
   const them = teams.find((t) => t.id === teamId);
@@ -27,34 +31,35 @@ export default async function Trade({ params, searchParams }: PageProps<"/trade/
   const [theirs, ours] = await Promise.all([rosters([them.id]), rosters([me.id])]);
   const review = step === "review" ? await load(() => preview({ teamId: me.id, contracts: give }, { teamId: them.id, contracts: get })) : null;
 
-  const roster = step === "get" ? theirs : ours;
-  const field = step === "get" ? "get" : "give";
-  const chosen = step === "get" ? get : give;
-  const back = step === "get" ? `/players` : `/trade/${them.id}?${new URLSearchParams(get.map((g) => ["get", g]))}`;
+  const first = step === "get";
+  const roster = first ? theirs : ours;
+  const field = first ? "get" : "give";
+  const chosen = first ? get : give;
+  const url = (s: string | null) => `/trade/${them.id}?${new URLSearchParams([...(s ? [["step", s]] : []), ...get.map((g) => ["get", g]), ...give.map((g) => ["give", g])])}`;
 
   return (
-    <Slide key={step}>
-      <div className="-mx-4 -mt-6 pb-28 sm:mx-0 sm:mt-0">
-        <div className="flex items-center gap-3 border-b border-line bg-card px-4 py-3">
-          <Link href={back} transitionTypes={BACK} className="text-xl text-muted hover:text-fg" aria-label="Back">‹</Link>
-          <div className="min-w-0">
-            <div className="truncate font-semibold">{step === "get" ? `Trade with ${them.name}` : "Pick your players"}</div>
-            <div className="text-xs text-muted">{step === "get" ? `${them.manager_name ?? ""} · ${money(them.capSpace)} cap space` : `${mine.name} · ${money(mine.capSpace)} cap space`}</div>
-          </div>
-        </div>
-        {err && <p className="bg-bad/10 px-4 py-2 text-sm text-bad">{err}</p>}
+    <Slide key={first ? "get" : "give"}>
+      <div className="pb-28">
+        {first ? (
+          <BackBar href={`/teams/${them.id}`} title={`Trade with ${them.name}`} sub={`Pick their players · ${money(them.capSpace)} cap space`} right={<Steps n={1} />} />
+        ) : (
+          <BackBar href={url(null)} step title="Pick your players" sub={`${mine.name} · ${money(mine.capSpace)} cap space`} right={<Steps n={2} />} />
+        )}
+        {err && <p className="-mx-4 bg-bad/10 px-4 py-2 text-sm text-bad sm:mx-0">{err}</p>}
 
-        <form method="get" action={`/trade/${them.id}`}>
-          <input type="hidden" name="step" value={step === "get" ? "give" : "review"} />
-          {step !== "get" && get.map((g) => <input key={g} type="hidden" name="get" value={g} />)}
-          <ul className="bg-card">
+        <StepForm action={`/trade/${them.id}`}>
+          <input type="hidden" name="step" value={first ? "give" : "review"} />
+          {first ? give.map((g) => <input key={g} type="hidden" name="give" value={g} />) : get.map((g) => <input key={g} type="hidden" name="get" value={g} />)}
+          <ul className="-mx-4 bg-card sm:mx-0 sm:mt-3 sm:overflow-hidden sm:rounded-2xl sm:border sm:border-line">
             {roster.map((p) => <PlayerPick key={p.contract_id} p={p} season={season} name={field} checked={chosen.includes(p.contract_id)} />)}
             {!roster.length && <li className="px-4 py-6 text-center text-sm text-muted">No players.</li>}
           </ul>
           <div className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-card/95 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur">
-            <button className="mx-auto block w-full max-w-md rounded-full bg-blue py-3.5 text-base font-semibold text-white">Continue</button>
+            <button className="mx-auto block w-full max-w-md rounded-full bg-blue py-3.5 text-base font-semibold text-white transition-opacity group-data-[pending]:opacity-60">
+              {first ? "Continue" : "Review trade"}
+            </button>
           </div>
-        </form>
+        </StepForm>
 
         {step === "review" && review && (
           <Summary
@@ -63,7 +68,7 @@ export default async function Trade({ params, searchParams }: PageProps<"/trade/
             me={{ name: mine.name, space: mine.capSpace }}
             get={get}
             give={give}
-            closeHref={`/trade/${them.id}?${new URLSearchParams([["step", "give"], ...get.map((g) => ["get", g]), ...give.map((g) => ["give", g])])}`}
+            closeHref={url("give")}
           />
         )}
       </div>
@@ -71,13 +76,18 @@ export default async function Trade({ params, searchParams }: PageProps<"/trade/
   );
 }
 
+// "1 of 2" in the bar.
+function Steps({ n }: { n: number }) {
+  return <span className="shrink-0 rounded-full bg-fg/[0.06] px-2.5 py-1 text-[11px] font-semibold text-muted">{n} of 2</span>;
+}
+
 // One roster row with the blue add box (a styled checkbox, so several can be picked).
 function PlayerPick({ p, season, name, checked }: { p: RosterPlayer; season: number; name: string; checked: boolean }) {
   return (
-    <li className="border-b border-line/60">
+    <li className="border-b border-line/60 last:border-b-0">
       <label className="flex cursor-pointer items-center gap-3 px-4 py-2.5">
         <input type="checkbox" name={name} value={p.contract_id} defaultChecked={checked} className="peer sr-only" />
-        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border-2 border-blue text-lg font-bold leading-none text-blue peer-checked:bg-blue peer-checked:text-white peer-checked:[&>.plus]:hidden peer-checked:[&>.tick]:inline peer-focus-visible:ring-2 peer-focus-visible:ring-blue/40">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border-2 border-blue text-lg font-bold leading-none text-blue transition-colors peer-checked:bg-blue peer-checked:text-white peer-checked:[&>.plus]:hidden peer-checked:[&>.tick]:inline peer-focus-visible:ring-2 peer-focus-visible:ring-blue/40">
           <span className="plus">+</span>
           <span className="tick hidden text-base">✓</span>
         </span>
@@ -107,49 +117,35 @@ function Summary({ review, them, me, get, give, closeHref }: {
   if ("err" in review) {
     return (
       <Modal closeHref={closeHref}>
-        <p className="text-sm text-bad">{review.err}</p>
+        <p className="p-5 text-sm text-bad">{review.err}</p>
       </Modal>
     );
   }
   const { get: inn, give: out, problems } = review.ok;
-  const sum = (ps: RosterPlayer[]) => ps.reduce((a, p) => a + p.salary, 0);
-  const net = sum(inn) - sum(out);
   return (
     <Modal closeHref={closeHref}>
-      <h2 className="text-lg font-bold">Trade with {them.name}</h2>
-      <table className="w-full text-sm">
-        <tbody>
-          <tr><td colSpan={2} className="pt-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-muted">You get</td></tr>
-          {inn.map((p) => <tr key={p.contract_id}><td className="py-0.5">{p.name}</td><td className="py-0.5 text-right num">{money(p.salary)}</td></tr>)}
-          {!inn.length && <tr><td className="py-0.5 text-muted">Nobody</td><td /></tr>}
-          <tr><td colSpan={2} className="pt-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-muted">You give</td></tr>
-          {out.map((p) => <tr key={p.contract_id}><td className="py-0.5">{p.name}</td><td className="py-0.5 text-right num">{money(p.salary)}</td></tr>)}
-          {!out.length && <tr><td className="py-0.5 text-muted">Nobody</td><td /></tr>}
-          <tr><td className="pt-3 text-muted">Your salary change</td><td className="pt-3 text-right num font-semibold">{net >= 0 ? "+" : "−"}{money(Math.abs(net))}</td></tr>
-          <tr><td className="text-muted">Your cap space after</td><td className="text-right num">{money(me.space - net)}</td></tr>
-          <tr><td className="text-muted">{them.name} cap space after</td><td className="text-right num">{money(them.space + net)}</td></tr>
-        </tbody>
-      </table>
-      {!!problems.length && <p className="text-sm text-bad">{problems.join("; ")}</p>}
-      <form action={sendOffer} className="flex gap-2 pt-1">
-        <input type="hidden" name="team" value={them.id} />
-        {get.map((g) => <input key={g} type="hidden" name="get" value={g} />)}
-        {give.map((g) => <input key={g} type="hidden" name="give" value={g} />)}
-        <Link href={closeHref} transitionTypes={BACK} className="flex-1 rounded-full border border-line py-3 text-center font-semibold">Back</Link>
-        <SubmitButton disabled={!!problems.length} className="flex-1 rounded-full bg-blue py-3 font-semibold text-white">Confirm</SubmitButton>
-      </form>
-      <p className="text-center text-xs text-muted">{them.name} gets the offer to accept or decline.</p>
+      <TradeSheet me={me} them={them} get={inn} give={out} />
+      <div className="space-y-3 border-t border-line p-4">
+        {!!problems.length && <p className="rounded-xl bg-bad/10 px-3 py-2 text-sm text-bad">{problems.join("; ")}</p>}
+        <form action={sendOffer} className="flex gap-2">
+          <input type="hidden" name="team" value={them.id} />
+          {get.map((g) => <input key={g} type="hidden" name="get" value={g} />)}
+          {give.map((g) => <input key={g} type="hidden" name="give" value={g} />)}
+          <Link href={closeHref} replace transitionTypes={BACK} className="flex-1 rounded-full border-[1.5px] border-line py-3 text-center font-semibold">Back</Link>
+          <SubmitButton disabled={!!problems.length} className="flex-1 rounded-full bg-blue py-3 font-semibold text-white">Send offer</SubmitButton>
+        </form>
+        <p className="text-center text-xs text-muted">{them.name} gets the offer to accept or decline.</p>
+      </div>
     </Modal>
   );
 }
 
-// A centred pop-up over a dimmed page. Tapping outside goes back a step.
+// A pop-up over a dimmed page, rising into place. Tapping outside goes back a step.
 function Modal({ closeHref, children }: { closeHref: string; children: React.ReactNode }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <Link href={closeHref} transitionTypes={BACK} className="absolute inset-0 bg-black/50" aria-label="Close" />
-      <div className="relative w-full max-w-sm space-y-3 rounded-2xl bg-card p-5 shadow-2xl">{children}</div>
+    <div className="fixed inset-0 z-50 flex items-end justify-center p-3 sm:items-center sm:p-4">
+      <Link href={closeHref} replace transitionTypes={BACK} className="menu-dim absolute inset-0 bg-black/50" aria-label="Close" />
+      <div className="menu-pop menu-pop-up relative max-h-[calc(100dvh-1.5rem)] w-full max-w-md overflow-y-auto rounded-3xl bg-card shadow-2xl">{children}</div>
     </div>
   );
 }
-

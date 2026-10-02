@@ -63,10 +63,10 @@ export default async function PlayerPage({ params, searchParams }: PageProps<"/p
     <Slide>
       <div className="mx-auto max-w-3xl">
         {/* header card */}
-        <div className="relative -mx-4 -mt-6 overflow-hidden bg-gradient-to-b from-line/80 to-card px-4 pb-4 pt-5 sm:mx-0 sm:mt-0 sm:rounded-2xl">
+        <div className="relative -mx-4 -mt-6 overflow-hidden bg-gradient-to-b from-line/80 to-card px-4 pb-4 pt-14 sm:mx-0 sm:mt-0 sm:rounded-2xl">
           {bigLogo && <img src={bigLogo} alt="" className="pointer-events-none absolute -right-6 -top-4 h-56 w-56 max-w-none opacity-[0.08]" />}
           {p.headshot && <img src={p.headshot} alt="" className="pointer-events-none absolute bottom-0 right-0 h-40 max-w-none object-contain sm:h-48" />}
-          <BackLink href="/players" label="Close" className="absolute right-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full text-2xl text-muted hover:bg-line">×</BackLink>
+          <BackLink href="/players" className="absolute left-1.5 top-2 z-10 bg-card/60 backdrop-blur" />
           <div className="relative w-[62%] space-y-2">
             <h1 className="text-[26px] font-black uppercase leading-[1.05] tracking-tight">{p.name}</h1>
             <div className="flex items-center gap-1.5 text-sm">
@@ -76,7 +76,7 @@ export default async function PlayerPage({ params, searchParams }: PageProps<"/p
             <div className="text-sm">
               {c ? (
                 <>
-                  <Link href={`/teams/${c.team.id}`} className="font-medium hover:underline">{c.team.name}</Link>
+                  <Link href={`/teams/${c.team.id}`} transitionTypes={FORWARD} className="font-medium hover:underline">{c.team.name}</Link>
                   <div className="text-xs text-muted num">{money(Number(c.salary))} · {yearsLeft(c, season)} {yearsLeft(c, season) === 1 ? "yr" : "yrs"} left · ends {seasonLabel(c.season_signed + c.years)}</div>
                 </>
               ) : w ? (
@@ -124,10 +124,10 @@ export default async function PlayerPage({ params, searchParams }: PageProps<"/p
           </Suspense>
         </div>
 
-        {/* tabs */}
+        {/* tabs (they swap in place in history, so the back arrow leaves the player) */}
         <nav className="-mx-4 mt-4 flex gap-6 overflow-x-auto border-b border-line px-4 text-sm [scrollbar-width:none] sm:mx-0">
           {TABS.map(([k, label]) => (
-            <Link key={k} href={tabHref(k)} scroll={false} className={`shrink-0 border-b-[3px] pb-2.5 font-medium ${tab === k ? "border-fg text-fg" : "border-transparent text-muted hover:text-fg"}`}>
+            <Link key={k} href={tabHref(k)} replace scroll={false} className={`shrink-0 border-b-[3px] pb-2.5 font-medium ${tab === k ? "border-fg text-fg" : "border-transparent text-muted hover:text-fg"}`}>
               {label}
             </Link>
           ))}
@@ -179,7 +179,7 @@ export default async function PlayerPage({ params, searchParams }: PageProps<"/p
                       {(o?.note || !!o?.news.length) && (
                         <Section title="Recent news">
                           <NewsList note={o?.note ?? null} news={(o?.news ?? []).slice(0, 3)} />
-                          <Link href={tabHref("news")} scroll={false} className="text-sm font-medium text-accent">All news</Link>
+                          <Link href={tabHref("news")} replace scroll={false} className="text-sm font-medium text-accent">All news</Link>
                         </Section>
                       )}
                     </>

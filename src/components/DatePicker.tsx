@@ -8,8 +8,9 @@ const full = (day: string) =>
   new Date(`${day}T12:00:00Z`).toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric", timeZone: "UTC" });
 
 // The date in the middle of the day row. Tap it for a calendar of the season; pick a day to jump there.
-export default function DatePicker({ day, today, label, path, params, from, to }: {
+export default function DatePicker({ day, today, label, path, params, from, to, replace }: {
   day: string; today: string; label: string; path: string; params: Record<string, string>; from: string; to: string;
+  replace?: boolean; // swap the day in place in history (on pages with a back arrow)
 }) {
   const [open, setOpen] = useState(false);
   const selected = useRef<HTMLDivElement>(null);
@@ -43,6 +44,7 @@ export default function DatePicker({ day, today, label, path, params, from, to }
                               prefetch={false}
                               key={d}
                               href={href(d)}
+                              replace={replace}
                               transitionTypes={d < day ? BACK : FORWARD}
                               onClick={() => setOpen(false)}
                               className={`mx-auto my-0.5 flex h-10 w-10 items-center justify-center rounded-full text-sm ${
