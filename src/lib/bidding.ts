@@ -77,7 +77,7 @@ export function cardOf(p: Row<"players">): CardPlayer {
 }
 
 export type RoomTeam = {
-  id: string; name: string; manager: string | null; capSpace: number; maxBid: number; roster: number; renouncesLeft: number; hasBid: boolean;
+  id: string; name: string; manager: string | null; capSpace: number; maxBid: number; roster: number; spots: number; renouncesLeft: number; hasBid: boolean;
 };
 export type RoundInfo = { id: string; number: number; kind: "regular" | "leftovers"; status: string; closesAt: string | null };
 export type Signing = { contractId: string; teamId: string; salary: number; years: number; player: CardPlayer };
@@ -126,7 +126,7 @@ export async function room(team: Team): Promise<Room> {
     teamSummaries(),
     d.from("rounds").select("*, round_players(count)").eq("season", season).order("number"),
     d.from("renounces").select("team_id, bid_id").eq("season", season),
-    d.from("round_players").select("round_id, pos, player:players(*), round:rounds!inner(status, season)").eq("round.status", "open").eq("round.season", season).order("pos"),
+    d.from("round_players").select("round_id, pos, player:players(*, contracts(active)), round:rounds!inner(status, season)").eq("round.status", "open").eq("round.season", season).order("pos"),
     d.from("bids").select("*, round:rounds!inner(status, season)").eq("round.status", "open").eq("round.season", season),
     d.from("contracts").select("years").eq("season_signed", season).eq("acquired_via", "draft"),
   ]);
@@ -149,9 +149,12 @@ export async function room(team: Team): Promise<Room> {
 
   const teams: RoomTeam[] = summaries.map((t) => ({
     id: t.id, name: t.name, manager: t.manager_name, capSpace: t.capSpace, maxBid: Math.floor(maxBid(t.state, rules) / BID_STEP) * BID_STEP, roster: t.state.rosterCount,
-    renouncesLeft: RENOUNCE_RIGHTS - (used.get(t.id) ?? 0), hasBid: phase === "bidding" && bidders.has(t.id),
+    spots: Math.max(0, rules.rosterMax - t.state.rosterCount), renouncesLeft: RENOUNCE_RIGHTS - (used.get(t.id) ?? 0), hasBid: phase === "bidding" && bidders.has(t.id),
   }));
-  const players = phase === "waiting" || !live ? [] : (rp.data ?? []).filter((x) => x.round_id === live.id).map((x) => one(x.player)).filter((p) => !!p).map(cardOf);
+  // A player who joined a team some other way after his round was set up (a free agent pickup) is out of the auction:
+  // no card, no reveal, nobody signs him twice.
+  const players = phase === "waiting" || !live ? [] : (rp.data ?? []).filter((x) => x.round_id === live.id).map((x) => one(x.player))
+    .filter((p) => !!p && !p.contracts.some((c) => c.active)).map((p) => cardOf(p!));
 
   let reveal: RevealItem[] | null = null;
   if (phase === "reveal" && live) {
@@ -316,7 +319,8 @@ export async function restart(team: Team) {
 
 // ---------- commissioner setup: which players go in which round ----------
 
-export type SetupRound = { number: number; id: string | null; status: string; players: CardPlayer[] };
+// `signed`: players in the round who have since joined a team (a free agent pickup). They're skipped in the auction.
+export type SetupRound = { number: number; id: string | null; status: string; players: CardPlayer[]; signed: string[] };
 
 async function taken(season: number) {
   const d = db();
@@ -329,11 +333,13 @@ async function taken(season: number) {
 
 export async function setupRounds(): Promise<SetupRound[]> {
   const { season } = await getSettings();
-  const { data: rounds } = await db().from("rounds").select("id, number, status, kind, round_players(pos, player:players(*))").eq("season", season).eq("kind", "regular").order("number");
+  const { data: rounds } = await db().from("rounds").select("id, number, status, kind, round_players(pos, player:players(*, contracts(active)))").eq("season", season).eq("kind", "regular").order("number");
   return Array.from({ length: REGULAR_ROUNDS }, (_, i) => {
     const r = rounds?.find((x) => x.number === i + 1);
-    const players = [...(r?.round_players ?? [])].sort((a, b) => a.pos - b.pos).map((x) => one(x.player)).filter((p) => !!p).map(cardOf);
-    return { number: i + 1, id: r?.id ?? null, status: r?.status ?? "setup", players };
+    const rows = [...(r?.round_players ?? [])].sort((a, b) => a.pos - b.pos).map((x) => one(x.player)).filter((p) => !!p);
+    // A finished round's signings are on teams too: only flag players in rounds still to come or live.
+    const signed = r?.status === "final" ? [] : rows.filter((p) => p.contracts.some((c) => c.active)).map((p) => p.id);
+    return { number: i + 1, id: r?.id ?? null, status: r?.status ?? "setup", players: rows.map(cardOf), signed };
   });
 }
 

@@ -22,7 +22,7 @@ import { ease, Gm, Kicker, Label, roundName } from "./ui";
 export default function Room({ data, me: who, app }: { data: Data; me: { id: string; name: string }; app: boolean }) {
   const router = useRouter();
   const skew = usePulse(data.v);
-  const me = data.teams.find((t) => t.id === data.meId) ?? { ...who, manager: null, capSpace: 0, maxBid: 0, roster: 0, renouncesLeft: 0, hasBid: false };
+  const me = data.teams.find((t) => t.id === data.meId) ?? { ...who, manager: null, capSpace: 0, maxBid: 0, roster: 0, spots: 0, renouncesLeft: 0, hasBid: false };
 
   // The bid sheet belongs to the round it was opened in: it never shows up again in a later one.
   const [open, setOpen] = useState<{ p: CardPlayer; round: string } | null>(null);
@@ -273,7 +273,7 @@ function Waiting({ data }: { data: Data }) {
             </div>
             <div className="text-right leading-tight">
               <div className="font-display text-xl">{money(t.capSpace)}</div>
-              <div className="text-[10px] text-white/35">{t.roster} players</div>
+              <div className="text-[10px] text-white/35">{t.spots} {t.spots === 1 ? "spot" : "spots"}</div>
             </div>
           </div>
         ))}

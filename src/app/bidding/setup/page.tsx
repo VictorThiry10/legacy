@@ -25,6 +25,10 @@ export default async function Setup({ searchParams }: PageProps<"/bidding/setup"
     <div className="mx-auto max-w-5xl px-4 pb-16 pt-[max(1.25rem,env(safe-area-inset-top))]">
       <Link href="/bidding" className="text-sm text-white/55 hover:text-white">← Room</Link>
       <h1 className="font-display mt-2 text-6xl leading-[0.85]">Rounds</h1>
+      <p className="mt-3 max-w-md text-sm text-white/55">
+        The free agents up for auction, {PER_ROUND} per round, in the order they come up. Search a free agent and tap a round number to
+        add him, ✕ to take him out. Auto fill tops every round up with the best free agents left.
+      </p>
 
       <div className="mt-5 flex flex-wrap gap-2">
         <ActionForm action={A.autoFill} confirm="Fill every empty spot with the best free agents left (last season's fantasy points per game)?">
@@ -79,7 +83,10 @@ export default async function Setup({ searchParams }: PageProps<"/bidding/setup"
               {r.players.map((p) => (
                 <li key={p.id} className="flex items-center gap-3">
                   <div className="w-8 shrink-0"><PlayerCard p={p} size="thumb" /></div>
-                  <span className="min-w-0 flex-1 truncate text-sm">{p.name}</span>
+                  <span className="min-w-0 flex-1 truncate text-sm">
+                    {p.name}
+                    {r.signed.includes(p.id) && <span className="ml-2 text-xs text-[var(--bad)]">On a team · skipped</span>}
+                  </span>
                   <span className="text-xs text-white/40">{p.stats ? `${p.stats.fppg}` : ""}</span>
                   {r.status === "setup" && (
                     <ActionForm action={A.removeFromRound}>
