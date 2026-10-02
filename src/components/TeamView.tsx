@@ -14,6 +14,7 @@ import { money } from "@/lib/rules";
 import { headshot } from "@/lib/names";
 import { openOffers } from "@/lib/trades";
 import { extensionOffer } from "@/lib/extensions";
+import { appStatus } from "@/lib/bidding";
 import LineupTable, { type LinePlayer } from "./LineupTable";
 
 type Search = Record<string, string | string[] | undefined>;
@@ -36,9 +37,10 @@ export default async function TeamView({ team, editable, base, sp }: { team: Tea
     return `${base}?${q}`;
   };
 
-  // my to-do card (trade offers, extensions): starts now, shown by Pending below
+  // my to-do card (free agency, trade offers, extensions): starts now, shown by Pending below
   const offers = editable ? openOffers(team.id) : null;
   const extensions = editable ? extensionOffer(team).catch(() => null) : null;
+  const freeAgency = editable ? appStatus(team).catch(() => null) : null;
   const [{ rules, season }, roster, games, abbr] = await Promise.all([getSettings(), rosters([team.id]), gamesBetween(day, day), teamAbbrs()]);
   const [rows, lines] = await Promise.all([lineupFor(team.id, day, roster), boxLines(roster.map((p) => p.id))]);
   const players = new Map(roster.map((p) => [p.id, p]));
@@ -106,7 +108,7 @@ export default async function TeamView({ team, editable, base, sp }: { team: Tea
         </div>
       </div>
 
-      {offers && extensions && <Pending offers={offers} extensions={extensions} />}
+      {offers && extensions && freeAgency && <Pending offers={offers} extensions={extensions} freeAgency={freeAgency} />}
 
       <div className="flex items-center border-y border-line -mx-4 sm:mx-0 sm:rounded-xl sm:border sm:bg-card">
         <Link href={href({ d: addDays(day, -1) })} prefetch={true} transitionTypes={BACK} className="px-4 py-2 text-xl text-muted hover:text-fg" aria-label="Previous day">‹</Link>
