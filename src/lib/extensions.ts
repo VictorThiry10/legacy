@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import { db } from "./supabase/server";
 import { rpc } from "./db";
 import { getSettings, type Team } from "./league";
@@ -69,35 +70,38 @@ export type ExtensionPlayer = {
 export type ExtensionOffer = { players: ExtensionPlayer[]; capSpace: number; rosterCount: number; rosterMax: number };
 
 // The pop-up for this team, or null: not open to it, nothing to extend, or already decided.
-export async function extensionOffer(team: Team): Promise<ExtensionOffer | null> {
-  const expired = EXPIRED[team.id];
-  if (!OPEN_TO.has(team.id) || !expired) return null;
-  const { data: done } = await db().from("extension_decisions").select("team_id").eq("team_id", team.id).maybeSingle();
+// Read once per page: the layout's pop-up and the Team page's to-do row both ask.
+export const extensionOffer = (team: Team) => offerFor(team.id);
+
+const offerFor = cache(async (teamId: string): Promise<ExtensionOffer | null> => {
+  const expired = EXPIRED[teamId];
+  if (!OPEN_TO.has(teamId) || !expired) return null;
+  const { data: done } = await db().from("extension_decisions").select("team_id").eq("team_id", teamId).maybeSingle();
   if (done) return null;
   const ids = Object.keys(expired);
   const [{ data: players }, { data: signed }, { data: waived }, roster, ir, space, { rules }] = await Promise.all([
     db().from("players").select("id, name, position, nba_team, headshot").in("id", ids),
     db().from("contracts").select("player_id, team_id, team:teams(name)").in("player_id", ids).eq("active", true),
     db().from("waivers").select("player_id").in("player_id", ids).eq("status", "open"),
-    rosters([team.id]),
-    onIR([team.id]),
-    capSpaces([team.id]),
+    rosters([teamId]),
+    onIR([teamId]),
+    capSpaces([teamId]),
     getSettings(),
   ]);
   const taken = (id: string) => {
     const c = signed?.find((s) => s.player_id === id);
-    if (c) return c.team_id === team.id ? "Already on your team" : `Signed by ${c.team?.name ?? "another team"}`;
+    if (c) return c.team_id === teamId ? "Already on your team" : `Signed by ${c.team?.name ?? "another team"}`;
     return waived?.some((w) => w.player_id === id) ? "On waivers" : null;
   };
   return {
     players: (players ?? [])
       .map((p) => ({ id: p.id, name: p.name, position: p.position, nbaTeam: p.nba_team, headshot: p.headshot, salary: expired[p.id], taken: taken(p.id) }))
       .sort((a, b) => b.salary - a.salary || a.name.localeCompare(b.name)),
-    capSpace: space.get(team.id) ?? 0,
+    capSpace: space.get(teamId) ?? 0,
     rosterCount: roster.filter((p) => !ir.has(p.id)).length, // IR doesn't take a roster spot
     rosterMax: rules.rosterMax,
   };
-}
+});
 
 // Extend the chosen players (none is fine: that's a decision too). Checked against the cap and roster size first.
 export async function extend(team: Team, playerIds: string[]) {
