@@ -56,7 +56,7 @@ export default async function OfferPage({ params }: PageProps<"/offers/[id]">) {
               {!o.mine && (
                 <form action={acceptOffer} className="flex-1">
                   <input type="hidden" name="offer" value={o.id} />
-                  <SubmitButton className="w-full rounded-full bg-good py-3 font-semibold text-white">Accept</SubmitButton>
+                  <SubmitButton className="w-full rounded-full bg-good-fill py-3 font-semibold text-white">Accept</SubmitButton>
                 </form>
               )}
             </div>

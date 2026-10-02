@@ -10,6 +10,7 @@ test("short names", () => {
   assert.equal(shortName("Jaren Jackson Jr."), "J. Jackson Jr.");
   assert.equal(nbaLogo("UTAH", 0), "https://a.espncdn.com/i/teamlogos/nba/500/utah.png");
   assert.equal(nbaLogo("UTAH", 48), "https://a.espncdn.com/combiner/i?img=/i/teamlogos/nba/500/utah.png&w=48&h=48");
+  assert.equal(nbaLogo("PHI", 48, true), "https://a.espncdn.com/combiner/i?img=/i/teamlogos/nba/500-dark/phi.png&w=48&h=48");
   assert.equal(nbaLogo(null), null);
 });
 

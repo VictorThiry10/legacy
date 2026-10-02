@@ -26,8 +26,9 @@ export const headshot = (url: string | null | undefined, h: number) => {
 };
 
 // ESPN's NBA team logo for an abbreviation (BOS, GS, UTAH...), `px` square. px = 0 keeps the 500 px original.
-export const nbaLogo = (abbr: string | null | undefined, px = 64) => {
+// `dark` is ESPN's version for dark backgrounds (Philadelphia, Toronto and Utah are drawn light there).
+export const nbaLogo = (abbr: string | null | undefined, px = 64, dark = false) => {
   if (!abbr) return null;
-  const path = `/i/teamlogos/nba/500/${abbr.toLowerCase()}.png`;
+  const path = `/i/teamlogos/nba/${dark ? "500-dark" : "500"}/${abbr.toLowerCase()}.png`;
   return px ? resized(path, px, px) : ESPN + path;
 };

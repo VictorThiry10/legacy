@@ -9,7 +9,13 @@ export const metadata: Metadata = {
   appleWebApp: { capable: true, title: "Legacy", statusBarStyle: "default" },
 };
 
-export const viewport: Viewport = { themeColor: "#1c1917" };
+// The browser's bars match the tab bar: white in light mode, the dark card colour in dark mode.
+export const viewport: Viewport = {
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
+    { media: "(prefers-color-scheme: dark)", color: "#1c1917" },
+  ],
+};
 
 // Shared by the league app, (league)/layout.tsx, and the bidding site, bidding/layout.tsx.
 export default function RootLayout({ children }: LayoutProps<"/">) {

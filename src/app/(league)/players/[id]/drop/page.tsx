@@ -38,7 +38,7 @@ export default async function DropPlayer({ params, searchParams }: PageProps<"/p
           <form action={drop}>
             <input type="hidden" name="player_id" value={p.id} />
             <input type="hidden" name="contract_id" value={p.contract_id} />
-            <SubmitButton className="inline-flex w-full items-center justify-center rounded-lg bg-bad px-3 py-2 text-sm font-semibold text-white">Drop {p.name}</SubmitButton>
+            <SubmitButton className="inline-flex w-full items-center justify-center rounded-lg bg-bad-fill px-3 py-2 text-sm font-semibold text-white">Drop {p.name}</SubmitButton>
           </form>
         )}
       </div>

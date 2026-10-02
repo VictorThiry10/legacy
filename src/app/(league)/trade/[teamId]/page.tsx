@@ -55,7 +55,7 @@ export default async function Trade({ params, searchParams }: PageProps<"/trade/
             {!roster.length && <li className="px-4 py-6 text-center text-sm text-muted">No players.</li>}
           </ul>
           <div className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-card/95 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur">
-            <button className="mx-auto block w-full max-w-md rounded-full bg-blue py-3.5 text-base font-semibold text-white transition-opacity group-data-[pending]:opacity-60">
+            <button className="mx-auto block w-full max-w-md rounded-full bg-blue-fill py-3.5 text-base font-semibold text-white transition-opacity group-data-[pending]:opacity-60">
               {first ? "Continue" : "Review trade"}
             </button>
           </div>
@@ -87,7 +87,7 @@ function PlayerPick({ p, season, name, checked }: { p: RosterPlayer; season: num
     <li className="border-b border-line/60 last:border-b-0">
       <label className="flex cursor-pointer items-center gap-3 px-4 py-2.5">
         <input type="checkbox" name={name} value={p.contract_id} defaultChecked={checked} className="peer sr-only" />
-        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border-2 border-blue text-lg font-bold leading-none text-blue transition-colors peer-checked:bg-blue peer-checked:text-white peer-checked:[&>.plus]:hidden peer-checked:[&>.tick]:inline peer-focus-visible:ring-2 peer-focus-visible:ring-blue/40">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border-2 border-blue text-lg font-bold leading-none text-blue transition-colors peer-checked:bg-blue-fill peer-checked:text-white peer-checked:[&>.plus]:hidden peer-checked:[&>.tick]:inline peer-focus-visible:ring-2 peer-focus-visible:ring-blue/40">
           <span className="plus">+</span>
           <span className="tick hidden text-base">✓</span>
         </span>
@@ -132,7 +132,7 @@ function Summary({ review, them, me, get, give, closeHref }: {
           {get.map((g) => <input key={g} type="hidden" name="get" value={g} />)}
           {give.map((g) => <input key={g} type="hidden" name="give" value={g} />)}
           <Link href={closeHref} replace transitionTypes={BACK} className="flex-1 rounded-full border-[1.5px] border-line py-3 text-center font-semibold">Back</Link>
-          <SubmitButton disabled={!!problems.length} className="flex-1 rounded-full bg-blue py-3 font-semibold text-white">Send offer</SubmitButton>
+          <SubmitButton disabled={!!problems.length} className="flex-1 rounded-full bg-blue-fill py-3 font-semibold text-white">Send offer</SubmitButton>
         </form>
       </div>
     </Modal>

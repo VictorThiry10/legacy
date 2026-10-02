@@ -32,7 +32,6 @@ export default async function AddPlayer({ params, searchParams }: PageProps<"/pl
   const playing = roster.filter((r) => !ir.has(r.id));
   const full = playing.length >= rules.rosterMax;
   const err = typeof sp.err === "string" ? sp.err : "";
-  const ok = typeof sp.ok === "string" ? sp.ok : "";
   const w = onWaivers?.waiver;
   const myBid = onWaivers?.myBid;
   const capSpace = summaries.find((t) => t.id === me.id)?.capSpace ?? 0;
@@ -61,14 +60,21 @@ export default async function AddPlayer({ params, searchParams }: PageProps<"/pl
             <h1 className="text-xl font-semibold">{p.name}</h1>
             <p className="text-sm text-muted">{p.nba_team} · {p.position}</p>
             {w && !owned ? (
-              <p className="text-sm">Bids close <LocalTime iso={w.closes_at} mode="day" /> <LocalTime iso={w.closes_at} /></p>
+              <>
+                <p className="text-sm">Bids close <LocalTime iso={w.closes_at} mode="day" /> <LocalTime iso={w.closes_at} /></p>
+                {myBid && (
+                  <p className="text-sm">
+                    Your bid <b className="num">{money(Number(myBid.amount))}</b>
+                    {myBid.drop_contract && <span className="text-muted"> · drops {roster.find((r) => r.contract_id === myBid.drop_contract)?.name ?? "a player"}</span>}
+                  </p>
+                )}
+              </>
             ) : (
               <p className="text-sm">{money(rules.minSalary)} · {years}</p>
             )}
           </div>
         </div>
         {err && <p className="card text-sm text-bad">{err}</p>}
-        {ok && <p className="card text-sm text-good">{ok}</p>}
         {owned ? (
           <p className="card text-sm">Already on {owned.team?.name ?? "another team"}.</p>
         ) : w && w.dropped_by === me.id ? (
@@ -77,15 +83,9 @@ export default async function AddPlayer({ params, searchParams }: PageProps<"/pl
           <p className="card text-sm">Bidding closed.</p>
         ) : w ? (
           <>
-            {myBid && (
-              <p className="card text-sm">
-                Your bid: <b className="num">{money(Number(myBid.amount))}</b>
-                {myBid.drop_contract && <> · drop {roster.find((r) => r.contract_id === myBid.drop_contract)?.name ?? "a player"} if you win</>}
-              </p>
-            )}
             <form action={bid} className="space-y-3">
               <input type="hidden" name="player_id" value={p.id} />
-              <Field label="Your bid ($m)" note={`Min ${money(lowestBid(rules.minSalary))} · ${money(capSpace)} cap space`}>
+              <Field label="Bid ($m)" note={`Min ${money(lowestBid(rules.minSalary))} · ${money(capSpace)} cap space`}>
                 <input
                   name="amount" type="number" inputMode="numeric" step="1" min={lowestBid(rules.minSalary) / 1e6} required className="input"
                   defaultValue={(myBid ? Number(myBid.amount) : lowestBid(rules.minSalary)) / 1e6}
