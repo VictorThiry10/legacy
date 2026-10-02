@@ -12,6 +12,7 @@ import RevealShow from "./RevealShow";
 import Results from "./Results";
 import Contracts from "./Contracts";
 import Portal from "./Portal";
+import { initials } from "@/lib/names";
 import { useClock } from "./clock";
 import { ready } from "./preload";
 import { ease, Gm, Kicker, Label, roundName } from "./ui";
@@ -129,15 +130,12 @@ export default function Room({ data, me: who, app }: { data: Data; me: { id: str
         <AnimatePresence>{locked && <Locked key="locked" />}</AnimatePresence>
         <AnimatePresence>{showing && <RevealShow key="show" data={data} onDone={showDone} />}</AnimatePresence>
       </Portal>
+      {/* room under the commissioner's bar; sign out only for the email sign in (the app has its own) */}
       <footer className={`mx-auto max-w-5xl px-4 pt-8 text-center text-xs text-white/30 ${data.isCommish || data.needsLeagueLogin ? "pb-28" : "pb-10"}`}>
-        {me.name}
         {!app && (
-          <>
-            {" · "}
-            <form action={A.signOut} className="inline">
-              <button className="hover:text-white/70">Sign out</button>
-            </form>
-          </>
+          <form action={A.signOut}>
+            <button className="hover:text-white/70">Sign out</button>
+          </form>
         )}
       </footer>
       {data.isCommish && <CommishBar data={data} />}
@@ -214,15 +212,20 @@ function Header({ data, me, app }: { data: Data; me: RoomTeam; app: boolean }) {
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m15 6-6 6 6 6" /></svg>
           </Link>
         )}
-        <div className="font-display text-2xl leading-none">
-          Legacy<span className="ml-2 text-white/35">Free agency</span>
-        </div>
+        <div className="font-display text-2xl leading-none">Auction</div>
         <div className="ml-auto flex items-center gap-3">
           <div className="text-right leading-none">
             <Label>Cap space</Label>
             <div className="font-display mt-1 text-xl">{money(me.capSpace)}</div>
           </div>
-          <Gm name={me.name} size="sm" />
+          {data.isCommish ? (
+            // the commissioner's way to the Rounds page (which players come up when)
+            <Link href="/bidding/setup" aria-label="Rounds" className="grid h-9 w-9 place-items-center rounded-full bg-white/[0.07] text-white/70 ring-1 ring-inset ring-white/10 transition hover:text-white">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M4 6h16M4 12h16M4 18h10" /></svg>
+            </Link>
+          ) : (
+            <Gm name={me.name} size="sm" />
+          )}
         </div>
       </div>
       {data.rounds.length > 0 && (
@@ -300,20 +303,15 @@ function Bidding({ data, me, myBids, skew, onOpen }: {
   const bids = Object.values(myBids);
   const total = bids.reduce((a, b) => a + b, 0);
   const over = total > me.capSpace;
-  const inCount = data.teams.filter((t) => t.hasBid).length;
-  const regular = data.rounds.filter((r) => r.kind === "regular").length;
   return (
     <section className="mx-auto max-w-5xl px-4 pt-6">
       <div className="flex items-end justify-between gap-4">
-        <div>
-          <Kicker>{data.round?.kind === "leftovers" ? "Nobody bid on these" : `Round ${data.round?.number} of ${regular}`}</Kicker>
-          <h1 className="font-display mt-1 text-6xl leading-[0.85]">{data.round?.kind === "leftovers" ? "Last chance" : `Round ${data.round?.number}`}</h1>
-        </div>
+        <h1 className="font-display text-6xl leading-[0.85]">{data.round?.kind === "leftovers" ? "Last chance" : `Round ${data.round?.number}`}</h1>
         <Countdown closes={closes} skew={skew} serverNow={data.now} />
       </div>
       <TimeBar closes={closes} skew={skew} serverNow={data.now} total={data.roundSeconds} />
 
-      <div className="mt-5 flex items-end gap-7">
+      <div className="mt-5 flex flex-wrap items-end gap-x-7 gap-y-4">
         <div>
           <Label>Max bid</Label>
           <div className="font-display mt-1 text-2xl leading-none">{money(me.maxBid)}</div>
@@ -325,11 +323,20 @@ function Bidding({ data, me, myBids, skew, onOpen }: {
             {over && <span className="text-[10px] text-amber-300/70">over cap if all win</span>}
           </div>
         </div>
+        {/* who has bid this round: each GM's initials light up once they have (never what or on whom) */}
         <div className="ml-auto text-right">
-          <Label>{inCount}/{data.teams.length} in</Label>
-          <div className="mt-2 flex justify-end gap-1.5">
+          <Label>Bids in</Label>
+          <div className="mt-1.5 flex justify-end gap-1">
             {data.teams.map((t) => (
-              <motion.span key={t.id} title={t.name} className="h-1.5 w-1.5 rounded-full" animate={{ backgroundColor: t.hasBid ? "#f5f5f4" : "rgba(255,255,255,0.15)" }} />
+              <motion.span
+                key={t.id}
+                title={t.name}
+                className="grid h-6 w-6 place-items-center rounded-full text-[8px] font-semibold tracking-wide"
+                animate={t.hasBid ? { backgroundColor: "#f5f5f4", color: "#0a0a0c" } : { backgroundColor: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.35)" }}
+                transition={{ duration: 0.4 }}
+              >
+                {initials(t.name)}
+              </motion.span>
             ))}
           </div>
         </div>
@@ -534,10 +541,10 @@ function CommishBar({ data }: { data: Data }) {
   const btn = "h-10 rounded-full px-4 text-sm font-semibold transition active:scale-95 disabled:opacity-40";
   const primary = `${btn} btn-primary`;
   const ghost = `${btn} text-white/70 hover:text-white`;
+  if (data.phase === "waiting" && !data.round) return null; // nothing to run yet (the Rounds page is in the header)
   return (
     <div className="glass fixed inset-x-0 bottom-0 z-40 border-t border-white/[0.06] pb-[env(safe-area-inset-bottom)]">
       <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-1 px-4 py-2.5">
-        <Link href="/bidding/setup" className={`${ghost} inline-flex items-center`}>Rounds</Link>
         <div className="ml-auto flex items-center gap-1">
           {data.phase === "waiting" && data.round && <button disabled={pending} onClick={act(A.startNext)} className={primary}>Start {roundName(data.round).toLowerCase()}</button>}
           {data.phase === "bidding" && (

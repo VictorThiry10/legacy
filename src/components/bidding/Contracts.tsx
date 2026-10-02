@@ -5,14 +5,15 @@ import type { Room } from "@/lib/bidding";
 import { money } from "@/lib/rules";
 import * as A from "@/app/bidding/actions";
 import PlayerCard from "./PlayerCard";
-import { ease, Gm, Kicker, Label } from "./ui";
+import { ease, Gm, Label } from "./ui";
 
 const MAX_YEARS = 4;
 const yrs = (n: number) => `${n} ${n === 1 ? "yr" : "yrs"}`;
 const LONG = [4, 3, 2]; // the lengths with a limit per season
 
 // After the last round: every signing starts as a 1 year deal, and each GM gives some of theirs longer contracts
-// with + and −, within the season's limits (1 × 4 years, 2 × 3, 3 × 2). Going over a limit says so and blocks Save.
+// with + and −, within the limits (1 × 4 years, 2 × 3, 3 × 2). The contracts already on the team count by the
+// seasons they have left (shown locked under the signings). Going over a limit says so and blocks Save.
 // Then the board of every signing, by team.
 export default function Contracts({ data }: { data: Room }) {
   const locked = data.phase === "done";
@@ -21,7 +22,7 @@ export default function Contracts({ data }: { data: Room }) {
   const [msg, setMsg] = useState("");
   const [pending, start] = useTransition();
   const len = (id: string, fallback: number) => years[id] ?? fallback;
-  const count = (n: number) => mine.filter((s) => len(s.contractId, s.years) === n).length;
+  const count = (n: number) => mine.filter((s) => len(s.contractId, s.years) === n).length + data.held.filter((h) => h.years === n).length;
   const dirty = mine.some((s) => len(s.contractId, s.years) !== s.years);
   const over = LONG.filter((n) => count(n) > (data.limits[n] ?? 0));
 
@@ -39,14 +40,10 @@ export default function Contracts({ data }: { data: Room }) {
 
   return (
     <section className="mx-auto max-w-5xl px-4 pt-6">
-      <Kicker>{locked ? "Free agency is done" : "Last step"}</Kicker>
-      <h1 className="font-display mt-1 text-6xl leading-[0.85]">{locked ? "Signings" : "Contract lengths"}</h1>
+      <h1 className="font-display text-6xl leading-[0.85]">{locked ? "Signings" : "Contract lengths"}</h1>
 
       {!locked && mine.length > 0 && (
         <>
-          <p className="mt-3 max-w-md text-sm text-white/55">
-            Every signing is a 1 year deal. Use + and − to give some of them longer contracts.
-          </p>
           <div className="mt-5 flex gap-6">
             {LONG.map((n) => {
               const bad = count(n) > (data.limits[n] ?? 0);
@@ -93,6 +90,26 @@ export default function Contracts({ data }: { data: Room }) {
                     <Step label="+" aria={`Longer contract for ${s.player.name}`} disabled={cur >= MAX_YEARS} onClick={() => set(s.contractId, cur + 1)} />
                   </div>
                 </motion.div>
+              );
+            })}
+            {data.held.map((h) => {
+              const bad = over.includes(h.years);
+              return (
+                <div key={h.contractId} className="flex items-center gap-3 border-b border-white/[0.04] px-3 py-2.5 opacity-55 last:border-0">
+                  <div className="w-10 shrink-0"><PlayerCard p={h.player} size="thumb" /></div>
+                  <div className="min-w-0 flex-1 leading-tight">
+                    <div className="truncate text-[15px] font-semibold">{h.player.name}</div>
+                    <div className="truncate text-xs text-white/40">
+                      <span className="font-semibold text-[var(--gold)] sm:hidden">{money(h.salary)} · </span>
+                      {[h.player.position?.replace(/,\s*/g, "/"), h.player.nbaTeam].filter(Boolean).join(" · ")}
+                    </div>
+                  </div>
+                  <div className="font-display hidden w-16 text-right text-2xl leading-none text-[var(--gold)] sm:block">{money(h.salary)}</div>
+                  <div className={`flex w-[7.5rem] items-center justify-center gap-1.5 text-sm font-semibold tabular-nums ${bad ? "text-[var(--bad)]" : ""}`}>
+                    <LockIcon />
+                    {yrs(h.years)}
+                  </div>
+                </div>
               );
             })}
           </div>
@@ -147,6 +164,12 @@ export default function Contracts({ data }: { data: Room }) {
     </section>
   );
 }
+
+const LockIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-label="Already signed">
+    <rect x="5" y="11" width="14" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" />
+  </svg>
+);
 
 function Step({ label, aria, disabled, onClick }: { label: string; aria: string; disabled: boolean; onClick: () => void }) {
   return (
