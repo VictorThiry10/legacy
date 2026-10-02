@@ -2,9 +2,11 @@ import type { CardPlayer } from "@/lib/bidding";
 import { teamColors } from "@/lib/nba-colors";
 import { headshot, nbaLogo } from "@/lib/names";
 import { money } from "@/lib/rules";
+import s from "./gold.module.css";
 
-// The bidding site's player card: dark, a soft glow in the NBA team's colour, headshot, fantasy points per game.
-// `bid` shows my bid in gold. Sizes itself from its width (container query units), in a grid or full screen.
+// The bidding site's player card: dark inside a gold rim, a soft glow in the NBA team's colour, headshot, fantasy
+// points per game. `bid` shows my bid in gold and lights the card up. Sizes itself from its width (container query
+// units), in a grid or full screen.
 
 const INJURY: Record<string, string> = { OUT: "OUT", "DAY-TO-DAY": "DTD", QUESTIONABLE: "Q", DOUBTFUL: "D", SUSPENSION: "SUS" };
 
@@ -28,7 +30,7 @@ export default function PlayerCard({ p, bid, size = "large", className = "", chi
   const loading = size === "thumb" ? "lazy" : undefined;
   const injury = p.injury ? (INJURY[p.injury.toUpperCase()] ?? p.injury.slice(0, 3).toUpperCase()) : null;
   return (
-    <div className={`@container relative aspect-[5/7] overflow-hidden rounded-[7%/5%] bg-[#121215] ring-1 ring-inset ring-white/10 ${className}`}>
+    <div className={`@container relative aspect-[5/7] overflow-hidden rounded-[7%/5%] bg-[#121215] ${bid !== undefined ? "shadow-[0_0_0_2px_#fff4c8,0_0_26px_rgba(233,196,106,0.55)]" : ""} ${className}`}>
       <div className="absolute inset-0" style={{ background: `radial-gradient(120% 70% at 50% 0%, color-mix(in oklab, ${c1} 42%, transparent) 0%, transparent 72%)` }} />
       {face && (
         <img src={face} alt="" loading={loading} decoding="async" className="pointer-events-none absolute left-1/2 top-[10%] w-[126%] max-w-none -translate-x-1/2" />
@@ -45,7 +47,7 @@ export default function PlayerCard({ p, bid, size = "large", className = "", chi
       <div className="absolute inset-x-[7%] bottom-[6%]">
         <div className="truncate text-[5cqw] font-medium uppercase tracking-[0.22em] text-white/45">{rest.length ? first : ""}</div>
         <div className="font-display truncate text-[14cqw] uppercase leading-[0.92]">{last}</div>
-        <div className="mt-[3cqw] flex items-baseline justify-between gap-[2cqw] border-t border-white/10 pt-[3cqw] leading-none">
+        <div className="mt-[3cqw] flex items-baseline justify-between gap-[2cqw] border-t border-[#e9c46a]/30 pt-[3cqw] leading-none">
           <span className="whitespace-nowrap">
             <span className="font-display text-[9cqw]">{p.stats ? p.stats.fppg.toFixed(1) : "–"}</span>
             <span className="ml-[1.5cqw] text-[4cqw] font-semibold tracking-[0.18em] text-white/40">FPTS</span>
@@ -53,20 +55,27 @@ export default function PlayerCard({ p, bid, size = "large", className = "", chi
           {bid !== undefined && <span className="font-display text-[9cqw] text-[var(--gold)]">{money(bid)}</span>}
         </div>
       </div>
-      {bid !== undefined && <div className="pointer-events-none absolute inset-0 rounded-[inherit] ring-1 ring-inset ring-[var(--gold)]/70" />}
+      <div className={s.frame} />
+      <div className="pointer-events-none absolute inset-[2.2cqw] rounded-[6%/4.3%] ring-1 ring-black/50" />
       {children}
     </div>
   );
 }
 
-// Face down: what a card looks like before it's revealed.
+// Face down: gold foil with the league's name engraved, before the card is revealed.
 export function CardBack({ className = "" }: { className?: string }) {
   return (
-    <div className={`@container relative aspect-[5/7] overflow-hidden rounded-[7%/5%] bg-[#121215] ring-1 ring-inset ring-white/10 ${className}`}>
-      <div className="absolute inset-0" style={{ background: "radial-gradient(110% 65% at 50% 0%, rgba(255,255,255,0.08), transparent 70%)" }} />
-      <div className="absolute inset-[4cqw] rounded-[5cqw] border border-white/[0.06]" />
+    <div className={`@container relative aspect-[5/7] overflow-hidden rounded-[7%/5%] ${s.foil} shadow-[0_6px_24px_rgba(0,0,0,0.45)] ${className}`}>
+      <div className="absolute inset-0" style={{ background: "radial-gradient(90% 60% at 30% 10%, rgba(255,250,225,0.35), transparent 70%)" }} />
+      <div className="absolute inset-[4.5cqw] rounded-[4.5cqw] border-[0.7cqw] border-[#4f360b]/45" />
+      <div className="absolute inset-[7cqw] rounded-[3cqw] border-[0.35cqw] border-[#fff1c4]/40" />
+      <div className="absolute left-1/2 top-1/2 h-[46cqw] w-[46cqw] -translate-x-1/2 -translate-y-1/2 rotate-45 border-[0.6cqw] border-[#4f360b]/35" />
       <div className="absolute inset-0 grid place-items-center">
-        <div className="font-display silver-text text-[30cqw] leading-none">LL</div>
+        <div className="text-center">
+          <div className={`${s.engraved} text-[7cqw] leading-none`}>✦</div>
+          <div className={`font-display ${s.engraved} mt-[1.5cqw] text-[21cqw] leading-[0.85] tracking-[0.04em]`}>Legacy</div>
+          <div className={`${s.engraved} mt-[2cqw] text-[3.6cqw] font-bold uppercase tracking-[0.45em]`}>Free agency</div>
+        </div>
       </div>
       <div className="card-sheen pointer-events-none absolute inset-0" />
     </div>

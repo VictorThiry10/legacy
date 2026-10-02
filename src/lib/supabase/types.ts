@@ -88,8 +88,8 @@ export type Database = {
         { closes_at?: string | null; created_at?: string; id?: string; kind?: string; number: number; result?: Json | null; season: number; status?: string }
       >;
       settings: Table<
-        { cap: number; fa_locked: boolean; id: number; league_name: string; league_size: number; min_salary: number; roster_max: number; scoring: Json; season: number; waiver_hours: number },
-        { cap?: number; fa_locked?: boolean; id?: number; league_name?: string; league_size?: number; min_salary?: number; roster_max?: number; scoring?: Json; season?: number; waiver_hours?: number }
+        { cap: number; fa_locked: boolean; id: number; league_name: string; league_size: number; min_salary: number; roster_max: number; round_seconds: number; scoring: Json; season: number; waiver_hours: number },
+        { cap?: number; fa_locked?: boolean; id?: number; league_name?: string; league_size?: number; min_salary?: number; roster_max?: number; round_seconds?: number; scoring?: Json; season?: number; waiver_hours?: number }
       >;
       sync_log: Table<{ last_run: string; name: string }, { last_run: string; name: string }>;
       teams: Table<

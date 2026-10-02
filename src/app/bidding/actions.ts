@@ -75,6 +75,10 @@ export async function removeFromRound(f: FormData) {
   return run(async () => B.removeFromRound(await me(), Number(f.get("round")), String(f.get("player"))));
 }
 
+export async function setRoundSeconds(f: FormData) {
+  return run(async () => B.setRoundSeconds(await me(), Number(f.get("seconds"))));
+}
+
 export async function autoFill() {
   return run(async () => B.autoFill(await me()));
 }
