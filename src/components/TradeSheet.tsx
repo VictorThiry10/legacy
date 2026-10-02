@@ -1,7 +1,7 @@
 import { money } from "@/lib/rules";
 import { headshot } from "@/lib/names";
 import type { RosterPlayer } from "@/lib/roster";
-import TeamAvatar, { teamColor } from "./TeamAvatar";
+import TeamAvatar from "./TeamAvatar";
 import { TradeIcon } from "./PendingRow";
 
 type Side = { name: string; space: number }; // a team and its cap space today
@@ -10,8 +10,9 @@ const total = (ps: RosterPlayer[]) => ps.reduce((a, p) => a + p.salary, 0);
 const cap = (n: number) => (n < 0 ? `−${money(-n)}` : money(n));
 const signed = (n: number) => `${n >= 0 ? "+" : "−"}${money(Math.abs(n))}`;
 
-// One trade, both teams in one card: the two teams side by side in their colours, then what each team gets
-// (a colour edge says whose side it is), then both teams' cap space before and after.
+// One trade, both teams in one card: the two teams side by side, then what each team gets, then both teams' cap
+// space before and after. My side is blue and theirs orange all the way down (the header fades from one to the
+// other, a colour edge marks each half), so the sides read apart even when two teams' badges look alike.
 // Used by the trade builder's summary and the offer page. `get` is what I get, `give` what I give.
 export default function TradeSheet({ me, them, get, give, showCap = true }: {
   me: Side; them: Side; get: RosterPlayer[]; give: RosterPlayer[]; showCap?: boolean;
@@ -19,44 +20,44 @@ export default function TradeSheet({ me, them, get, give, showCap = true }: {
   const net = total(get) - total(give); // my salary change
   return (
     <div>
-      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 px-4 py-4" style={{ background: `linear-gradient(90deg, ${teamColor(me.name, 0.16)}, ${teamColor(them.name, 0.16)})` }}>
-        <TeamHead name={me.name} note="You" />
+      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 bg-gradient-to-r from-blue/15 to-orange/15 px-4 py-4">
+        <TeamHead name={me.name} note="You" tone="text-blue" />
         <span className="flex h-9 w-9 items-center justify-center rounded-full bg-card text-fg shadow-sm">
           <TradeIcon />
         </span>
-        <TeamHead name={them.name} note="Them" />
+        <TeamHead name={them.name} note="Them" tone="text-orange" />
       </div>
 
-      <Half team={me.name} label="You get" players={get} />
-      <Half team={them.name} label={`${them.name} get`} players={give} />
+      <Half team={me.name} edge="bg-blue" label="You get" players={get} />
+      <Half team={them.name} edge="bg-orange" label={`${them.name} get`} players={give} />
 
       {showCap && (
         <div className="grid grid-cols-2 divide-x divide-line border-t border-line">
-          <Cap team={me.name} before={me.space} after={me.space - net} />
-          <Cap team={them.name} before={them.space} after={them.space + net} />
+          <Cap dot="bg-blue" before={me.space} after={me.space - net} />
+          <Cap dot="bg-orange" before={them.space} after={them.space + net} />
         </div>
       )}
     </div>
   );
 }
 
-function TeamHead({ name, note }: { name: string; note: string }) {
+function TeamHead({ name, note, tone }: { name: string; note: string; tone: string }) {
   return (
     <div className="flex min-w-0 flex-col items-center gap-1.5 text-center">
       <TeamAvatar name={name} size="lg" />
       <div className="w-full min-w-0 leading-tight">
         <div className="truncate text-sm font-semibold">{name}</div>
-        <div className="text-[11px] uppercase tracking-wide text-muted">{note}</div>
+        <div className={`text-[11px] font-semibold uppercase tracking-wide ${tone}`}>{note}</div>
       </div>
     </div>
   );
 }
 
-// What one team gets, with that team's colour down the left edge.
-function Half({ team, label, players }: { team: string; label: string; players: RosterPlayer[] }) {
+// What one team gets, with its side's colour down the left edge.
+function Half({ team, edge, label, players }: { team: string; edge: string; label: string; players: RosterPlayer[] }) {
   return (
     <section className="relative border-t border-line pb-1.5">
-      <span aria-hidden className="absolute inset-y-0 left-0 w-1" style={{ background: teamColor(team) }} />
+      <span aria-hidden className={`absolute inset-y-0 left-0 w-1 ${edge}`} />
       <div className="flex items-center justify-between gap-3 py-2.5 pl-5 pr-4">
         <span className="flex min-w-0 items-center gap-2">
           <TeamAvatar name={team} size="sm" />
@@ -84,11 +85,11 @@ function Half({ team, label, players }: { team: string; label: string; players: 
 }
 
 // One team's cap space, today and after the trade.
-function Cap({ team, before, after }: { team: string; before: number; after: number }) {
+function Cap({ dot, before, after }: { dot: string; before: number; after: number }) {
   return (
     <div className="min-w-0 px-4 py-3">
       <div className="flex items-center gap-1.5">
-        <span aria-hidden className="h-2 w-2 shrink-0 rounded-full" style={{ background: teamColor(team) }} />
+        <span aria-hidden className={`h-2 w-2 shrink-0 rounded-full ${dot}`} />
         <span className="truncate text-[11px] uppercase tracking-wide text-muted">Cap space</span>
       </div>
       <div className="num mt-1 flex items-baseline gap-1.5 text-sm">
