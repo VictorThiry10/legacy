@@ -24,7 +24,7 @@ export default async function LeagueSettings() {
           <Field label="Hard cap ($m)"><input name="cap" type="number" step="0.1" min="0.1" defaultValue={rules.cap / 1e6} required className="input" /></Field>
           <Field label="Roster spots"><input name="roster_max" type="number" min="1" max="20" defaultValue={rules.rosterMax} required className="input" /></Field>
           <Field label="Min salary ($m)"><input name="min_salary" type="number" step="0.1" min="0.1" defaultValue={rules.minSalary / 1e6} required className="input" /></Field>
-          <Field label="Waivers (hours)" note="Sealed bids on a dropped player"><input name="waiver_hours" type="number" min="1" max="168" defaultValue={waiverHours} required className="input" /></Field>
+          <Field label="Waivers (hours)"><input name="waiver_hours" type="number" min="1" max="168" defaultValue={waiverHours} required className="input" /></Field>
           <div className="sm:col-span-2"><button className="btn">Save</button></div>
         </ActionForm>
       </section>

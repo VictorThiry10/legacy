@@ -127,7 +127,7 @@ export async function lockedToday(p: { nba_team_id?: string | null }) {
   const day = today();
   return (await gamesBetween(day, day)).some((g) => (g.home_team_id === p.nba_team_id || g.away_team_id === p.nba_team_id) && new Date(g.start) <= new Date());
 }
-export const lockedMessage = (name: string) => `Locked: ${name}'s game today has started. You can drop him tomorrow.`;
+export const lockedMessage = (name: string) => `Locked until tomorrow: ${name}'s game has started.`;
 
 // A GM drops one of their players. He goes on waivers (lib/waivers.ts) and his salary comes off the cap.
 export async function dropPlayer(o: { teamId: string; contractId: string }) {

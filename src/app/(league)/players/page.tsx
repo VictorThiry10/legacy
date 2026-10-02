@@ -4,6 +4,7 @@ import { getSettings, type Player } from "@/lib/league";
 import { STAT_COLS, fmt, seasonLabel, stat, type StatKey } from "@/lib/player-stats";
 import LocalTime from "@/components/LocalTime";
 import SearchBar from "@/components/SearchBar";
+import PickMenu from "@/components/PickMenu";
 import Slide from "@/components/Slide";
 import { headshot, initials } from "@/lib/names";
 import { openWaivers } from "@/lib/waivers";
@@ -169,32 +170,27 @@ function FilterBar({ sp, show, perGame }: { sp: Params; show: string; perGame: b
     const keep = Object.fromEntries(Object.entries(sp).filter(([k, v]) => v && k !== "q" && k !== "search")) as Record<string, string>;
     return <SearchBar path="/players" params={keep} initial={sp.q ?? ""} cancelHref={href(sp, { q: undefined, search: undefined })} />;
   }
+  // The filters open as a menu over the dimmed page (PickMenu): it sits on top of everything, never wider than the
+  // screen, and closes on a pick.
+  const pick = (section: string, name: string, value: string, options: [string, string][]) =>
+    options.map(([v, label], i) => ({ label, href: href(sp, { [name]: v || undefined, n: undefined }), on: value === v, section: i ? undefined : section }));
   return (
-    // Dropdowns are placed against the outer box, so the sideways-scrolling chip row doesn't clip them.
-    <div className="relative">
     <div className="flex items-center gap-2 overflow-x-auto pb-1 -mx-4 px-4 sm:mx-0 sm:px-0">
       <Link href={href(sp, { search: "1" })} prefetch={false} scroll={false} className={`${chip(false)} shrink-0`} aria-label="Search"><SearchIcon /></Link>
-      <details className="shrink-0">
-        <summary className={`${chip(filtered)} list-none cursor-pointer`} aria-label="Filters"><FilterIcon /></summary>
-        <div className="absolute left-0 top-full z-20 mt-1 card p-3 shadow-lg space-y-3 text-sm">
-          <Options sp={sp} name="show" value={show} options={[["all", "All players"], ["fa", "Free agents"], ["wa", "Waivers"], ["owned", "Rostered"]]} />
-          <Options sp={sp} name="view" value={perGame ? "" : "tot"} options={[["", "Averages"], ["tot", "Totals"]]} />
-        </div>
-      </details>
+      <PickMenu
+        bare
+        ariaLabel="Filters"
+        label={<FilterIcon />}
+        className={`${chip(filtered)} shrink-0`}
+        width={260}
+        items={[
+          ...pick("Players", "show", show, [["all", "All players"], ["fa", "Free agents"], ["wa", "Waivers"], ["owned", "Rostered"]]),
+          ...pick("Stats", "view", perGame ? "" : "tot", [["", "Averages"], ["tot", "Totals"]]),
+        ]}
+      />
       <span className="h-8 w-px bg-line shrink-0 mx-1" />
       {[["", "All"], ...POSITIONS.map((p) => [p, p])].map(([v, label]) => (
         <Link key={label} href={href(sp, { pos: v || undefined, n: undefined })} prefetch={false} scroll={false} className={`${chip((sp.pos ?? "") === v)} shrink-0`}>{label}</Link>
-      ))}
-    </div>
-    </div>
-  );
-}
-
-function Options({ sp, name, value, options }: { sp: Params; name: string; value: string; options: [string, string][] }) {
-  return (
-    <div className="flex gap-2">
-      {options.map(([v, label]) => (
-        <Link key={v} href={href(sp, { [name]: v || undefined, n: undefined })} prefetch={false} scroll={false} className={`${chip(value === v)} h-9 text-xs`}>{label}</Link>
       ))}
     </div>
   );

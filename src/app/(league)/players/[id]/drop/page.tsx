@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
 
 // Confirm dropping one of my players: he goes on waivers and his salary comes off my cap.
 export default async function DropPlayer({ params, searchParams }: PageProps<"/players/[id]/drop">) {
-  const [{ id }, sp, me, { season, waiverHours }] = await Promise.all([params, searchParams, myTeamOrWelcome(), getSettings()]);
+  const [{ id }, sp, me, { season }] = await Promise.all([params, searchParams, myTeamOrWelcome(), getSettings()]);
   const p = (await rosters([me.id])).find((r) => r.id === id);
   if (!p) notFound();
   const locked = await lockedToday(p);
@@ -26,16 +26,12 @@ export default async function DropPlayer({ params, searchParams }: PageProps<"/p
         <div className="card flex items-center gap-4">
           {p.headshot ? <img src={headshot(p.headshot, 192)!} alt="" decoding="async" className="h-16 w-16 rounded-full object-cover bg-line" /> : <span className="h-16 w-16 rounded-full bg-line" />}
           <div>
-            <h1 className="text-xl font-semibold">Drop {p.name}</h1>
+            <h1 className="text-xl font-semibold">{p.name}</h1>
             <p className="text-sm text-muted">{p.nba_team} · {p.position}</p>
             <p className="text-sm num">{money(p.salary)} · {left} {left === 1 ? "yr" : "yrs"} left</p>
           </div>
         </div>
         {err && <p className="card text-sm text-bad">{err}</p>}
-        <div className="card space-y-1 text-sm">
-          <p>His {money(p.salary)} comes off your cap and he goes on waivers for {waiverHours} hours.</p>
-          <p className="text-muted">The other GMs can send sealed bids on him; you can&apos;t. Nobody bids and he becomes a free agent.</p>
-        </div>
         {locked ? (
           <p className="card text-sm">{lockedMessage(p.name)}</p>
         ) : (

@@ -12,7 +12,7 @@ export default async function SettingsLayout({ children }: LayoutProps<"/setting
   return (
     <Slide>
       <div className="space-y-5">
-        <BackBar href="/league" title="Settings" sub="Commissioner only" />
+        <BackBar href="/league" title="Settings" />
         <SubNav replace tabs={[["/settings", "League"], ["/settings/rosters", "Rosters"], ["/settings/schedule", "Schedule"]]} />
         {children}
       </div>
