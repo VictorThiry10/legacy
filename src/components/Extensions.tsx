@@ -1,21 +1,42 @@
 "use client";
 import { useState, useTransition } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import type { ExtensionOffer } from "@/lib/extensions";
 import { decideExtensions } from "@/app/(league)/extensions/actions";
 import { headshot } from "@/lib/names";
 import { money } from "@/lib/rules";
+import PendingRow, { ContractIcon } from "./PendingRow";
 
 // The one-off contract extensions pop-up: tick last season's players to keep for 1 year at last season's salary.
-// "Later" hides it until the next visit; deciding (even "no extensions") closes it for good.
+// It opens by itself on the first page of a visit; "Later" closes it, and the Team page's to-do row opens it again.
+// Deciding (even "no extensions") closes it for good.
 export default function Extensions({ offer }: { offer: ExtensionOffer }) {
-  const router = useRouter();
   const [open, setOpen] = useState(true);
+  return open ? <Sheet offer={offer} onClose={() => setOpen(false)} /> : null;
+}
+
+// The Team page's to-do row (Pending.tsx). The pop-up goes on <body>: the page slides, which would trap it.
+export function ExtensionsRow({ offer }: { offer: ExtensionOffer }) {
+  const [open, setOpen] = useState(false);
+  const left = offer.players.filter((p) => !p.taken).length;
+  return (
+    <>
+      <PendingRow
+        onClick={() => setOpen(true)} icon={<ContractIcon />} title="Contract extensions" action="Decide"
+        sub={`${left} player${left === 1 ? "" : "s"} from last season`}
+      />
+      {open && createPortal(<Sheet offer={offer} onClose={() => setOpen(false)} />, document.body)}
+    </>
+  );
+}
+
+function Sheet({ offer, onClose }: { offer: ExtensionOffer; onClose: () => void }) {
+  const router = useRouter();
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
   const [pending, start] = useTransition();
-  if (!open) return null;
 
   const chosen = offer.players.filter((p) => picked.has(p.id));
   const total = chosen.reduce((a, p) => a + p.salary, 0);
@@ -45,8 +66,8 @@ export default function Extensions({ offer }: { offer: ExtensionOffer }) {
   };
 
   const close = () => {
-    setOpen(false);
-    if (done) router.refresh(); // new contracts on the roster pages
+    onClose();
+    if (done) router.refresh(); // new contracts on the roster pages, and the to-do row goes
   };
 
   return (
