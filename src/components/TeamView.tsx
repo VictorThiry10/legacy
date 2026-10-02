@@ -16,6 +16,8 @@ import { openOffers } from "@/lib/trades";
 import { extensionOffer } from "@/lib/extensions";
 import { appStatus } from "@/lib/bidding";
 import LineupTable, { type LinePlayer } from "./LineupTable";
+import BackBar from "./BackBar";
+import TeamAvatar from "./TeamAvatar";
 
 type Search = Record<string, string | string[] | undefined>;
 const STATS = [
@@ -26,7 +28,7 @@ type Key = (typeof STATS)[number][0];
 type Agg = Record<Key, number> & { gp: number; fpts: number };
 
 // ESPN style lineup: one day at a time, a stats view picker, one row per slot. `editable` only for the signed in owner.
-export default async function TeamView({ team, editable, base, sp }: { team: TeamSummary; editable: boolean; base: string; sp: Search }) {
+export default async function TeamView({ team, editable, base, sp, back }: { team: TeamSummary; editable: boolean; base: string; sp: Search; back?: string }) {
   const str = (k: string) => (typeof sp[k] === "string" ? (sp[k] as string) : "");
   const now = today();
   const day = isDay(str("d")) ? str("d") : now;
@@ -98,30 +100,38 @@ export default async function TeamView({ team, editable, base, sp }: { team: Tea
   return (
     <Slide>
     <div className="space-y-4">
-      <div className="flex flex-wrap items-end gap-x-6 gap-y-2">
-        <div>
-          <h1 className="text-xl font-semibold">{team.name}</h1>
-          <p className="text-muted text-sm">
-            {team.manager_name ?? team.manager_email} · {team.state.rosterCount}/{rules.rosterMax} players · {money(team.state.salary)} salary ·{" "}
-            <span className={team.capSpace < 0 ? "text-bad" : ""}>{money(team.capSpace)} cap space</span>
-          </p>
+      {back ? (
+        <BackBar
+          href={back}
+          title={<span className="flex items-center gap-2"><TeamAvatar name={team.name} size="sm" />{team.name}</span>}
+          sub={<>{team.manager_name ?? team.manager_email} · {team.state.rosterCount}/{rules.rosterMax} players · <span className={team.capSpace < 0 ? "text-bad" : ""}>{money(team.capSpace)} cap space</span></>}
+        />
+      ) : (
+        <div className="flex flex-wrap items-end gap-x-6 gap-y-2">
+          <div>
+            <h1 className="text-xl font-semibold">{team.name}</h1>
+            <p className="text-muted text-sm">
+              {team.manager_name ?? team.manager_email} · {team.state.rosterCount}/{rules.rosterMax} players · {money(team.state.salary)} salary ·{" "}
+              <span className={team.capSpace < 0 ? "text-bad" : ""}>{money(team.capSpace)} cap space</span>
+            </p>
+          </div>
         </div>
-      </div>
+      )}
 
       {offers && extensions && freeAgency && <Pending offers={offers} extensions={extensions} freeAgency={freeAgency} />}
 
       <div className="flex items-center border-y border-line -mx-4 sm:mx-0 sm:rounded-xl sm:border sm:bg-card">
-        <Link href={href({ d: addDays(day, -1) })} prefetch={true} transitionTypes={BACK} className="px-4 py-2 text-xl text-muted hover:text-fg" aria-label="Previous day">‹</Link>
+        <Link href={href({ d: addDays(day, -1) })} replace={!!back} prefetch={true} transitionTypes={BACK} className="px-4 py-2 text-xl text-muted hover:text-fg" aria-label="Previous day">‹</Link>
         <div className="flex-1 text-center leading-tight">
           <DatePicker
             day={day} today={now} label={dayName} path={base}
-            params={{ stat: period }} from={`${season}-10-01`} to={`${season + 1}-06-30`}
+            params={{ stat: period }} from={`${season}-10-01`} to={`${season + 1}-06-30`} replace={!!back}
           />
           {day !== now && (
-            <Link href={href({ d: now })} transitionTypes={day < now ? FORWARD : BACK} className="block text-[10px] uppercase tracking-wide text-muted hover:text-fg">Today</Link>
+            <Link href={href({ d: now })} replace={!!back} transitionTypes={day < now ? FORWARD : BACK} className="block text-[10px] uppercase tracking-wide text-muted hover:text-fg">Today</Link>
           )}
         </div>
-        <Link href={href({ d: addDays(day, 1) })} prefetch={true} transitionTypes={FORWARD} className="px-4 py-2 text-xl text-muted hover:text-fg" aria-label="Next day">›</Link>
+        <Link href={href({ d: addDays(day, 1) })} replace={!!back} prefetch={true} transitionTypes={FORWARD} className="px-4 py-2 text-xl text-muted hover:text-fg" aria-label="Next day">›</Link>
       </div>
 
       <Link href={viewsHref} transitionTypes={FORWARD} className="flex items-center justify-center gap-1.5 rounded-full border-[1.5px] border-accent py-2 text-sm font-semibold text-accent hover:bg-accent/10">

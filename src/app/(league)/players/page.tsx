@@ -4,6 +4,7 @@ import { getSettings, type Player } from "@/lib/league";
 import { STAT_COLS, fmt, seasonLabel, stat, type StatKey } from "@/lib/player-stats";
 import LocalTime from "@/components/LocalTime";
 import SearchBar from "@/components/SearchBar";
+import Slide from "@/components/Slide";
 import { headshot, initials } from "@/lib/names";
 import { openWaivers } from "@/lib/waivers";
 
@@ -16,10 +17,12 @@ export default async function Players({ searchParams }: PageProps<"/players">) {
   const raw = await searchParams;
   const sp: Params = Object.fromEntries(Object.entries(raw).map(([k, v]) => [k, typeof v === "string" ? v : undefined]));
   return (
-    <div className="space-y-4">
-      <h1 className="text-2xl font-semibold">Players</h1>
-      <StatsTable sp={sp} />
-    </div>
+    <Slide>
+      <div className="space-y-4">
+        <h1 className="text-2xl font-semibold">Players</h1>
+        <StatsTable sp={sp} />
+      </div>
+    </Slide>
   );
 }
 

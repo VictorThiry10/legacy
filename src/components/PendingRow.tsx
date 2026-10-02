@@ -23,7 +23,7 @@ export default function PendingRow({ href, onClick, icon, title, sub, action }: 
     </>
   );
   const cls = "flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-fg/[0.03] active:bg-fg/[0.06]";
-  return href ? <Link href={href} className={cls}>{inner}</Link> : <button type="button" onClick={onClick} className={cls}>{inner}</button>;
+  return href ? <Link href={href} transitionTypes={["nav-forward"]} className={cls}>{inner}</Link> : <button type="button" onClick={onClick} className={cls}>{inner}</button>;
 }
 
 const icon = (d: ReactNode) => (

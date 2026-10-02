@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { db } from "@/lib/supabase/server";
 import { myTeamOrWelcome } from "@/lib/auth";
@@ -9,7 +8,8 @@ import { lowestBid, waiverFor } from "@/lib/waivers";
 import { money } from "@/lib/rules";
 import Field from "@/components/Field";
 import LocalTime from "@/components/LocalTime";
-import Slide, { BACK } from "@/components/Slide";
+import Slide from "@/components/Slide";
+import BackBar from "@/components/BackBar";
 import { addPlayer, bid, unbid } from "./actions";
 import { headshot } from "@/lib/names";
 import SubmitButton from "@/components/SubmitButton";
@@ -54,7 +54,7 @@ export default async function AddPlayer({ params, searchParams }: PageProps<"/pl
   return (
     <Slide>
       <div className="mx-auto max-w-md space-y-4">
-        <Link href={`/players/${p.id}`} transitionTypes={BACK} className="text-sm text-muted hover:text-fg">← {p.name}</Link>
+        <BackBar href={`/players/${p.id}`} title={w && !owned ? "Bid on waivers" : "Add player"} />
         <div className="card flex items-center gap-4">
           {p.headshot ? <img src={headshot(p.headshot, 192)!} alt="" decoding="async" className="h-16 w-16 rounded-full object-cover bg-line" /> : <span className="h-16 w-16 rounded-full bg-line" />}
           <div>

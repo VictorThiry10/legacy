@@ -1,6 +1,6 @@
 "use server";
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
+import { redirect, RedirectType } from "next/navigation";
 import { requireTeam } from "@/lib/auth";
 import { dropPlayer } from "@/lib/roster";
 
@@ -15,6 +15,6 @@ export async function drop(f: FormData) {
     err = e instanceof Error ? e.message : "Something went wrong.";
   }
   revalidatePath("/", "layout");
-  if (err) redirect(`/players/${encodeURIComponent(playerId)}/drop?err=${encodeURIComponent(err)}`);
-  redirect("/team");
+  if (err) redirect(`/players/${encodeURIComponent(playerId)}/drop?err=${encodeURIComponent(err)}`, RedirectType.replace);
+  redirect("/team", RedirectType.replace);
 }

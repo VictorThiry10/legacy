@@ -1,10 +1,10 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { myTeamOrWelcome } from "@/lib/auth";
 import { getSettings } from "@/lib/league";
 import { lockedMessage, lockedToday, rosters } from "@/lib/roster";
 import { money, yearsLeft } from "@/lib/rules";
-import Slide, { BACK } from "@/components/Slide";
+import Slide from "@/components/Slide";
+import BackBar from "@/components/BackBar";
 import { drop } from "./actions";
 import { headshot } from "@/lib/names";
 import SubmitButton from "@/components/SubmitButton";
@@ -22,7 +22,7 @@ export default async function DropPlayer({ params, searchParams }: PageProps<"/p
   return (
     <Slide>
       <div className="mx-auto max-w-md space-y-4">
-        <Link href={`/players/${p.id}`} transitionTypes={BACK} className="text-sm text-muted hover:text-fg">← {p.name}</Link>
+        <BackBar href={`/players/${p.id}`} title="Drop player" />
         <div className="card flex items-center gap-4">
           {p.headshot ? <img src={headshot(p.headshot, 192)!} alt="" decoding="async" className="h-16 w-16 rounded-full object-cover bg-line" /> : <span className="h-16 w-16 rounded-full bg-line" />}
           <div>
