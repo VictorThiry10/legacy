@@ -19,7 +19,7 @@ export const dynamic = "force-dynamic";
 // Add a player. A free agent: $min for 1 year, first come first served. A player on waivers: a sealed bid instead.
 // Either way a full roster picks who to drop (for a bid, only if it wins).
 export default async function AddPlayer({ params, searchParams }: PageProps<"/players/[id]/add">) {
-  const [{ id }, sp, me, { rules, season, waiverHours }] = await Promise.all([params, searchParams, myTeamOrWelcome(), getSettings()]);
+  const [{ id }, sp, me, { rules, season }] = await Promise.all([params, searchParams, myTeamOrWelcome(), getSettings()]);
   const [{ data: p }, { data: owned }, roster, ir, onWaivers, summaries] = await Promise.all([
     db().from("players").select("id, name, nba_team, position, headshot").eq("id", id).maybeSingle(),
     db().from("contracts").select("team:teams(name)").eq("player_id", id).eq("active", true).maybeSingle(),
@@ -58,13 +58,10 @@ export default async function AddPlayer({ params, searchParams }: PageProps<"/pl
         <div className="card flex items-center gap-4">
           {p.headshot ? <img src={headshot(p.headshot, 192)!} alt="" decoding="async" className="h-16 w-16 rounded-full object-cover bg-line" /> : <span className="h-16 w-16 rounded-full bg-line" />}
           <div>
-            <h1 className="text-xl font-semibold">{w && !owned ? "Bid on" : "Add"} {p.name}</h1>
+            <h1 className="text-xl font-semibold">{p.name}</h1>
             <p className="text-sm text-muted">{p.nba_team} · {p.position}</p>
             {w && !owned ? (
-              <p className="text-sm">
-                <span className="rounded-full bg-orange px-2 py-0.5 text-xs font-semibold text-bg">On waivers</span>{" "}
-                bids close <LocalTime iso={w.closes_at} mode="day" /> <LocalTime iso={w.closes_at} />
-              </p>
+              <p className="text-sm">Bids close <LocalTime iso={w.closes_at} mode="day" /> <LocalTime iso={w.closes_at} /></p>
             ) : (
               <p className="text-sm">{money(rules.minSalary)} · {years}</p>
             )}
@@ -75,15 +72,11 @@ export default async function AddPlayer({ params, searchParams }: PageProps<"/pl
         {owned ? (
           <p className="card text-sm">Already on {owned.team?.name ?? "another team"}.</p>
         ) : w && w.dropped_by === me.id ? (
-          <p className="card text-sm">You dropped him, so you can&apos;t bid on him until he clears waivers.</p>
+          <p className="card text-sm">You dropped him.</p>
         ) : w && new Date(w.closes_at) <= new Date() ? (
-          <p className="card text-sm">Bidding has closed. He signs with the best bid as soon as it settles.</p>
+          <p className="card text-sm">Bidding closed.</p>
         ) : w ? (
           <>
-            <div className="card space-y-1 text-sm">
-              <p>Every dropped player spends {waiverHours} hours on waivers. Bids are sealed: nobody sees yours. When bidding closes, the best bid signs him for {years} at that salary.</p>
-              <p className="text-muted">Ties go to the team with more cap space, then the earlier bid. If nobody bids he becomes a free agent.</p>
-            </div>
             {myBid && (
               <p className="card text-sm">
                 Your bid: <b className="num">{money(Number(myBid.amount))}</b>
@@ -92,13 +85,13 @@ export default async function AddPlayer({ params, searchParams }: PageProps<"/pl
             )}
             <form action={bid} className="space-y-3">
               <input type="hidden" name="player_id" value={p.id} />
-              <Field label="Your bid ($m)" note={`Whole millions, at least ${money(lowestBid(rules.minSalary))}. You have ${money(capSpace)} in cap space.`}>
+              <Field label="Your bid ($m)" note={`Min ${money(lowestBid(rules.minSalary))} · ${money(capSpace)} cap space`}>
                 <input
                   name="amount" type="number" inputMode="numeric" step="1" min={lowestBid(rules.minSalary) / 1e6} required className="input"
                   defaultValue={(myBid ? Number(myBid.amount) : lowestBid(rules.minSalary)) / 1e6}
                 />
               </Field>
-              {full && dropPicker(`Your roster is full (${rules.rosterMax}). Pick a player to drop if you win:`, myBid?.drop_contract)}
+              {full && dropPicker("Roster full: drop who if you win?", myBid?.drop_contract)}
               <SubmitButton className="btn w-full">{myBid ? "Change bid" : "Place bid"}</SubmitButton>
             </form>
             {myBid && (
@@ -111,7 +104,7 @@ export default async function AddPlayer({ params, searchParams }: PageProps<"/pl
         ) : (
           <form action={addPlayer} className="space-y-3">
             <input type="hidden" name="player_id" value={p.id} />
-            {full && dropPicker(`Your roster is full (${rules.rosterMax}). Pick a player to drop (he goes on waivers):`)}
+            {full && dropPicker("Roster full: drop who?")}
             <SubmitButton className="btn w-full">{full ? "Drop and add" : `Add ${p.name}`}</SubmitButton>
           </form>
         )}

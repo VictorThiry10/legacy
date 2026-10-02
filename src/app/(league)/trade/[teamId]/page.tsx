@@ -134,7 +134,6 @@ function Summary({ review, them, me, get, give, closeHref }: {
           <Link href={closeHref} replace transitionTypes={BACK} className="flex-1 rounded-full border-[1.5px] border-line py-3 text-center font-semibold">Back</Link>
           <SubmitButton disabled={!!problems.length} className="flex-1 rounded-full bg-blue py-3 font-semibold text-white">Send offer</SubmitButton>
         </form>
-        <p className="text-center text-xs text-muted">{them.name} gets the offer to accept or decline.</p>
       </div>
     </Modal>
   );

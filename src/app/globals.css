@@ -41,6 +41,9 @@
   --color-orange: var(--orange);
   --color-bad: var(--bad);
 }
+/* The page never scrolls sideways on a phone; wide tables scroll inside their own box. clip, not hidden, so the
+   sticky tab bar keeps working. */
+html, body { overflow-x: clip; }
 body {
   background: var(--bg);
   color: var(--fg);

@@ -153,7 +153,7 @@ async function Playoffs({ team }: { team: (id: string | null) => TeamSummary | u
   });
   if ("err" in r) return <p className="bg-card px-4 py-4 text-sm text-bad">{r.err}</p>;
   const { all, s } = r.ok;
-  if (!all.length) return <p className="bg-card px-4 py-6 text-center text-sm text-muted">Playoffs appear once the schedule is built.</p>;
+  if (!all.length) return <p className="bg-card px-4 py-6 text-center text-sm text-muted">No playoffs yet.</p>;
   const placeholder = (m: Matchup, i: number) =>
     m.round === "final" ? ["Semifinal 1 winner", "Semifinal 2 winner"] : i === 0 ? ["4th seed", "1st seed"] : ["3rd seed", "2nd seed"];
   return (

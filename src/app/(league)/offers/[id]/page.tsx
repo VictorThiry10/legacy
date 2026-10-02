@@ -60,9 +60,6 @@ export default async function OfferPage({ params }: PageProps<"/offers/[id]">) {
                 </form>
               )}
             </div>
-            <p className="text-center text-xs text-muted">
-              {o.mine ? `${o.other.name} can accept or decline. You can cancel until then.` : "Accepting swaps the players right away."}
-            </p>
           </>
         )}
       </div>

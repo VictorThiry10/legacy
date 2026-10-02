@@ -44,10 +44,6 @@ export default async function Schedule() {
         <section className="space-y-2 max-w-xl">
           <h2 className="font-semibold">Preseason dress rehearsal</h2>
           <ActionForm action={rehearse} className="card space-y-3" confirm={testing ? "Start the rehearsal again? Test matchups are replaced." : undefined}>
-            <p className="text-sm text-muted">
-              The teams that have joined play a mini season on real NBA preseason games: two short weeks, semifinals, final.
-              Building the real schedule removes it.
-            </p>
             <button className="btn">{testing ? "Restart rehearsal" : "Start rehearsal"}</button>
           </ActionForm>
         </section>

@@ -56,7 +56,7 @@ function Sheet({ offer, onClose }: { offer: ExtensionOffer; onClose: () => void 
   const decide = () => {
     const ask = chosen.length
       ? `Extend ${chosen.map((p) => p.name).join(", ")} for ${money(total)}? This is final.`
-      : "No extensions? You won't be able to extend these players later.";
+      : "No extensions? This is final.";
     if (!window.confirm(ask)) return;
     start(async () => {
       const r = await decideExtensions(chosen.map((p) => p.id));
@@ -77,7 +77,7 @@ function Sheet({ offer, onClose }: { offer: ExtensionOffer; onClose: () => void 
         <div className="p-5 pb-3">
           <h2 id="ext-title" className="text-lg font-semibold">Contract extensions</h2>
           <p className="mt-1 text-sm text-muted">
-            {done ?? "Keep any of your players from last season for 1 more year, at last season's salary. You decide once."}
+            {done ?? "One more year at last season's salary."}
           </p>
         </div>
 
