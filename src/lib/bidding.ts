@@ -18,18 +18,26 @@ export const PER_ROUND = 8;
 export const REGULAR_ROUNDS = 8;
 const COOKIE = "bid_session";
 
-// ---------- sign in: email only, no code ----------
+// ---------- sign in: email only, no code, or the league app's login ----------
 
 // Joined rows come back as an object or a one item list depending on the relation: always one or null.
 const one = <T,>(x: T | T[] | null): T | null => (Array.isArray(x) ? (x[0] ?? null) : x);
 
+// The bidding site's own sign in (the bid_session cookie) first, then the league app's login, so GMs coming from
+// the app (the Team page's to-do card) are already in.
 export const bidTeam = cache(async (): Promise<Team | null> => {
   const token = (await cookies()).get(COOKIE)?.value;
-  if (!token) return null;
-  // The session and its team in one read, through the team_id foreign key.
-  const { data: s } = await db().from("bid_sessions").select("team:teams(*)").eq("token", token).maybeSingle();
-  return one(s?.team ?? null);
+  if (token) {
+    // The session and its team in one read, through the team_id foreign key.
+    const { data: s } = await db().from("bid_sessions").select("team:teams(*)").eq("token", token).maybeSingle();
+    const team = one(s?.team ?? null);
+    if (team) return team;
+  }
+  return (await getMe().catch(() => null))?.team ?? null;
 });
+
+// Signed in to the league app: the room links back to it, and has no sign out of its own.
+export const inLeagueApp = async () => !!(await getMe().catch(() => null))?.team;
 
 export async function signIn(email: string) {
   const clean = email.trim().toLowerCase();
@@ -98,6 +106,16 @@ const roundInfo = (r: Row<"rounds">): RoundInfo => ({
   id: r.id, number: r.number, kind: r.kind === "leftovers" ? "leftovers" : "regular", status: r.status, closesAt: r.closes_at,
 });
 
+// Where free agency is, from the season's rounds (in order): the live round, else the next one set up.
+function phaseOf<R extends { status: string; closes_at: string | null }>(rounds: R[], faLocked: boolean, now: number) {
+  const live = rounds.find((r) => r.status === "open") ?? null;
+  const next = rounds.find((r) => r.status === "setup") ?? null;
+  const phase: Phase = live
+    ? Date.parse(live.closes_at ?? "") > now ? "bidding" : "reveal"
+    : next || !rounds.length ? "waiting" : faLocked ? "done" : "contracts";
+  return { phase, live, next };
+}
+
 export async function room(team: Team): Promise<Room> {
   const verified = commishVerified(team); // league login check, only does work for the commissioner
   const { season, rules, faLocked } = await getSettings();
@@ -115,11 +133,7 @@ export async function room(team: Team): Promise<Room> {
   if (rs.error) fail(rs.error);
   const rounds = rs.data ?? [];
   const now = Date.now();
-  const live = rounds.find((r) => r.status === "open") ?? null;
-  const next = rounds.find((r) => r.status === "setup") ?? null;
-  const phase: Phase = live
-    ? Date.parse(live.closes_at ?? "") > now ? "bidding" : "reveal"
-    : next || !rounds.length ? "waiting" : faLocked ? "done" : "contracts";
+  const { phase, live, next } = phaseOf(rounds, faLocked, now);
   const current = live ?? (phase === "waiting" ? next : null);
 
   // Only the contracts screens need the signings: a second read once the phase is known (nothing is live then).
@@ -190,6 +204,23 @@ export async function pulse(): Promise<string> {
   return fingerprint({
     rounds: rounds ?? [], faLocked, bidders: (bidders ?? []).map((b) => b.team_id), renounces: ren ?? 0, years: (lens ?? []).map((l) => l.years), teams: teams ?? 0,
   });
+}
+
+// The league app's way in (the Team page's to-do card): where free agency is for this team. Null before any round
+// is set up and once contracts are locked.
+export type AppStatus = { phase: Exclude<Phase, "done">; round: RoundInfo | null; isCommish: boolean; signings: number };
+
+export async function appStatus(team: Team): Promise<AppStatus | null> {
+  const { season, faLocked } = await getSettings();
+  const { data: rounds } = await db().from("rounds").select("*").eq("season", season).order("number");
+  if (!rounds?.length) return null;
+  const { phase, live, next } = phaseOf(rounds, faLocked, Date.now());
+  if (phase === "done") return null;
+  const { count } = phase === "contracts"
+    ? await db().from("contracts").select("id", { count: "exact", head: true }).eq("team_id", team.id).eq("season_signed", season).eq("acquired_via", "draft").eq("active", true)
+    : { count: 0 };
+  const round = live ?? next;
+  return { phase, round: round ? roundInfo(round) : null, isCommish: team.is_commish, signings: count ?? 0 };
 }
 
 // ---------- GM moves ----------

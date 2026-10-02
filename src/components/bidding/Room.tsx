@@ -18,7 +18,8 @@ import { ease, Gm, Kicker, Label, roundName } from "./ui";
 
 // The live bidding room. One page that changes with the round: waiting, bidding (cards and a clock), the reveal,
 // then contract lengths. Polls a tiny fingerprint every 2 seconds and refreshes when anything moves.
-export default function Room({ data, me: who }: { data: Data; me: { id: string; name: string } }) {
+// `app`: signed in to the league app, so the header leads back to it (there's no browser back in the installed app).
+export default function Room({ data, me: who, app }: { data: Data; me: { id: string; name: string }; app: boolean }) {
   const router = useRouter();
   const skew = usePulse(data.v);
   const me = data.teams.find((t) => t.id === data.meId) ?? { ...who, manager: null, capSpace: 0, maxBid: 0, roster: 0, renouncesLeft: 0, hasBid: false };
@@ -81,7 +82,7 @@ export default function Room({ data, me: who }: { data: Data; me: { id: string; 
 
   return (
     <MotionConfig reducedMotion="user">
-      <Header data={data} me={me} />
+      <Header data={data} me={me} app={app} />
       {/* A cold open shows the room straight away; only the reveal fades in (it sits under the show). */}
       <AnimatePresence mode="wait" initial={data.phase === "reveal"} onExitComplete={() => window.scrollTo({ top: 0, behavior: "instant" })}>
         <motion.div
@@ -129,10 +130,15 @@ export default function Room({ data, me: who }: { data: Data; me: { id: string; 
         <AnimatePresence>{showing && <RevealShow key="show" data={data} onDone={showDone} />}</AnimatePresence>
       </Portal>
       <footer className={`mx-auto max-w-5xl px-4 pt-8 text-center text-xs text-white/30 ${data.isCommish || data.needsLeagueLogin ? "pb-28" : "pb-10"}`}>
-        {me.name} ·{" "}
-        <form action={A.signOut} className="inline">
-          <button className="hover:text-white/70">Sign out</button>
-        </form>
+        {me.name}
+        {!app && (
+          <>
+            {" · "}
+            <form action={A.signOut} className="inline">
+              <button className="hover:text-white/70">Sign out</button>
+            </form>
+          </>
+        )}
       </footer>
       {data.isCommish && <CommishBar data={data} />}
       {data.needsLeagueLogin && (
@@ -198,11 +204,16 @@ function usePulse(v: string) {
   return skew;
 }
 
-function Header({ data, me }: { data: Data; me: RoomTeam }) {
+function Header({ data, me, app }: { data: Data; me: RoomTeam; app: boolean }) {
   const reduce = useReducedMotion();
   return (
     <header className="glass sticky top-0 z-30 border-b border-white/[0.06] pt-[env(safe-area-inset-top)]">
       <div className="mx-auto flex h-14 max-w-5xl items-center gap-3 px-4">
+        {app && (
+          <Link href="/team" aria-label="Back to the league" className="-ml-2 -mr-1 grid h-9 w-9 shrink-0 place-items-center rounded-full text-white/55 transition hover:bg-white/[0.06] hover:text-white">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m15 6-6 6 6 6" /></svg>
+          </Link>
+        )}
         <div className="font-display text-2xl leading-none">
           Legacy<span className="ml-2 text-white/35">Free agency</span>
         </div>

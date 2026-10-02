@@ -1,4 +1,4 @@
-import { bidTeam, room } from "@/lib/bidding";
+import { bidTeam, inLeagueApp, room } from "@/lib/bidding";
 import { getSettings } from "@/lib/league";
 import { load } from "@/lib/guard";
 import Login from "@/components/bidding/Login";
@@ -8,9 +8,9 @@ export const dynamic = "force-dynamic";
 
 export default async function Bidding() {
   // The room needs the settings too: read them while the session is checked (cached for the request).
-  const [team] = await Promise.all([bidTeam(), getSettings()]);
+  const [team, app] = await Promise.all([bidTeam(), inLeagueApp(), getSettings()]);
   if (!team) return <Login />;
   const data = await load(() => room(team));
   if ("err" in data) return <p className="p-8 text-center text-[var(--bad)]">{data.err}</p>;
-  return <Room data={data.ok} me={{ id: team.id, name: team.name }} />;
+  return <Room data={data.ok} me={{ id: team.id, name: team.name }} app={app} />;
 }
