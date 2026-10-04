@@ -13,6 +13,7 @@ export type Database = {
   __InternalSupabase: { PostgrestVersion: "14.18" };
   public: {
     Tables: {
+      app_secrets: Table<{ key: string; value: string }, { key: string; value: string }>;
       activity: Table<{ created_at: string; id: number; kind: string; message: string }, { created_at?: string; kind: string; message: string }>;
       bid_sessions: Table<{ created_at: string; team_id: string; token: string }, { created_at?: string; team_id: string; token: string },
         [FK<"bid_sessions_team_id_fkey", "team_id", "teams">]
@@ -84,6 +85,11 @@ export type Database = {
         { bid_id: string; block: number; created_at: string; id: string; round_id: string; season: number; team_id: string },
         { bid_id: string; block: number; created_at?: string; id?: string; round_id: string; season: number; team_id: string },
         [FK<"renounces_bid_id_fkey", "bid_id", "bids">, FK<"renounces_round_id_fkey", "round_id", "rounds">, FK<"renounces_team_id_fkey", "team_id", "teams">]
+      >;
+      push_subscriptions: Table<
+        { auth: string; created_at: string; endpoint: string; p256dh: string; team_id: string },
+        { auth: string; created_at?: string; endpoint: string; p256dh: string; team_id: string },
+        [FK<"push_subscriptions_team_id_fkey", "team_id", "teams">]
       >;
       round_players: Table<{ player_id: string; pos: number; round_id: string }, { player_id: string; pos?: number; round_id: string },
         [FK<"round_players_player_id_fkey", "player_id", "players">, FK<"round_players_round_id_fkey", "round_id", "rounds">]

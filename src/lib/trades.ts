@@ -6,10 +6,14 @@ import { problemsFor, rosters, type RosterPlayer } from "./roster";
 import { emailHtml, esc, sendMail } from "./mail";
 import { money } from "./rules";
 import { pickName, picksById, picksOf, type Pick } from "./picks";
+import { notifyTeams } from "./push";
+import { listed } from "./names";
 
 // Trade offers between two GMs. The proposer picks players and rookie draft picks from both teams; the other GM
 // accepts or declines. Accepting swaps the contracts and the picks in one database step. Only rule: both teams under
 // the cap afterwards (picks cost nothing).
+// Each step also sends a push (lib/push.ts): a new offer to the GM who decides, the answer to the GM who asked, a
+// withdrawn offer to the GM who was deciding, and a completed trade to the rest of the league.
 
 export type TradeSide = { teamId: string; contracts: string[]; picks?: string[] };
 
@@ -49,6 +53,9 @@ export async function preview(from: TradeSide, to: TradeSide) {
 const list = (ps: RosterPlayer[], picks: Pick[]) =>
   [...ps.map((p) => `${esc(p.name)} (${money(p.salary)})`), ...picks.map((p) => `the ${esc(pickName(p))}`)].join(", ") || "nothing";
 
+// A push's wording for one side of a trade: "Trae Young, Paolo Banchero and the 2027 pick".
+const words = (ps: RosterPlayer[], picks: Pick[]) => listed([...ps.map((p) => p.name), ...picks.map((p) => `the ${pickName(p)}`)]);
+
 async function teamsById(ids: string[]) {
   const { data } = await db().from("teams").select("id, name, manager_email").in("id", ids);
   return new Map((data ?? []).map((t) => [t.id, t]));
@@ -64,6 +71,11 @@ export async function propose(from: TradeSide, to: TradeSide, site: string) {
   if (error) fail(error);
   const teams = await teamsById([from.teamId, to.teamId]);
   const sender = teams.get(from.teamId), receiver = teams.get(to.teamId);
+  await notifyTeams([to.teamId], {
+    title: `Trade offer from ${sender?.name ?? "a GM"}`,
+    body: `You get ${words(give, givePicks)} for ${words(get, getPicks)}.`,
+    url: `/offers/${data!.id}`, tag: `offer-${data!.id}`,
+  });
   if (receiver?.manager_email) {
     await sendMail({
       to: receiver.manager_email,
@@ -137,12 +149,20 @@ async function offer(id: string) {
 export async function accept(offerId: string, teamId: string, site?: string) {
   const o = await offer(offerId);
   if (o.to_team !== teamId) throw new Error("Only the other team can accept.");
-  const { problems } = await preview({ teamId: o.from_team, contracts: o.give, picks: o.give_picks }, { teamId: o.to_team, contracts: o.get, picks: o.get_picks });
+  const { give, get, givePicks, getPicks, problems } = await preview({ teamId: o.from_team, contracts: o.give, picks: o.give_picks }, { teamId: o.to_team, contracts: o.get, picks: o.get_picks });
   if (problems.length) throw new Error(`Can't go through anymore: ${problems.join("; ")}.`);
   const { season } = await getSettings();
   await rpc("trade_offer_accept", { p_offer: offerId, p_season: season });
   const teams = await teamsById([o.from_team, o.to_team]);
   const proposer = teams.get(o.from_team);
+  const a = proposer?.name ?? "A team", b = teams.get(o.to_team)?.name ?? "a team";
+  await notifyTeams([o.from_team], { title: `${b} accepted your trade`, body: `You get ${words(get, getPicks)} for ${words(give, givePicks)}.`, url: "/team", tag: `offer-${offerId}` });
+  const { data: league } = await db().from("teams").select("id");
+  await notifyTeams((league ?? []).map((t) => t.id).filter((id) => id !== o.from_team && id !== o.to_team), {
+    title: `Trade: ${a} and ${b}`,
+    body: `${a} get ${words(get, getPicks)}. ${b} get ${words(give, givePicks)}.`,
+    url: "/league?view=cap",
+  });
   if (proposer?.manager_email && site) {
     await sendMail({
       to: proposer.manager_email,
@@ -157,6 +177,21 @@ export async function close(offerId: string, teamId: string) {
   const o = await offer(offerId);
   const status = o.to_team === teamId ? "declined" : o.from_team === teamId ? "cancelled" : null;
   if (!status) throw new Error("Not your offer.");
+  const view = await getOffer(offerId, o.from_team).catch(() => null); // the sender's point of view, for the push
   const { error } = await db().from("trade_offers").update({ status, decided_at: new Date().toISOString() }).eq("id", offerId).eq("status", "pending");
   if (error) fail(error);
+  const teams = await teamsById([o.from_team, o.to_team]);
+  if (status === "declined") {
+    await notifyTeams([o.from_team], {
+      title: `${teams.get(o.to_team)?.name ?? "They"} declined your trade offer`,
+      body: view ? `You offered ${words(view.give, view.givePicks)} for ${words(view.get, view.getPicks)}.` : "",
+      url: `/offers/${offerId}`, tag: `offer-${offerId}`,
+    });
+  } else {
+    await notifyTeams([o.to_team], {
+      title: `${teams.get(o.from_team)?.name ?? "They"} cancelled their trade offer`,
+      body: view ? `They offered ${words(view.give, view.givePicks)} for ${words(view.get, view.getPicks)}.` : "",
+      url: "/team", tag: `offer-${offerId}`,
+    });
+  }
 }

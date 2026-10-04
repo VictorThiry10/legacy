@@ -10,6 +10,7 @@ import type { SeasonLine } from "@/lib/espn-parse";
 import Slide, { BACK, FORWARD } from "./Slide";
 import DatePicker from "./DatePicker";
 import Pending from "./Pending";
+import PushPrompt from "./PushPrompt";
 import { money } from "@/lib/rules";
 import { headshot } from "@/lib/names";
 import { openOffers } from "@/lib/trades";
@@ -121,6 +122,7 @@ export default async function TeamView({ team, editable, base, sp, back, tradeHr
         </div>
       )}
 
+      {editable && <PushPrompt />}
       {offers && extensions && freeAgency && <Pending offers={offers} extensions={extensions} freeAgency={freeAgency} />}
 
       <div className="flex items-center border-y border-line -mx-4 sm:mx-0 sm:rounded-xl sm:border sm:bg-card">

@@ -12,6 +12,10 @@ export const shortName = (name: string) => {
   return rest.length ? `${first[0]}. ${rest.join(" ")}` : name;
 };
 
+// "A", "A and B", "A, B and C"; "nothing" for an empty list.
+export const listed = (items: string[]) =>
+  !items.length ? "nothing" : items.length === 1 ? items[0] : `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
+
 const ESPN = "https://a.espncdn.com";
 
 // ESPN resizes its own images on its CDN (the "combiner"): a 36 px avatar doesn't need a 260 KB photo.

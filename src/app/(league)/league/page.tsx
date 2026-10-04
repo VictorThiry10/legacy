@@ -12,6 +12,7 @@ import Moves from "@/components/Moves";
 import TeamAvatar from "@/components/TeamAvatar";
 import PickMenu from "@/components/PickMenu";
 import Slide from "@/components/Slide";
+import PushToggle from "@/components/PushToggle";
 
 export const dynamic = "force-dynamic";
 
@@ -46,6 +47,7 @@ export default async function League({ searchParams }: PageProps<"/league">) {
 
         <div className="flex flex-wrap items-center gap-3 border-t border-line bg-card px-4 py-4 text-sm sm:rounded-b-2xl">
           {me?.team?.is_commish && <Link href="/settings" transitionTypes={["nav-forward"]} className="btn-ghost">Commissioner settings</Link>}
+          {me?.team && <PushToggle />}
           <form action="/auth/signout" method="post" className="ml-auto">
             <button className="btn-ghost">Sign out</button>
           </form>
