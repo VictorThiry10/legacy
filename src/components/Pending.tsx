@@ -13,7 +13,8 @@ export default async function Pending({ offers, extensions, freeAgency }: {
 }) {
   const [all, ext, fa] = await Promise.all([offers, extensions, freeAgency]);
   if (!fa && !ext && !all.length) return null;
-  const deal = (o: Offer) => `${few(o.get)} for ${few(o.give)}`;
+  const picks = (ps: { year: number }[]) => ps.map((p) => ({ name: `${p.year} pick` }));
+  const deal = (o: Offer) => `${few([...o.get, ...picks(o.getPicks)])} for ${few([...o.give, ...picks(o.givePicks)])}`;
   return (
     <div className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-card">
       {fa && <FreeAgencyRow s={fa} />}
@@ -29,4 +30,4 @@ export default async function Pending({ offers, extensions, freeAgency }: {
 }
 
 // "Trae Young +4": the first (biggest) name and how many more.
-const few = (ps: { name: string }[]) => (!ps.length ? "nobody" : ps.length === 1 ? ps[0].name : `${ps[0].name} +${ps.length - 1}`);
+const few = (ps: { name: string }[]) => (!ps.length ? "nothing" : ps.length === 1 ? ps[0].name : `${ps[0].name} +${ps.length - 1}`);

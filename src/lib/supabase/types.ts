@@ -27,6 +27,11 @@ export type Database = {
         { active?: boolean; amount: number; created_at?: string; id?: string; reason: string; team_id: string },
         [FK<"cap_adjustments_team_id_fkey", "team_id", "teams">]
       >;
+      draft_picks: Table<
+        { id: string; original_team: string; team_id: string; year: number },
+        { id?: string; original_team: string; team_id: string; year: number },
+        [FK<"draft_picks_original_team_fkey", "original_team", "teams">, FK<"draft_picks_team_id_fkey", "team_id", "teams">]
+      >;
       contracts: Table<
         { acquired_via: string; active: boolean; created_at: string; id: string; player_id: string; salary: number; season_signed: number; team_id: string; years: number },
         { acquired_via?: string; active?: boolean; created_at?: string; id?: string; player_id: string; salary: number; season_signed: number; team_id: string; years: number },
@@ -98,11 +103,11 @@ export type Database = {
       >;
       trade_offers: Table<
         {
-          created_at: string; decided_at: string | null; from_team: string; get: string[]; give: string[]; id: string;
+          created_at: string; decided_at: string | null; from_team: string; get: string[]; get_picks: string[]; give: string[]; give_picks: string[]; id: string;
           season: number; status: string; to_team: string;
         },
         {
-          created_at?: string; decided_at?: string | null; from_team: string; get?: string[]; give?: string[]; id?: string;
+          created_at?: string; decided_at?: string | null; from_team: string; get?: string[]; get_picks?: string[]; give?: string[]; give_picks?: string[]; id?: string;
           season: number; status?: string; to_team: string;
         },
         [FK<"trade_offers_from_team_fkey", "from_team", "teams">, FK<"trade_offers_to_team_fkey", "to_team", "teams">]
@@ -110,13 +115,13 @@ export type Database = {
       transactions: Table<
         {
           contract_id: string | null; created_at: string; group_id: string | null; id: string; kind: string; note: string | null;
-          other_team_id: string | null; player_id: string; salary: number | null; season: number; team_id: string; years: number | null;
+          other_team_id: string | null; pick_id: string | null; player_id: string | null; salary: number | null; season: number; team_id: string; years: number | null;
         },
         {
           contract_id?: string | null; created_at?: string; group_id?: string | null; id?: string; kind: string; note?: string | null;
-          other_team_id?: string | null; player_id: string; salary?: number | null; season: number; team_id: string; years?: number | null;
+          other_team_id?: string | null; pick_id?: string | null; player_id?: string | null; salary?: number | null; season: number; team_id: string; years?: number | null;
         },
-        [FK<"transactions_contract_id_fkey", "contract_id", "contracts">, FK<"transactions_other_team_id_fkey", "other_team_id", "teams">, FK<"transactions_player_id_fkey", "player_id", "players">, FK<"transactions_team_id_fkey", "team_id", "teams">]
+        [FK<"transactions_contract_id_fkey", "contract_id", "contracts">, FK<"transactions_other_team_id_fkey", "other_team_id", "teams">, FK<"transactions_pick_id_fkey", "pick_id", "draft_picks">, FK<"transactions_player_id_fkey", "player_id", "players">, FK<"transactions_team_id_fkey", "team_id", "teams">]
       >;
       waiver_bids: Table<
         { amount: number; created_at: string; drop_contract: string | null; id: string; team_id: string; waiver_id: string },
@@ -168,6 +173,7 @@ export type Database = {
         Args: { p_from_a: string[]; p_from_b: string[]; p_note: string; p_season: number; p_team_a: string; p_team_b: string };
         Returns: string;
       };
+      draft_picks_fill: { Args: { p_first: number; p_years: number }; Returns: undefined };
       trade_offer_accept: { Args: { p_offer: string; p_season: number }; Returns: undefined };
       save_lineup: { Args: { p_day: string; p_rows: Json; p_team: string }; Returns: undefined };
       score_lineup_points: { Args: { p_from: string; p_to: string }; Returns: undefined };

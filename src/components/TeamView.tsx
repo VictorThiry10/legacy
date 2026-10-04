@@ -28,7 +28,9 @@ type Key = (typeof STATS)[number][0];
 type Agg = Record<Key, number> & { gp: number; fpts: number };
 
 // ESPN style lineup: one day at a time, a stats view picker, one row per slot. `editable` only for the signed in owner.
-export default async function TeamView({ team, editable, base, sp, back }: { team: TeamSummary; editable: boolean; base: string; sp: Search; back?: string }) {
+export default async function TeamView({ team, editable, base, sp, back, tradeHref }: {
+  team: TeamSummary; editable: boolean; base: string; sp: Search; back?: string; tradeHref?: string; // tradeHref: a Trade button in the back bar
+}) {
   const str = (k: string) => (typeof sp[k] === "string" ? (sp[k] as string) : "");
   const now = today();
   const day = isDay(str("d")) ? str("d") : now;
@@ -105,6 +107,7 @@ export default async function TeamView({ team, editable, base, sp, back }: { tea
           href={back}
           title={<span className="flex items-center gap-2"><TeamAvatar name={team.name} size="sm" />{team.name}</span>}
           sub={<>{team.manager_name ?? team.manager_email} · {team.state.rosterCount}/{rules.rosterMax} players · <span className={team.capSpace < 0 ? "text-bad" : ""}>{money(team.capSpace)} cap space</span></>}
+          right={tradeHref && <Link href={tradeHref} transitionTypes={FORWARD} className="shrink-0 rounded-full bg-blue-fill px-4 py-1.5 text-sm font-semibold text-white">Trade</Link>}
         />
       ) : (
         <div className="flex flex-wrap items-end gap-x-6 gap-y-2">

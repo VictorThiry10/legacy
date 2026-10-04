@@ -41,6 +41,8 @@ export default async function OfferPage({ params }: PageProps<"/offers/[id]">) {
             them={{ name: o.other.name, space: theirs?.capSpace ?? 0 }}
             get={o.get}
             give={o.give}
+            getPicks={o.getPicks}
+            givePicks={o.givePicks}
             showCap={open && !!theirs}
           />
         </div>

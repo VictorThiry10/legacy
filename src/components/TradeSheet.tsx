@@ -1,6 +1,7 @@
 import { money } from "@/lib/rules";
 import { headshot } from "@/lib/names";
 import type { RosterPlayer } from "@/lib/roster";
+import type { Pick } from "@/lib/picks";
 import TeamAvatar from "./TeamAvatar";
 import { TradeIcon } from "./PendingRow";
 
@@ -10,12 +11,12 @@ const total = (ps: RosterPlayer[]) => ps.reduce((a, p) => a + p.salary, 0);
 const cap = (n: number) => (n < 0 ? `−${money(-n)}` : money(n));
 const signed = (n: number) => `${n >= 0 ? "+" : "−"}${money(Math.abs(n))}`;
 
-// One trade, both teams in one card: the two teams side by side, then what each team gets, then both teams' cap
-// space before and after. My side is blue and theirs orange all the way down (the header fades from one to the
+// One trade, both teams in one card: the two teams side by side, then what each team gets (players, then rookie
+// draft picks), then both teams' cap space before and after. My side is blue and theirs orange all the way down (the header fades from one to the
 // other, a colour edge marks each half), so the sides read apart even when two teams' badges look alike.
 // Used by the trade builder's summary and the offer page. `get` is what I get, `give` what I give.
-export default function TradeSheet({ me, them, get, give, showCap = true }: {
-  me: Side; them: Side; get: RosterPlayer[]; give: RosterPlayer[]; showCap?: boolean;
+export default function TradeSheet({ me, them, get, give, getPicks = [], givePicks = [], showCap = true }: {
+  me: Side; them: Side; get: RosterPlayer[]; give: RosterPlayer[]; getPicks?: Pick[]; givePicks?: Pick[]; showCap?: boolean;
 }) {
   const net = total(get) - total(give); // my salary change
   return (
@@ -28,8 +29,8 @@ export default function TradeSheet({ me, them, get, give, showCap = true }: {
         <TeamHead name={them.name} note="Them" tone="text-orange" />
       </div>
 
-      <Half team={me.name} edge="bg-blue" label="You get" players={get} />
-      <Half team={them.name} edge="bg-orange" label={`${them.name} get`} players={give} />
+      <Half team={me.name} edge="bg-blue" label="You get" players={get} picks={getPicks} />
+      <Half team={them.name} edge="bg-orange" label={`${them.name} get`} players={give} picks={givePicks} />
 
       {showCap && (
         <div className="grid grid-cols-2 divide-x divide-line border-t border-line">
@@ -54,7 +55,7 @@ function TeamHead({ name, note, tone }: { name: string; note: string; tone: stri
 }
 
 // What one team gets, with its side's colour down the left edge.
-function Half({ team, edge, label, players }: { team: string; edge: string; label: string; players: RosterPlayer[] }) {
+function Half({ team, edge, label, players, picks }: { team: string; edge: string; label: string; players: RosterPlayer[]; picks: Pick[] }) {
   return (
     <section className="relative border-t border-line pb-1.5">
       <span aria-hidden className={`absolute inset-y-0 left-0 w-1 ${edge}`} />
@@ -63,7 +64,7 @@ function Half({ team, edge, label, players }: { team: string; edge: string; labe
           <TeamAvatar name={team} size="sm" />
           <span className="truncate text-[11px] font-semibold uppercase tracking-wide">{label}</span>
         </span>
-        <span className="num shrink-0 text-xs text-muted">{money(total(players))}</span>
+        {!!players.length && <span className="num shrink-0 text-xs text-muted">{money(total(players))}</span>}
       </div>
       {players.map((p) => (
         <div key={p.contract_id} className="flex items-center gap-3 py-1.5 pl-5 pr-4">
@@ -79,7 +80,16 @@ function Half({ team, edge, label, players }: { team: string; edge: string; labe
           <span className="num shrink-0 text-sm font-semibold">{money(p.salary)}</span>
         </div>
       ))}
-      {!players.length && <p className="py-1.5 pl-5 pr-4 text-sm text-muted">Nobody</p>}
+      {picks.map((p) => (
+        <div key={p.id} className="flex items-center gap-3 py-1.5 pl-5 pr-4">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-fg/[0.06] text-muted"><PickIcon /></span>
+          <span className="min-w-0 flex-1 leading-tight">
+            <span className="block truncate text-[15px] font-medium">{p.year} rookie pick</span>
+            <span className="block truncate text-[11px] text-muted">{p.original.name}</span>
+          </span>
+        </div>
+      ))}
+      {!players.length && !picks.length && <p className="py-1.5 pl-5 pr-4 text-sm text-muted">Nothing</p>}
     </section>
   );
 }
@@ -101,3 +111,10 @@ function Cap({ dot, before, after }: { dot: string; before: number; after: numbe
     </div>
   );
 }
+
+// A draft pick: a ticket.
+export const PickIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <path d="M3 9V7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v2a3 3 0 0 0 0 6v2a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-2a3 3 0 0 0 0-6ZM14 5v14" strokeDasharray="0" />
+  </svg>
+);
