@@ -1,27 +1,27 @@
 "use client";
 import { useEffect, useImperativeHandle, useRef, type Ref } from "react";
-import { LOTTERY_BALLS } from "@/lib/rules";
 
 // What the show (Lottery.tsx) asks of the machine.
 export type MachineApi = {
   mix: (level: number) => void; // air through the drum: 0 off, 1 full
-  draw: (n: number, slot: number) => Promise<void>; // ball n goes up the tube into tray slot 0 to 3; resolves once it's seated
-  back: () => void; // the tray's balls drop back into the drum
+  draw: () => Promise<void>; // a ball arcs to the tube and leaves through its top; resolves as it comes out
+  reset: () => void; // every ball back in the drum
 };
 
 // World units: the drum is a circle of radius 1 around (0, 0), y grows downwards. The canvas shows WIDTH x (BOTTOM - TOP).
 const R = 1;
-const r = 0.13; // ball radius
-const BIG = 1.3; // a drawn ball grows this much in the tray
-const TRAY_Y = -1.5;
-const TRAY_H = r * BIG + 0.045; // half the tray's height
-const SLOTS = [-0.6, -0.2, 0.2, 0.6]; // the tray's four places
+const r = 0.16; // ball radius
 const MOUTH = -(R - r); // where the tube takes a ball
-const TUBE = MOUTH - (TRAY_Y + TRAY_H); // length of the tube, mouth to tray
-const TOP = -1.8;
+const EXIT = -1.34; // where a drawn ball comes out of the tube, and the page takes over (Capsule.tsx)
+const TOP = -1.52;
 const BOTTOM = 1.28;
 const WIDTH = 2.4;
 const ASPECT = WIDTH / (BOTTOM - TOP);
+// For the page to pick a ball up exactly where the canvas leaves it: heights as a share of the canvas's height,
+// the ball's size as a share of its width.
+export const EXIT_Y = (EXIT - TOP) / (BOTTOM - TOP);
+export const CENTRE_Y = -TOP / (BOTTOM - TOP);
+export const BALL = (2 * r) / WIDTH;
 
 // The air is a smooth flow, not noise: up the middle, out along the top, down the sides and back in along the floor,
 // with a jet at the bottom middle that lifts the balls into it. The column sways slowly, so no two loops are alike.
@@ -34,58 +34,37 @@ const WIND = 1.7; // the air's speed
 const JET = 8; // lift at the bottom middle
 const MAX = 3.6; // top speed
 const T_CATCH = 0.7; // s for a drawn ball to arc to the tube
-const T_SEAT = 0.7; // s up the tube and round into its place
-const T_BACK = 0.6; // s from its place back down the tube
-const BACK_AFTER = [0.32, 0, 0.16, 0.48]; // the inner balls leave first, so none passes through another
+const T_TUBE = 0.35; // s up the tube and out
+const T_LINGER = 0.12; // s it stays drawn at the exit, while the page's copy of it appears on top
 
 type Ball = {
-  n: number; x: number; y: number; vx: number; vy: number;
-  spin: number; turn: number; // the angle its number is at, and how fast it's turning
+  x: number; y: number; vx: number; vy: number;
+  spin: number; turn: number; // the angle its seam is at, and how fast it's turning
   lift: number; // how much air it catches: balls differ a little, so they don't move as one
-  state: "in" | "up" | "tray" | "back"; t: number; x0: number; y0: number; slot: number; size: number; done?: () => void;
+  state: "in" | "up"; t: number; x0: number; y0: number; done?: () => void;
 };
 
-type Look = { color: string; light: string; dark: string };
-const WHITE: Look = { light: "#ffffff", color: "#eeeef2", dark: "#9c9caa" };
-
 const TAU = Math.PI * 2;
-const lerp = (a: number, b: number, k: number) => a + (b - a) * k;
 const clamp = (v: number, lo = 0, hi = 1) => Math.min(hi, Math.max(lo, v));
-const smooth = (k: number) => k * k * (3 - 2 * k);
 const easeOut = (k: number) => 1 - (1 - k) ** 3;
 // a point on the curve from a to c, bent towards b
 const bend = (a: number, b: number, c: number, k: number) => (1 - k) * (1 - k) * a + 2 * (1 - k) * k * b + k * k * c;
-// #rrggbb mixed with white (amount > 0) or black (amount < 0)
-const shade = (hex: string, amount: number) => {
-  const to = amount > 0 ? 255 : 0;
-  const c = [1, 3, 5].map((i) => Math.round(lerp(parseInt(hex.slice(i, i + 2), 16), to, Math.abs(amount))));
-  return `rgb(${c.join(",")})`;
-};
 
 // Every ball somewhere in the drum, not overlapping. Gravity piles them up on the first frames.
-function seed(): Ball[] {
+function seed(count: number): Ball[] {
   const balls: Ball[] = [];
-  for (let n = 1; n <= LOTTERY_BALLS; n++) {
+  for (let n = 0; n < count; n++) {
     for (let k = 0; k < 300; k++) {
       const a = Math.random() * TAU;
       const d = Math.sqrt(Math.random()) * (R - r);
       const x = Math.cos(a) * d;
       const y = Math.sin(a) * d;
       if (k < 299 && balls.some((b) => (b.x - x) ** 2 + (b.y - y) ** 2 < 4 * r * r)) continue;
-      balls.push({ n, x, y, vx: 0, vy: 0, spin: (Math.random() - 0.5) * 2, turn: 0, lift: 0.85 + Math.random() * 0.3, state: "in", t: 0, x0: 0, y0: 0, slot: 0, size: 1 });
+      balls.push({ x, y, vx: 0, vy: 0, spin: (Math.random() - 0.5) * 3, turn: 0, lift: 0.85 + Math.random() * 0.3, state: "in", t: 0, x0: 0, y0: 0 });
       break;
     }
   }
   return balls;
-}
-
-// Where a ball is on its way from the mouth of the tube to its place in the tray: k 0 to 1 along the whole way.
-function seat(slot: number, k: number): { x: number; y: number; size: number } {
-  const curve = Math.abs(SLOTS[slot]) + 0.15; // about the length of the bend into the tray
-  const d = k * (TUBE + curve);
-  if (d <= TUBE) return { x: 0, y: MOUTH - d, size: 1 };
-  const j = (d - TUBE) / curve;
-  return { x: bend(0, 0, SLOTS[slot], j), y: bend(MOUTH - TUBE, TRAY_Y, TRAY_Y, j), size: lerp(1, BIG, smooth(clamp(j / 0.7))) };
 }
 
 // One physics step for the balls in the drum: air and gravity, then ball on ball, then the glass.
@@ -170,13 +149,13 @@ function step(balls: Ball[], air: number, time: number, dt: number) {
   }
 }
 
-// Balls outside the air: arcing to the tube, up it and round into the tray, or on their way back down.
+// The ball being drawn: an arc to the tube, up it and out. Returns the balls still on the canvas.
 function animate(balls: Ball[], dt: number) {
   for (const b of balls) {
-    if (b.state === "in") continue;
-    b.spin *= 1 - Math.min(1, dt * 7); // its number comes upright
+    if (b.state !== "up") continue;
+    b.spin *= 1 - Math.min(1, dt * 7); // its seam comes level
     b.t += dt;
-    if (b.state === "up" && b.t < T_CATCH) {
+    if (b.t < T_CATCH) {
       // from where it was, dipping under the mouth and up into it, faster and faster
       const k = (b.t / T_CATCH) ** 2;
       const x = bend(b.x0, 0, 0, k);
@@ -187,59 +166,52 @@ function animate(balls: Ball[], dt: number) {
       }
       b.x = x;
       b.y = y;
-    } else if (b.state === "up") {
-      const k = clamp((b.t - T_CATCH) / T_SEAT);
-      Object.assign(b, seat(b.slot, easeOut(k)));
-      if (k === 1) {
-        b.state = "tray";
-        b.done?.();
+    } else {
+      b.x = 0;
+      b.y = MOUTH + (EXIT - MOUTH) * easeOut(clamp((b.t - T_CATCH) / T_TUBE));
+      b.spin = 0;
+      if (b.t >= T_CATCH + T_TUBE && b.done) {
+        b.done();
+        b.done = undefined;
       }
-    } else if (b.state === "back" && b.t > 0) {
-      const k = clamp(b.t / T_BACK);
-      Object.assign(b, seat(b.slot, 1 - k * k));
-      if (k === 1) Object.assign(b, { state: "in", vx: (Math.random() - 0.5) * 0.4, vy: 1.6, size: 1 });
     }
   }
+  return balls.filter((b) => !(b.state === "up" && b.t > T_CATCH + T_TUBE + T_LINGER));
 }
 
-function sphere(ctx: CanvasRenderingContext2D, x: number, y: number, rad: number, look: Look) {
+// A capsule: a white ball in two halves, the lower one a shade darker, with a seam that turns as it rolls.
+// Capsule.tsx draws the same ball on the page.
+function drawBall(ctx: CanvasRenderingContext2D, x: number, y: number, rad: number, spin: number) {
   const g = ctx.createRadialGradient(x - rad * 0.32, y - rad * 0.38, rad * 0.05, x, y, rad);
-  g.addColorStop(0, look.light);
-  g.addColorStop(0.6, look.color);
-  g.addColorStop(1, look.dark);
+  g.addColorStop(0, "#ffffff");
+  g.addColorStop(0.6, "#eeeef2");
+  g.addColorStop(1, "#9c9caa");
   ctx.fillStyle = g;
   ctx.beginPath();
   ctx.arc(x, y, rad, 0, TAU);
   ctx.fill();
-}
-
-// A white ball with its number, turned to `spin`. `mix` (0 to 1) fades it into the team's colour, in the tray.
-function drawBall(ctx: CanvasRenderingContext2D, x: number, y: number, rad: number, b: Ball, team: Look | null, mix: number) {
-  sphere(ctx, x, y, rad, WHITE);
-  if (team && mix > 0.01) {
-    ctx.globalAlpha = mix;
-    sphere(ctx, x, y, rad, team);
-    ctx.fillStyle = "rgba(255,255,255,0.95)";
-    ctx.beginPath();
-    ctx.arc(x, y, rad * 0.64, 0, TAU);
-    ctx.fill();
-    ctx.globalAlpha = 1;
-  }
   ctx.save();
   ctx.translate(x, y);
-  ctx.rotate(b.spin);
-  ctx.fillStyle = "#15151a";
-  ctx.font = `800 ${rad * 0.9}px ui-sans-serif, system-ui, -apple-system, sans-serif`;
-  ctx.fillText(String(b.n), 0, rad * 0.05);
-  if (b.n === 6 || b.n === 9) ctx.fillRect(-rad * 0.24, rad * 0.44, rad * 0.48, rad * 0.07); // which way up, like a pool ball
+  ctx.rotate(spin);
+  ctx.fillStyle = "rgba(24,24,44,0.14)";
+  ctx.beginPath();
+  ctx.arc(0, 0, rad, 0, Math.PI);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = "rgba(20,20,26,0.45)";
+  ctx.lineWidth = Math.max(1, rad * 0.06);
+  ctx.beginPath();
+  ctx.moveTo(-rad, 0);
+  ctx.lineTo(rad, 0);
+  ctx.stroke();
   ctx.restore();
-  ctx.fillStyle = "rgba(255,255,255,0.55)";
+  ctx.fillStyle = "rgba(255,255,255,0.6)";
   ctx.beginPath();
   ctx.ellipse(x - rad * 0.4, y - rad * 0.48, rad * 0.2, rad * 0.1, -0.65, 0, TAU);
   ctx.fill();
 }
 
-function render(ctx: CanvasRenderingContext2D, w: number, balls: Ball[], team: Look | null, glow: number) {
+function render(ctx: CanvasRenderingContext2D, w: number, balls: Ball[]) {
   const s = w / WIDTH;
   const h = (BOTTOM - TOP) * s;
   const cx = w / 2;
@@ -249,8 +221,6 @@ function render(ctx: CanvasRenderingContext2D, w: number, balls: Ball[], team: L
   const Rp = R * s;
   const rp = r * s;
   ctx.clearRect(0, 0, w, h);
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
 
   // a soft light behind the drum
   const halo = ctx.createRadialGradient(cx, cy, Rp * 0.3, cx, cy, Rp * 1.3);
@@ -300,48 +270,25 @@ function render(ctx: CanvasRenderingContext2D, w: number, balls: Ball[], team: L
   ctx.arc(cx, cy, Rp, 0, TAU);
   ctx.fill();
 
-  // tube and tray, behind the balls; the tray lights up in the team's colour
-  const tw = rp * 1.18;
-  const th = TRAY_H * s;
-  const trayX = X(SLOTS[0]) - th;
-  const trayW = X(SLOTS[3]) - X(SLOTS[0]) + th * 2;
-  if (team && glow > 0.01) {
-    ctx.save();
-    ctx.translate(cx, Y(TRAY_Y));
-    ctx.scale(1, 0.42);
-    const light = ctx.createRadialGradient(0, 0, 0, 0, 0, trayW * 0.72);
-    light.addColorStop(0, team.color);
-    light.addColorStop(1, "rgba(0,0,0,0)");
-    ctx.globalAlpha = 0.4 * glow;
-    ctx.fillStyle = light;
-    ctx.beginPath();
-    ctx.arc(0, 0, trayW * 0.72, 0, TAU);
-    ctx.fill();
-    ctx.restore();
-  }
+  // the tube, open at the top, behind the balls
+  const tw = rp * 1.15;
+  const tubeTop = Y(-1.2);
   ctx.fillStyle = "rgba(255,255,255,0.04)";
-  ctx.fillRect(cx - tw, Y(TRAY_Y) + th, tw * 2, Y(-R) - Y(TRAY_Y) - th + 2);
-  ctx.fillStyle = "rgba(12,12,15,0.55)";
-  ctx.beginPath();
-  ctx.roundRect(trayX, Y(TRAY_Y) - th, trayW, th * 2, th);
-  ctx.fill();
+  ctx.fillRect(cx - tw, tubeTop, tw * 2, Y(-R) - tubeTop + 2);
 
-  // balls: the drum's first, then the ones outside it on top
-  for (const b of [...balls].sort((a, c) => Number(a.state !== "in") - Number(c.state !== "in"))) {
-    drawBall(ctx, X(b.x), Y(b.y), rp * b.size, b, team, b.state === "tray" ? glow : 0);
-  }
+  // balls: the drum's first, the one being drawn on top
+  for (const b of [...balls].sort((a, c) => Number(a.state !== "in") - Number(c.state !== "in"))) drawBall(ctx, X(b.x), Y(b.y), rp, b.spin);
 
-  // glass in front: tray and tube edges, the rim, two reflections
-  const edge = ctx.createLinearGradient(X(-1), Y(-1.7), X(1), Y(1));
+  // glass in front: the tube's edges, the rim, two reflections
+  const edge = ctx.createLinearGradient(X(-1), Y(-1.4), X(1), Y(1));
   edge.addColorStop(0, "rgba(255,255,255,0.42)");
   edge.addColorStop(1, "rgba(255,255,255,0.1)");
   ctx.strokeStyle = edge;
   ctx.lineWidth = 1.5;
   ctx.beginPath();
-  ctx.roundRect(trayX, Y(TRAY_Y) - th, trayW, th * 2, th);
-  ctx.moveTo(cx - tw, Y(TRAY_Y) + th);
+  ctx.moveTo(cx - tw, tubeTop);
   ctx.lineTo(cx - tw, Y(-R) + 2);
-  ctx.moveTo(cx + tw, Y(TRAY_Y) + th);
+  ctx.moveTo(cx + tw, tubeTop);
   ctx.lineTo(cx + tw, Y(-R) + 2);
   ctx.stroke();
   ctx.lineWidth = 2;
@@ -362,38 +309,31 @@ function render(ctx: CanvasRenderingContext2D, w: number, balls: Ball[], team: L
   ctx.lineCap = "butt";
 }
 
-// The lottery drum, like the NBA's: 14 numbered balls in a glass sphere, carried round by the air. Four are drawn
-// up a tube into a tray for each pick, then dropped back in. `tint` (a team's colour) lights the tray and its balls.
+// The lottery drum: one capsule per team in a glass sphere, carried round by the air. For each pick one is drawn
+// up the tube and out of the top, where the page takes it over, opens it and shows the name (Capsule.tsx).
 // Driven from Lottery.tsx through `ref`.
-export default function Machine({ tint, ref }: { tint: string | null; ref: Ref<MachineApi> }) {
+export default function Machine({ count, ref }: { count: number; ref: Ref<MachineApi> }) {
   const canvas = useRef<HTMLCanvasElement>(null);
-  const sim = useRef({ balls: [] as Ball[], air: 0, target: 0, team: null as Look | null, lit: false, glow: 0 });
-
-  useEffect(() => {
-    if (tint) sim.current.team = { color: tint, light: shade(tint, 0.55), dark: shade(tint, -0.45) };
-    sim.current.lit = !!tint; // the colour itself stays until the light has faded
-  }, [tint]);
+  const sim = useRef({ balls: [] as Ball[], air: 0, target: 0 });
 
   useImperativeHandle(ref, () => ({
     mix: (level) => void (sim.current.target = level),
-    draw: (n, slot) =>
+    draw: () =>
       new Promise<void>((done) => {
-        const b = sim.current.balls.find((b) => b.n === n && b.state === "in");
+        // the one nearest the tube
+        const b = sim.current.balls.filter((b) => b.state === "in").sort((a, c) => Math.hypot(a.x, a.y - MOUTH) - Math.hypot(c.x, c.y - MOUTH))[0];
         if (!b) return done();
-        Object.assign(b, { state: "up", t: 0, x0: b.x, y0: b.y, slot, done, spin: Math.atan2(Math.sin(b.spin), Math.cos(b.spin)) });
+        Object.assign(b, { state: "up", t: 0, x0: b.x, y0: b.y, done, spin: Math.atan2(Math.sin(b.spin), Math.cos(b.spin)) });
       }),
-    back: () =>
-      sim.current.balls
-        .filter((b) => b.state === "tray" || b.state === "up")
-        .forEach((b) => Object.assign(b, { state: "back", t: -BACK_AFTER[b.slot], done: undefined })),
-  }), []);
+    reset: () => Object.assign(sim.current, { balls: seed(count), air: 0, target: 0 }),
+  }), [count]);
 
   useEffect(() => {
     const el = canvas.current;
     const ctx = el?.getContext("2d");
     if (!el || !ctx) return;
     const state = sim.current;
-    Object.assign(state, { balls: seed(), air: 0, target: 0 });
+    Object.assign(state, { balls: seed(count), air: 0, target: 0 });
     let w = 0;
     const size = () => {
       const dpr = Math.min(window.devicePixelRatio || 1, 3);
@@ -413,10 +353,9 @@ export default function Machine({ tint, ref }: { tint: string | null; ref: Ref<M
       const dt = Math.min((now - last) / 1000, 1 / 30);
       last = now;
       state.air += (state.target - state.air) * Math.min(1, dt * 2);
-      state.glow += ((state.lit ? 1 : 0) - state.glow) * Math.min(1, dt * 6);
-      animate(state.balls, dt);
+      state.balls = animate(state.balls, dt);
       for (acc += dt; acc >= H; acc -= H) step(state.balls, state.air, (time += H), H);
-      if (w) render(ctx, w, state.balls, state.team, state.glow); // w is 0 while the drum is hidden (phones, before Play)
+      if (w) render(ctx, w, state.balls); // w is 0 while the drum is hidden (phones, before Play)
       raf = requestAnimationFrame(frame);
     };
     raf = requestAnimationFrame(frame);
@@ -424,13 +363,13 @@ export default function Machine({ tint, ref }: { tint: string | null; ref: Ref<M
       cancelAnimationFrame(raf);
       ro.disconnect();
     };
-  }, []);
+  }, [count]);
 
   return (
     <canvas
       ref={canvas}
       role="img"
-      aria-label="Lottery machine: a glass drum of 14 numbered balls"
+      aria-label="Lottery machine: a glass drum with one ball per team"
       className="block h-auto w-full"
       style={{ aspectRatio: ASPECT }}
     />
