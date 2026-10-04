@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { headshot, initials, nbaLogo, shortName } from "./names";
+import { headshot, initials, listed, nbaLogo, shortName } from "./names";
 
 test("short names", () => {
   assert.equal(initials("Brunson Bhenchodes"), "BB");
@@ -20,4 +20,11 @@ test("headshots at the size they're drawn", () => {
   assert.equal(headshot(full, 0), full);
   assert.equal(headshot("https://example.com/x.png", 100), "https://example.com/x.png");
   assert.equal(headshot(null, 100), null);
+});
+
+test("listed: a readable list", () => {
+  assert.equal(listed([]), "nothing");
+  assert.equal(listed(["Trae Young"]), "Trae Young");
+  assert.equal(listed(["Trae Young", "the 2027 pick"]), "Trae Young and the 2027 pick");
+  assert.equal(listed(["A", "B", "C"]), "A, B and C");
 });

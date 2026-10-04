@@ -5,6 +5,8 @@ import { getSettings } from "./league";
 import { refreshScores } from "./season";
 import { parseEligibility, parseInjuries, parseOverview, parseProjections, parseRoster, parseScoreboard, parseSeasonStats, parseSummary, type GameRow, type PlayerRow } from "./espn-parse";
 import { etDay } from "./dates";
+import { injuryChanges, injuryMessage } from "./injuries";
+import { notifyTeams } from "./push";
 
 // ESPN's free public data feed (unofficial: if ESPN changes it, espn-parse.ts is the file to fix).
 const BASE = process.env.ESPN_BASE ?? "https://site.api.espn.com/apis/site/v2/sports/basketball/nba";
@@ -19,23 +21,48 @@ async function get<T>(path: string, base = BASE): Promise<T> {
 
 type EspnTeams = { sports: { leagues: { teams: { team: { id: string; abbreviation: string } }[] }[] }[] };
 
-// Every NBA roster, the league injury report, last season's stat line and this season's projection -> players table.
+// Every NBA roster, last season's stat line and this season's projection -> players table. Injuries are left to
+// syncInjuries (run at the end), so a player's status only ever changes in one place.
 export async function syncPlayers() {
   const { season } = await getSettings();
   const teams = (await get<EspnTeams>("/teams")).sports[0].leagues[0].teams.map((t) => t.team);
   const rosters = await Promise.all(teams.map((t) => get<Parameters<typeof parseRoster>[0]>(`/teams/${t.id}/roster`).then((r) => parseRoster(r, t))));
   const players: PlayerRow[] = rosters.flat();
-  const injuries = new Map(parseInjuries(await get("/injuries")).map((i) => [i.playerId, i]));
   // ESPN names a season by the year it ends: our 2026-27 season's "last season" is ESPN's 2026.
   const [last, positions, projected] = await Promise.all([lastSeasonStats(season), fantasyPositions(season), projections(season)]);
   const now = new Date().toISOString();
-  const rows = players.map((p) => {
-    const inj = injuries.get(p.id);
-    return { ...p, position: positions.get(p.id) ?? p.position, injury_status: inj?.status ?? p.injury_status, injury_note: inj?.note ?? null, last_season: last.get(p.id) ?? null, projection: projected.get(p.id) ?? null, updated_at: now };
-  });
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- the roster feed's own injury tag is dropped on purpose
+  const rows = players.map(({ injury_status, ...p }) => ({ ...p, position: positions.get(p.id) ?? p.position, last_season: last.get(p.id) ?? null, projection: projected.get(p.id) ?? null, updated_at: now }));
   const { error } = await db().from("players").upsert(rows);
   if (error) throw new Error(error.message);
+  await attempt(syncInjuries);
   return rows.length;
+}
+
+// ESPN's league injury report -> players' injury status and note. Only players whose status changed are written,
+// and for each one on a fantasy roster, that GM gets a push: hurt, ruled out, upgraded, or cleared.
+// Runs every 10 minutes, and after each player refresh.
+export async function syncInjuries() {
+  const report = new Map(parseInjuries(await get("/injuries")).map((i) => [i.playerId, i]));
+  const { data: players, error } = await db().from("players").select("id, name, injury_status, injury_note").limit(2000);
+  if (error) throw new Error(error.message);
+  const changes = injuryChanges(players ?? [], report);
+  if (!changes) return { skipped: "ESPN's injury report looks cut short" };
+  for (const c of changes) await db().from("players").update({ injury_status: c.to, injury_note: c.note }).eq("id", c.playerId);
+  // a new note on the same status is saved quietly
+  const changed = new Set(changes.map((c) => c.playerId));
+  for (const p of players ?? []) {
+    const note = report.get(p.id)?.note ?? null;
+    if (!changed.has(p.id) && p.injury_status && note !== p.injury_note) await db().from("players").update({ injury_note: note }).eq("id", p.id);
+  }
+  if (!changes.length) return { changes: 0 };
+  const { data: owned } = await db().from("contracts").select("player_id, team_id").eq("active", true).in("player_id", changes.map((c) => c.playerId));
+  let pushed = 0;
+  for (const c of changes) {
+    const owner = owned?.find((o) => o.player_id === c.playerId);
+    if (owner) pushed += await notifyTeams([owner.team_id], { ...injuryMessage(c), url: `/players/${c.playerId}`, tag: `injury-${c.playerId}` });
+  }
+  return { changes: changes.length, pushed };
 }
 
 const ymd = (d: Date) => d.toISOString().slice(0, 10).replace(/-/g, "");
@@ -180,7 +207,8 @@ export async function autoRefresh() {
   const out: Record<string, unknown> = { scores: await attempt(syncRecent) };
   if (await due("catch-up", 30)) out.catchUp = await attempt(catchUpGames);
   out.fantasy = await attempt(refreshScores); // after box scores, so lineups score the latest stats
-  if (await due("players", 55)) out.players = await attempt(syncPlayers);
+  if (await due("players", 55)) out.players = await attempt(syncPlayers); // ends with the injury report
+  else if (await due("injuries", 9)) out.injuries = await attempt(syncInjuries);
   if (await due("schedule", 60 * 24 - 10)) {
     const day = 24 * 3600_000;
     out.schedule = await attempt(() => syncSchedule(new Date(Date.now() - day), new Date(Date.now() + 14 * day)));

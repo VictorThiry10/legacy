@@ -9,6 +9,7 @@ import { releaseContract, signPlayer, trade } from "@/lib/roster";
 import { createSchedule, createTestSchedule, rescoreEverything } from "@/lib/season";
 import { isDay } from "@/lib/dates";
 import { deliver, emailHtml } from "@/lib/mail";
+import { notifyTeams } from "@/lib/push";
 
 // Commissioner actions. Each checks the caller is the commissioner, then refreshes every page.
 
@@ -121,4 +122,18 @@ export async function sendTestEmail() {
 
 export async function rehearse() {
   return commish(() => createTestSchedule());
+}
+
+// Pushes the commissioner's own phones a sample trade offer, to check notifications end to end.
+export async function sendTestPush() {
+  return guard(async () => {
+    const me = await requireCommish();
+    const sent = await notifyTeams([me.id], {
+      title: "Trade offer from Brunson Bhenchodes (test)",
+      body: "You get Jalen Brunson and the 2027 pick for Naz Reid. This is a test: nothing was offered.",
+      url: "/team", tag: "push-test",
+    });
+    if (!sent) throw new Error("None of your phones has notifications on yet. Turn them on from the Team page first.");
+    return `Sent to ${sent} device${sent === 1 ? "" : "s"}.`;
+  });
 }
