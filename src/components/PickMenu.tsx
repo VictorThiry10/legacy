@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
+import { useScrollLock } from "./ScrollLock";
 
 export type PickItem = { label: string; href: string; on?: boolean };
 
@@ -12,16 +13,13 @@ export default function PickMenu({ label, items, className = "", width = 240 }: 
   const [at, setAt] = useState<{ x: number; top: number; bottom: number } | null>(null);
   const close = () => setAt(null);
 
-  // Any scroll or resize closes it (it's placed where the label was when opened).
+  // The page stays still under it; a resize closes it (it's placed where the label was when opened).
+  useScrollLock(!!at);
   useEffect(() => {
     if (!at) return;
     const off = () => setAt(null);
-    window.addEventListener("scroll", off, { passive: true, once: true });
     window.addEventListener("resize", off, { once: true });
-    return () => {
-      window.removeEventListener("scroll", off);
-      window.removeEventListener("resize", off);
-    };
+    return () => window.removeEventListener("resize", off);
   }, [at]);
 
   const open = () => {
@@ -60,7 +58,7 @@ export default function PickMenu({ label, items, className = "", width = 240 }: 
               style={up ? { bottom: window.innerHeight - at.top + 12, left, width: w } : { top: at.bottom + 12, left, width: w }}
             >
               <span className={`absolute h-3.5 w-3.5 rotate-45 rounded-sm bg-card ${up ? "-bottom-1.5" : "-top-1.5"}`} style={{ left: at.x - left - 7 }} />
-              <ul className="relative max-h-[60dvh] overflow-y-auto overscroll-contain py-1">
+              <ul data-scrolls className="relative max-h-[60dvh] overflow-y-auto overscroll-contain py-1">
                 {items.map((it) => (
                   <li key={`${it.label}|${it.href}`} className="border-b border-line/70 last:border-0">
                     <Link

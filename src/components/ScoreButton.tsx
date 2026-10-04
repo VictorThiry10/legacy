@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { useScrollLock } from "./ScrollLock";
 
 export type ScoreRow = { label: string; per: number; n: number; score: number };
 
@@ -10,6 +11,7 @@ export default function ScoreButton({ points, name, headshot, game, rows, classN
   points: number; name: string; headshot: string | null; game: string; rows: ScoreRow[]; className?: string;
 }) {
   const [open, setOpen] = useState(false);
+  useScrollLock(open);
   useEffect(() => {
     if (!open) return;
     const esc = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);

@@ -7,6 +7,7 @@ import { decideExtensions } from "@/app/(league)/extensions/actions";
 import { headshot } from "@/lib/names";
 import { money } from "@/lib/rules";
 import PendingRow, { ContractIcon } from "./PendingRow";
+import { useScrollLock } from "./ScrollLock";
 
 // The one-off contract extensions pop-up: tick last season's players to keep for 1 year at last season's salary.
 // It opens by itself on the first page of a visit; "Later" closes it, and the Team page's to-do row opens it again.
@@ -32,6 +33,7 @@ export function ExtensionsRow({ offer }: { offer: ExtensionOffer }) {
 }
 
 function Sheet({ offer, onClose }: { offer: ExtensionOffer; onClose: () => void }) {
+  useScrollLock();
   const router = useRouter();
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
@@ -83,7 +85,7 @@ function Sheet({ offer, onClose }: { offer: ExtensionOffer; onClose: () => void 
 
         {!done && (
           <>
-            <ul className="min-h-0 flex-1 space-y-1.5 overflow-y-auto px-3">
+            <ul data-scrolls className="min-h-0 flex-1 space-y-1.5 overflow-y-auto overscroll-contain px-3">
               {offer.players.map((p) => {
                 const on = picked.has(p.id);
                 return (
