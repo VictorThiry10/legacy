@@ -5,7 +5,7 @@ import { ROOKIES, type Rookie } from "./rookies";
 // The teams ahead of me "pick" one every PACE ms, each taking the best rookie left, until it's my turn.
 export type TestDraft = { order: { name: string; color: string }[]; at: number; mine?: Rookie & { years: number } }; // mine: my pick
 const KEY = "rookie-draft-test";
-const PACE = 8000;
+const PACE = 12000;
 
 const read = () => {
   try {

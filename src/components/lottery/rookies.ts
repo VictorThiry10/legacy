@@ -13,5 +13,8 @@ export const ROOKIES: Rookie[] = [
   { id: "5149077", name: "Kingston Flemings", position: "PG, SG", nba: "ATL", salary: 2 * M },
 ];
 
+// Contracts are 1 to 4 years.
+export const LENGTHS = [1, 2, 3, 4];
+
 // What the pick screen needs about my team and the rest of the class (draft/actions.ts).
-export type DraftOptions = { others: Rookie[]; years: number[] }; // years: the contract lengths I still have a slot for
+export type DraftOptions = { others: Rookie[]; open: number[] }; // open: the contract lengths I still have a slot for
