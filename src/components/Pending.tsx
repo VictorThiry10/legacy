@@ -4,19 +4,22 @@ import type { AppStatus } from "@/lib/bidding";
 import PendingRow, { TradeIcon } from "./PendingRow";
 import { ExtensionsRow } from "./Extensions";
 import FreeAgencyRow from "./FreeAgencyRow";
+import DraftCard from "./lottery/DraftCard";
 
 // Everything waiting on my team, in one card at the top of the Team page: free agency while it runs, what I have
 // to decide, then the offers I sent. Each row opens the full thing (the auction room, the extensions pop-up, the
 // offer page with Accept / Decline). Takes promises already started (TeamView starts them early), so it never waits in line.
-export default async function Pending({ offers, extensions, freeAgency }: {
-  offers: Promise<Offer[]>; extensions: Promise<ExtensionOffer | null>; freeAgency: Promise<AppStatus | null>;
+// `rookieDraft`: the card also carries the rookie draft's row (a test for now, lottery/DraftCard.tsx).
+export default async function Pending({ offers, extensions, freeAgency, rookieDraft }: {
+  offers: Promise<Offer[]>; extensions: Promise<ExtensionOffer | null>; freeAgency: Promise<AppStatus | null>; rookieDraft?: boolean;
 }) {
   const [all, ext, fa] = await Promise.all([offers, extensions, freeAgency]);
-  if (!fa && !ext && !all.length) return null;
+  const empty = !fa && !ext && !all.length;
+  if (empty && !rookieDraft) return null;
   const picks = (ps: { year: number }[]) => ps.map((p) => ({ name: `${p.year} pick` }));
   const deal = (o: Offer) => `${few([...o.get, ...picks(o.getPicks)])} for ${few([...o.give, ...picks(o.givePicks)])}`;
-  return (
-    <div className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-card">
+  const rows = (
+    <>
       {fa && <FreeAgencyRow s={fa} />}
       {ext && <ExtensionsRow offer={ext} />}
       {all.filter((o) => !o.mine).map((o) => (
@@ -25,8 +28,10 @@ export default async function Pending({ offers, extensions, freeAgency }: {
       {all.filter((o) => o.mine).map((o) => (
         <PendingRow key={o.id} href={`/offers/${o.id}`} icon={<TradeIcon />} title={`Offer sent to ${o.other.name}`} sub={deal(o)} />
       ))}
-    </div>
+    </>
   );
+  if (rookieDraft) return <DraftCard empty={empty}>{rows}</DraftCard>;
+  return <div className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-card">{rows}</div>;
 }
 
 // "Trae Young +4": the first (biggest) name and how many more.

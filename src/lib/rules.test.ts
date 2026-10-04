@@ -91,10 +91,43 @@ test("lottery odds match the deck and sum to 100", () => {
   let seed = 1;
   const rand = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
   for (let i = 0; i < 20000; i++) {
-    const first = drawLottery(ids, rand)[0];
+    const first = drawLottery(ids, rand).order[0];
     counts[first] = (counts[first] ?? 0) + 1;
   }
   assert.ok(Math.abs(counts.w1 / 20000 - 0.25) < 0.02);
+  assert.ok(Math.abs(counts.t4 / 20000 - 0.075) < 0.01);
+});
+
+test("lottery draws the top 4 like the NBA, the rest go by record", () => {
+  const ids = ["w1", "w2", "w3", "w4", "t1", "t2", "t3", "t4"];
+  let seed = 7;
+  const rand = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  for (let i = 0; i < 500; i++) {
+    const { order, combos } = drawLottery(ids, rand);
+    assert.deepEqual([...order].sort(), [...ids].sort()); // every team once
+    assert.equal(combos.length, 4);
+    for (const c of combos) {
+      assert.equal(new Set(c).size, 4);
+      assert.ok(c.every((n) => n >= 1 && n <= 14));
+    }
+    // picks 5 to 8: the teams not drawn, worst record first, so nobody drops more than 4 places
+    assert.deepEqual(order.slice(4), ids.filter((id) => !order.slice(0, 4).includes(id)));
+    order.forEach((id, k) => assert.ok(k - ids.indexOf(id) <= 4));
+  }
+});
+
+test("lottery takes other odds, and a team with none is never drawn", () => {
+  const ids = ["a", "b", "c", "d", "e"];
+  const odds = { a: 50, b: 30, c: 10, d: 10, e: 0 };
+  let seed = 3;
+  const rand = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  let first = 0;
+  for (let i = 0; i < 4000; i++) {
+    const { order } = drawLottery(ids, rand, odds);
+    assert.equal(order[4], "e");
+    if (order[0] === "a") first++;
+  }
+  assert.ok(Math.abs(first / 4000 - 0.5) < 0.03);
 });
 
 test("fantasy points", () => {

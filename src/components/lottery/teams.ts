@@ -1,36 +1,25 @@
-import type { DrumTeam } from "./Machine";
+export type LotteryTeam = { id: string; name: string; color: string; odds: number }; // odds: % chance at the #1 pick
 
-export type LotteryTeam = DrumTeam & { odds: number }; // odds: % chance at the #1 pick
-
-// The eight teams and their ball colours.
+// The eight teams and their colours.
 const TEAMS: [name: string, color: string][] = [
   ["Theo", "#ef4444"], ["Elliot", "#f97316"], ["Ilan", "#facc15"], ["Benji", "#22c55e"],
-  ["Thiry", "#14b8a6"], ["Award", "#3b82f6"], ["Chomi", "#a855f7"], ["Brunson", "#ec4899"],
+  ["Thiry", "#14b8a6"], ["Awad", "#3b82f6"], ["Chomi", "#a855f7"], ["Brunson", "#ec4899"],
 ];
-const BALLS = 40; // 2.5% each, numbered 1 to 40
+const STEP = 2.5; // odds come in steps of 2.5%
 
-// Test field: random odds. The 40 balls are cut into eight random runs (every team gets at least one ball),
-// handed to the teams in a random order, best odds first.
+// Who gets the lottery pop-up and the draft that follows. A test for now: Victor's team only, shown as Thiry.
+const OPEN_TO = new Set(["95b613dc-64b6-4d2f-8774-ba38fa257b60"]);
+export const inLotteryTest = (teamId: string) => OPEN_TO.has(teamId);
+export const ME = "Thiry";
+
+// Test field: random odds, in a random order of teams, best odds first (standing in for worst record first).
+// 100% is cut into eight random runs of 2.5%, so every team has a chance.
 export function randomField(): LotteryTeam[] {
+  const parts = 100 / STEP;
   const cuts = new Set<number>();
-  while (cuts.size < TEAMS.length - 1) cuts.add(1 + Math.floor(Math.random() * (BALLS - 1)));
-  const edges = [0, ...[...cuts].sort((a, b) => a - b), BALLS];
-  const counts = edges.slice(1).map((e, i) => e - edges[i]).sort((a, b) => b - a);
+  while (cuts.size < TEAMS.length - 1) cuts.add(1 + Math.floor(Math.random() * (parts - 1)));
+  const edges = [0, ...[...cuts].sort((a, b) => a - b), parts];
+  const shares = edges.slice(1).map((e, i) => e - edges[i]).sort((a, b) => b - a);
   const shuffled = TEAMS.map((t) => ({ t, k: Math.random() })).sort((a, b) => a.k - b.k).map((x) => x.t);
-  return shuffled.map(([name, color], i) => {
-    const first = counts.slice(0, i).reduce((a, b) => a + b, 1);
-    return { id: name, name, color, odds: (counts[i] / BALLS) * 100, balls: Array.from({ length: counts[i] }, (_, k) => first + k) };
-  });
-}
-
-// The draft order for a field: a random ball out of those left picks next, then that team's balls come out.
-export function drawOrder(teams: LotteryTeam[]): string[] {
-  const left = teams.map((t) => ({ id: t.id, n: t.balls.length }));
-  const order: string[] = [];
-  while (left.length) {
-    let r = Math.random() * left.reduce((a, t) => a + t.n, 0);
-    const i = left.findIndex((t) => (r -= t.n) < 0);
-    order.push(left.splice(i < 0 ? left.length - 1 : i, 1)[0].id);
-  }
-  return order;
+  return shuffled.map(([name, color], i) => ({ id: name, name, color, odds: shares[i] * STEP }));
 }

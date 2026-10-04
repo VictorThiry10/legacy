@@ -3,7 +3,7 @@ import "server-only";
 import { db } from "./supabase/server";
 import { getSettings } from "./league";
 import { refreshScores } from "./season";
-import { parseEligibility, parseInjuries, parseOverview, parseProjections, parseRoster, parseScoreboard, parseSeasonStats, parseSummary, type GameRow, type PlayerRow } from "./espn-parse";
+import { parseEligibility, parseInjuries, parseOverview, parseProjections, parseRookies, parseRoster, parseScoreboard, parseSeasonStats, parseSummary, type GameRow, type PlayerRow } from "./espn-parse";
 import { etDay } from "./dates";
 import { injuryChanges, injuryMessage } from "./injuries";
 import { notifyTeams } from "./push";
@@ -179,6 +179,17 @@ export const playerOverviewCached = unstable_cache(
   async (id: string) => parseOverview(await get(`/athletes/${encodeURIComponent(id)}/overview`, WEB)),
   ["espn-player-overview"],
   { revalidate: 900 },
+);
+
+// This year's NBA rookies, from every roster. 30 requests, so kept for a day. Throws when ESPN fails: callers catch.
+export const rookieClass = unstable_cache(
+  async () => {
+    const teams = (await get<EspnTeams>("/teams")).sports[0].leagues[0].teams.map((t) => t.team);
+    const rosters = await Promise.all(teams.map((t) => get<Parameters<typeof parseRookies>[0]>(`/teams/${t.id}/roster`).then((r) => parseRookies(r, t))));
+    return rosters.flat();
+  },
+  ["espn-rookie-class"],
+  { revalidate: 86400 },
 );
 
 // ---------- automatic refresh ----------

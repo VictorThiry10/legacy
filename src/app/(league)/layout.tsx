@@ -7,9 +7,7 @@ import TimeZone from "@/components/TimeZone";
 import NavTracker from "@/components/NavTracker";
 import Extensions from "@/components/Extensions";
 import LotteryPopup from "@/components/lottery/Popup";
-
-// Who gets the rookie lottery pop-up (components/lottery). A test for now, with random odds: Victor's team only.
-const LOTTERY_OPEN_TO = new Set(["95b613dc-64b6-4d2f-8774-ba38fa257b60"]);
+import { inLotteryTest } from "@/components/lottery/teams";
 
 // The league app: tab bar on top once you have a team.
 export default async function LeagueLayout({ children }: { children: React.ReactNode }) {
@@ -27,7 +25,8 @@ export default async function LeagueLayout({ children }: { children: React.React
           <ExtensionsPrompt team={me.team} />
         </Suspense>
       )}
-      {me?.team && LOTTERY_OPEN_TO.has(me.team.id) && <LotteryPopup />}
+      {/* the rookie lottery pop-up: a test for now, with random odds */}
+      {me?.team && inLotteryTest(me.team.id) && <LotteryPopup />}
       <TimeZone />
       <NavTracker />
     </>
