@@ -1,21 +1,24 @@
 import Link from "next/link";
 import { myTeamOrWelcome } from "@/lib/auth";
-import { teamSummaries, type TeamSummary } from "@/lib/league";
+import { getSettings, teamSummaries, type TeamSummary } from "@/lib/league";
 import { currentOf, matchups, scores, standings, type Matchup, type Standing } from "@/lib/season";
 import { rosters, type RosterPlayer } from "@/lib/roster";
 import { lineupsOn } from "@/lib/lineup-store";
 import { SLOTS, isStarter, slotLabel, type LineupRow } from "@/lib/lineup";
-import { gamesBetween, linesIn, teamAbbrs, type Game } from "@/lib/nba";
+import { gamesBetween, linesIn, teamAbbrs, type DayLine, type Game } from "@/lib/nba";
+import { scoreRows } from "@/lib/rules";
+import { nickname } from "@/lib/nba-teams";
 import { addDays, ago, isDay, minutesSince, monthDay, today, weekday } from "@/lib/dates";
 import { lastRuns } from "@/lib/espn";
 import { STALE_MINUTES } from "@/lib/health";
-import { shortName } from "@/lib/names";
+import { headshot, shortName } from "@/lib/names";
 import TeamLogo from "@/components/TeamLogo";
 import TeamAvatar from "@/components/TeamAvatar";
 import { load } from "@/lib/guard";
 import AutoRefresh from "@/components/AutoRefresh";
 import Slide, { BACK, FORWARD } from "@/components/Slide";
-import { GameStatus, oppLabel } from "@/components/GameInfo";
+import { GameLine, oppLabel } from "@/components/GameInfo";
+import ScoreButton from "@/components/ScoreButton";
 import MatchupSwipe from "@/components/MatchupSwipe";
 import PickMenu from "@/components/PickMenu";
 import { db } from "@/lib/supabase/server";
@@ -24,8 +27,9 @@ export const dynamic = "force-dynamic";
 
 // Head to head, ESPN style: swipe through the week's matchups at the top, the score stays pinned while you
 // scroll, then one day at a time, slot by slot, one team on each side. My own team is always on the right.
+// A player who has played shows his game's score and his stat line; tapping his points opens the breakdown.
 export default async function MatchupPage({ searchParams }: PageProps<"/matchup">) {
-  const [me, teams, sp, schedule, runs] = await Promise.all([myTeamOrWelcome(), teamSummaries(), searchParams, load(() => matchups()), lastRuns()]);
+  const [me, teams, sp, schedule, runs, { scoring }] = await Promise.all([myTeamOrWelcome(), teamSummaries(), searchParams, load(() => matchups()), lastRuns(), getSettings()]);
   const now = today();
   const r = await load(async () => {
     if ("err" in schedule) throw new Error(schedule.err);
@@ -57,7 +61,7 @@ export default async function MatchupPage({ searchParams }: PageProps<"/matchup"
       for (const l of lines) pts.set(l.playerId, (pts.get(l.playerId) ?? 0) + l.fpts);
     }
     const weeks = [...new Set(all.map((x) => x.week))];
-    return { m, L, R, day, summary, s, table, roster, games, abbr, pts, lineups, weekMs, weeks };
+    return { m, L, R, day, summary, s, table, roster, games, abbr, pts, lines, lineups, weekMs, weeks };
   });
 
   if ("err" in r) return <p className="card text-bad text-sm">{r.err}</p>;
@@ -69,7 +73,7 @@ export default async function MatchupPage({ searchParams }: PageProps<"/matchup"
       </div>
     );
   }
-  const { m, L, R, day, summary, s, table, roster, games, abbr, pts, lineups, weekMs, weeks } = r.ok;
+  const { m, L, R, day, summary, s, table, roster, games, abbr, pts, lines, lineups, weekMs, weeks } = r.ok;
   const team = (id: string | null) => (id ? teams.find((t) => t.id === id) : undefined);
   const scoreOf = (x: Matchup, id: string | null) => (id === x.home_team_id ? s.get(x.id)?.home : s.get(x.id)?.away) ?? 0;
   const live = m.starts <= now && now <= m.ends;
@@ -89,7 +93,21 @@ export default async function MatchupPage({ searchParams }: PageProps<"/matchup"
   const extraL = left.filter((x) => x.slot === "BE"), extraR = right.filter((x) => x.slot === "BE");
   for (let k = 0; k < Math.max(extraL.length, extraR.length); k++) pairs.splice(pairs.length - 1, 0, { slot: "BE", l: extraL[k], r: extraR[k] });
   const dayPts = (row?: LineupRow) => (row?.playerId ? pts.get(row.playerId) : undefined);
-  const fmt = (n?: number) => (n == null ? "-" : String(Math.round(n * 10) / 10));
+  // On a day: the box score line of each player who played (not in the Summary, which adds up the whole matchup).
+  const line = new Map(summary ? [] : lines.map((l) => [l.playerId, l]));
+  const gameTitle = (g: Game, p: RosterPlayer) => {
+    const home = g.home_team_id === p.nba_team_id;
+    return `${nice(day).slice(0, 3)} ${Number(day.slice(5, 7))}/${Number(day.slice(8))} ${home ? "vs." : "@"} ${nickname(abbr.get(home ? g.away_team_id : g.home_team_id) ?? "?")}`;
+  };
+  // One side's points: tappable once he has played, 0.0 if his game ended without him, a dash before that.
+  const points = (row: LineupRow | undefined, p: RosterPlayer | undefined, side: string) => {
+    const l = p && line.get(p.id), g = gameOf(p);
+    if (l && p && g) {
+      return <div className={`flex items-center ${side}`}><ScoreButton points={l.fpts} name={p.name} headshot={headshot(p.headshot, 240)} game={gameTitle(g, p)} rows={scoreRows(l.stats, scoring)} /></div>;
+    }
+    const v = dayPts(row) ?? (!summary && p && g?.state === "post" ? 0 : undefined);
+    return <div className={`flex items-center text-[15px] num ${side} ${v == null ? "text-muted" : "font-semibold"}`}>{v == null ? "-" : v.toFixed(1)}</div>;
+  };
   const starters = pairs.filter((x) => isStarter(x.slot));
   const benchAndIR = pairs.filter((x) => !isStarter(x.slot));
   const dayTotal = (side: "l" | "r") => (summary ? scoreOf(m, side === "l" ? L : R) : starters.reduce((a, x) => a + (dayPts(x[side]) ?? 0), 0));
@@ -102,12 +120,12 @@ export default async function MatchupPage({ searchParams }: PageProps<"/matchup"
   const row = ({ slot, l, r: rr }: { slot: string; l?: LineupRow; r?: LineupRow }, key: string) => {
     const pl = l?.playerId ? players.get(l.playerId) : undefined, pr = rr?.playerId ? players.get(rr.playerId) : undefined;
     return (
-      <div key={key} className="grid grid-cols-[minmax(0,1fr)_2.5rem_2.75rem_2.5rem_minmax(0,1fr)] border-b border-line/60 bg-card">
-        <PlayerCell p={pl} g={summary ? undefined : gameOf(pl)} abbr={abbr} />
-        <div className="flex items-center justify-end pr-2 text-sm num">{fmt(dayPts(l))}</div>
+      <div key={key} className="grid grid-cols-[minmax(0,1fr)_2.75rem_2.25rem_2.75rem_minmax(0,1fr)] border-b border-line/60 bg-card">
+        <PlayerCell p={pl} g={summary ? undefined : gameOf(pl)} line={pl && line.get(pl.id)} abbr={abbr} />
+        {points(l, pl, "justify-end pr-1.5")}
         <div className="flex items-center justify-center bg-line/70 text-[11px] font-bold text-muted">{slotLabel(slot) === "Bench" ? "BE" : slotLabel(slot) === "UTIL" ? "UTL" : slotLabel(slot)}</div>
-        <div className="flex items-center pl-2 text-sm num">{fmt(dayPts(rr))}</div>
-        <PlayerCell p={pr} g={summary ? undefined : gameOf(pr)} abbr={abbr} right />
+        {points(rr, pr, "pl-1.5")}
+        <PlayerCell p={pr} g={summary ? undefined : gameOf(pr)} line={pr && line.get(pr.id)} abbr={abbr} right />
       </div>
     );
   };
@@ -208,17 +226,19 @@ function TeamName({ t, rec, right }: { t?: TeamSummary; rec?: Standing; right?: 
 
 const INJ: Record<string, string> = { "day-to-day": "DTD", out: "O", questionable: "Q", doubtful: "D", suspension: "SSPD" };
 
-function PlayerCell({ p, g, abbr, right }: { p?: RosterPlayer; g?: Game; abbr: Map<string, string>; right?: boolean }) {
+function PlayerCell({ p, g, line, abbr, right }: { p?: RosterPlayer; g?: Game; line?: DayLine; abbr: Map<string, string>; right?: boolean }) {
   if (!p) return <div className={`flex items-center px-3 py-4 text-sm text-muted ${right ? "justify-end" : ""}`}>Empty</div>;
   const inj = p.injury_status ? INJ[p.injury_status.toLowerCase()] ?? p.injury_status : null;
   return (
-    <Link href={`/players/${p.id}`} prefetch={false} transitionTypes={FORWARD} className={`flex min-w-0 flex-col justify-center px-3 py-2.5 leading-tight active:bg-line/50 ${right ? "items-end text-right" : ""}`}>
+    <Link href={`/players/${p.id}`} prefetch={false} transitionTypes={FORWARD} className={`flex min-w-0 flex-col justify-center py-2.5 leading-tight active:bg-line/50 ${right ? "items-end pl-1 pr-3 text-right" : "pl-3 pr-1"}`}>
       <span className={`flex min-w-0 max-w-full items-center gap-1.5 ${right ? "flex-row-reverse" : ""}`}>
         <span className="truncate text-[15px] font-medium">{shortName(p.name)}</span>
         <TeamLogo abbr={p.nba_team} px={48} alt={p.nba_team ?? ""} className="h-4 w-4 shrink-0" />
         {inj && <span className="shrink-0 text-[11px] font-bold text-bad">{inj}</span>}
       </span>
-      {g && <span className="mt-0.5 truncate text-[11px] text-muted">{oppLabel(g, p.nba_team_id!, abbr)} <GameStatus g={g} teamId={p.nba_team_id!} /></span>}
+      {/* these two wrap rather than cut off on a narrow phone */}
+      {g && <span className="mt-0.5 text-[11px] tracking-tight text-muted">{oppLabel(g, p.nba_team_id!, abbr)} <GameLine g={g} teamId={p.nba_team_id!} /></span>}
+      {line && <span className="text-[11px] tracking-tight text-muted">{line.stats.pts} PTS, {line.stats.reb} REB, {line.stats.ast} AST</span>}
     </Link>
   );
 }

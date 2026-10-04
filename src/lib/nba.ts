@@ -5,6 +5,7 @@ import { all, chunks } from "./db";
 import { addDays, etDay } from "./dates";
 import { getSettings } from "./league";
 import type { Row } from "./supabase/types";
+import type { StatLine } from "./rules";
 
 // Reading the NBA data that espn.ts saves: games, team abbreviations, box scores.
 
@@ -56,8 +57,13 @@ export async function boxLines(playerIds: string[]): Promise<BoxLine[]> {
 }
 
 // Box score lines for some players in some games only (e.g. one day's games): much lighter than a whole season.
-export async function linesIn(playerIds: string[], gameIds: string[]): Promise<{ playerId: string; fpts: number }[]> {
+export type DayLine = { playerId: string; fpts: number; stats: StatLine };
+export async function linesIn(playerIds: string[], gameIds: string[]): Promise<DayLine[]> {
   if (!playerIds.length || !gameIds.length) return [];
-  const { data } = await db().from("player_games").select("player_id, fpts").in("player_id", [...new Set(playerIds)]).in("game_id", gameIds).eq("played", true);
-  return (data ?? []).map((r) => ({ playerId: r.player_id, fpts: Number(r.fpts) }));
+  const { data } = await db().from("player_games").select("player_id, pts, fgm, fga, reb, ast, stl, blk, tov, tf, ej, win, fpts")
+    .in("player_id", [...new Set(playerIds)]).in("game_id", gameIds).eq("played", true);
+  return (data ?? []).map((r) => ({
+    playerId: r.player_id, fpts: Number(r.fpts),
+    stats: { pts: r.pts, fgm: r.fgm, fga: r.fga, reb: r.reb, ast: r.ast, stl: r.stl, blk: r.blk, to: r.tov, tf: r.tf, ej: r.ej, win: r.win },
+  }));
 }

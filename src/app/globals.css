@@ -77,7 +77,10 @@ table.t { @apply w-full text-sm; }
 @keyframes menu-pop-up { from { opacity: 0; transform: translateY(6px) scale(0.97); } }
 .menu-dim { animation: menu-dim 180ms ease-out both; }
 @keyframes menu-dim { from { opacity: 0; } }
-@media (prefers-reduced-motion: reduce) { .menu-pop, .menu-pop-up, .menu-dim { animation: none; } }
+/* a sheet that rises from the bottom (the Players filters) */
+.sheet-up { animation: sheet-up 300ms cubic-bezier(0.32, 0.72, 0, 1) both; }
+@keyframes sheet-up { from { transform: translateY(100%); } }
+@media (prefers-reduced-motion: reduce) { .menu-pop, .menu-pop-up, .menu-dim, .sheet-up { animation: none; } }
 /* Players table: short class names for the cells repeated on every row (keeps the page light) */
 table.players th.stick, table.players td.stick {
   position: sticky; left: 0; z-index: 10; width: 3rem; min-width: 3rem; background: var(--card);
