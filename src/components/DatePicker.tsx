@@ -3,6 +3,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { monthGrid, monthsBetween, monthTitle } from "@/lib/calendar";
 import { BACK, FORWARD } from "./Slide";
+import { useScrollLock } from "./ScrollLock";
 
 const full = (day: string) =>
   new Date(`${day}T12:00:00Z`).toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric", timeZone: "UTC" });
@@ -13,6 +14,7 @@ export default function DatePicker({ day, today, label, path, params, from, to, 
   replace?: boolean; // swap the day in place in history (on pages with a back arrow)
 }) {
   const [open, setOpen] = useState(false);
+  useScrollLock(open);
   const selected = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (open) selected.current?.scrollIntoView({ block: "start" });
@@ -27,7 +29,7 @@ export default function DatePicker({ day, today, label, path, params, from, to, 
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setOpen(false)}>
           <div className="w-full max-w-sm overflow-hidden rounded-2xl bg-card shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <div className="bg-accent px-4 py-6 text-center text-2xl font-medium text-bg">{full(day)}</div>
-            <div className="max-h-[60dvh] overflow-y-auto px-3 pb-4">
+            <div data-scrolls className="max-h-[60dvh] overflow-y-auto overscroll-contain px-3 pb-4">
               {months.map((m) => {
                 const here = day.slice(0, 7) === `${m.year}-${String(m.month).padStart(2, "0")}`;
                 return (

@@ -13,6 +13,7 @@ import SubmitButton from "@/components/SubmitButton";
 import BackBar from "@/components/BackBar";
 import StepForm from "@/components/StepForm";
 import TradeSheet from "@/components/TradeSheet";
+import ScrollLock from "@/components/ScrollLock";
 
 export const dynamic = "force-dynamic";
 
@@ -143,8 +144,9 @@ function Summary({ review, them, me, get, give, closeHref }: {
 function Modal({ closeHref, children }: { closeHref: string; children: React.ReactNode }) {
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center p-3 sm:items-center sm:p-4">
+      <ScrollLock />
       <Link href={closeHref} replace transitionTypes={BACK} className="menu-dim absolute inset-0 bg-black/50" aria-label="Close" />
-      <div className="menu-pop menu-pop-up relative max-h-[calc(100dvh-1.5rem)] w-full max-w-md overflow-y-auto rounded-3xl bg-card shadow-2xl">{children}</div>
+      <div data-scrolls className="menu-pop menu-pop-up relative max-h-[calc(100dvh-1.5rem)] w-full max-w-md overflow-y-auto overscroll-contain rounded-3xl bg-card shadow-2xl">{children}</div>
     </div>
   );
 }

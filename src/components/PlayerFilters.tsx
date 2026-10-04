@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import TeamLogo from "./TeamLogo";
+import { useScrollLock } from "./ScrollLock";
 
 type Option = [value: string, label: string];
 export type FilterValues = { show: string; mine: string; play: string; team: string; view: string };
@@ -42,17 +43,12 @@ export default function PlayerFilters({ value, days, teams, keep, className }: {
     router.push(q.size ? `/players?${q}` : "/players", { scroll: false });
   };
 
-  // The page behind stays still while the sheet is up; Escape closes it.
+  useScrollLock(open);
   useEffect(() => {
     if (!open) return;
-    const html = document.documentElement;
-    html.style.overflow = "hidden";
     const esc = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
     window.addEventListener("keydown", esc);
-    return () => {
-      html.style.overflow = "";
-      window.removeEventListener("keydown", esc);
-    };
+    return () => window.removeEventListener("keydown", esc);
   }, [open]);
 
   const head = "grid h-14 shrink-0 grid-cols-[3rem_1fr_3rem] items-center border-b border-line px-2";
@@ -79,7 +75,7 @@ export default function PlayerFilters({ value, days, teams, keep, className }: {
                   <h2 className={title}>Filters</h2>
                   <button type="button" onClick={() => setDraft(DEFAULTS)} disabled={!dirty} className="justify-self-end pr-2 text-sm font-medium text-blue disabled:text-muted/60">Reset</button>
                 </div>
-                <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+                <div data-scrolls className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
                   <button type="button" role="switch" aria-checked={draft.mine === ""} onClick={() => setDraft({ ...draft, mine: draft.mine === "" ? "0" : "" })} className={row}>
                     <span className="text-[17px]">Show my team</span>
                     <span className={`relative h-7 w-12 shrink-0 rounded-full transition-colors ${draft.mine === "" ? "bg-blue-fill" : "bg-line"}`}>
@@ -110,7 +106,7 @@ export default function PlayerFilters({ value, days, teams, keep, className }: {
                   <h2 className={title}>{current.title}</h2>
                   <span />
                 </div>
-                <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-[env(safe-area-inset-bottom)]">
+                <div data-scrolls className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-[env(safe-area-inset-bottom)]">
                   {current.options.map(([v, label]) => {
                     const on = draft[current.key] === v;
                     return (
