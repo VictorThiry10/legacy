@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { parseSummary, parseInjuries } from "./espn-parse";
+import { parseSummary, parseInjuries, parseRookies } from "./espn-parse";
 
 // Real ESPN box score: Bucks 125, Nets 108 (Apr 10, 2026). E.J. Liddell ejected, double technical Wilson/Dieng.
 const summary = JSON.parse(readFileSync(new URL("./fixtures/summary-401811034.json", import.meta.url), "utf8"));
@@ -105,4 +105,18 @@ test("parseProjections: ESPN's projected season line, scored our way; players wi
   );
   // 1764 + 616 - 610 + 817 + 235*1.5 + 74*2.5 + 235*2.5 - 194*1.5
   assert.equal(wemby.fpts, 3421);
+});
+
+test("rookies are the roster's players with 0 years of experience", () => {
+  // the shape of ESPN's roster feed (Wizards, Oct 2026)
+  const roster = { athletes: [
+    { id: "5142718", fullName: "AJ Dybantsa", position: { abbreviation: "SF" }, experience: { years: 0 } },
+    { id: "4277905", fullName: "Trae Young", position: { abbreviation: "PG" }, experience: { years: 9 } },
+    { id: "5105841", fullName: "Felix Okpara", experience: { years: 0 } },
+    { id: "1", fullName: "No Experience Field" },
+  ] };
+  assert.deepEqual(parseRookies(roster, { abbreviation: "WSH" }), [
+    { id: "5142718", name: "AJ Dybantsa", position: "SF", nba_team: "WSH" },
+    { id: "5105841", name: "Felix Okpara", position: null, nba_team: "WSH" },
+  ]);
 });

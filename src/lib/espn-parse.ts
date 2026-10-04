@@ -11,7 +11,7 @@ export type PlayerRow = {
 
 type RosterAthlete = {
   id: string; fullName: string; position?: { abbreviation?: string }; headshot?: { href?: string };
-  injuries?: { status?: string }[]; contract?: { salary?: number };
+  injuries?: { status?: string }[]; contract?: { salary?: number }; experience?: { years?: number };
 };
 
 export function parseRoster(json: { athletes?: RosterAthlete[] }, team: { id: string; abbreviation: string }): PlayerRow[] {
@@ -25,6 +25,14 @@ export function parseRoster(json: { athletes?: RosterAthlete[] }, team: { id: st
     injury_status: a.injuries?.[0]?.status ?? null,
     espn_salary: a.contract?.salary ?? null,
   }));
+}
+
+// A roster's rookies: the players with no NBA season behind them.
+export type RookieRow = { id: string; name: string; position: string | null; nba_team: string };
+export function parseRookies(json: { athletes?: RosterAthlete[] }, team: { abbreviation: string }): RookieRow[] {
+  return (json.athletes ?? [])
+    .filter((a) => a.experience?.years === 0)
+    .map((a) => ({ id: a.id, name: a.fullName, position: a.position?.abbreviation ?? null, nba_team: team.abbreviation }));
 }
 
 export type InjuryRow = { playerId: string; status: string; note: string | null; returnDate: string | null };
