@@ -4,6 +4,8 @@ import { getSettings, teamSummaries, type TeamSummary } from "@/lib/league";
 import { currentOf, matchups, scores, standings, type Matchup, type Standing } from "@/lib/season";
 import { money } from "@/lib/rules";
 import { recentMoves } from "@/lib/roster";
+import { picksOf } from "@/lib/picks";
+import { initials } from "@/lib/names";
 import { weekLabel } from "@/lib/dates";
 import { load } from "@/lib/guard";
 import Moves from "@/components/Moves";
@@ -179,7 +181,7 @@ async function Playoffs({ team }: { team: (id: string | null) => TeamSummary | u
 }
 
 async function Cap({ teams, myId, rosterMax }: { teams: TeamSummary[]; myId?: string; rosterMax: number }) {
-  const moves = await recentMoves(20);
+  const [moves, picks] = await Promise.all([recentMoves(20), picksOf()]);
   return (
     <div className="bg-card">
       <div className={`grid grid-cols-[minmax(0,1fr)_3rem_4rem_4rem] items-center gap-2 border-y border-line px-4 py-2 ${head}`}>
@@ -193,6 +195,27 @@ async function Cap({ teams, myId, rosterMax }: { teams: TeamSummary[]; myId?: st
           <span className={`text-right num font-semibold ${t.capSpace < 0 ? "text-bad" : ""}`}>{money(t.capSpace)}</span>
         </div>
       ))}
+      {/* rookie draft picks: who holds what. A traded pick carries the initials of the team it came from. */}
+      <div className={`border-y border-line px-4 py-2 ${head}`}>Draft picks</div>
+      {teams.map((t) => {
+        const held = picks.filter((x) => x.team_id === t.id);
+        return (
+          <div key={t.id} className={`flex items-center gap-3 border-b border-line/60 px-4 py-2.5 ${t.id === myId ? "bg-blue/10" : ""}`}>
+            <TeamAvatar name={t.name} size="sm" />
+            <div className="flex min-w-0 flex-1 flex-wrap gap-1.5">
+              {held.map((x) => {
+                const own = x.original.id === t.id;
+                return (
+                  <span key={x.id} title={own ? `${x.year} pick` : `${x.year} pick, from ${x.original.name}`} className={`num rounded-full px-2 py-0.5 text-xs font-medium ${own ? "bg-line/70" : "border border-accent text-accent"}`}>
+                    {x.year}{!own && ` · ${initials(x.original.name)}`}
+                  </span>
+                );
+              })}
+              {!held.length && <span className="text-xs text-muted">None</span>}
+            </div>
+          </div>
+        );
+      })}
       <div className={`border-y border-line px-4 py-2 ${head}`}>Recent moves</div>
       <div className="px-4 pb-2"><Moves moves={moves} /></div>
     </div>

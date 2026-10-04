@@ -12,5 +12,5 @@ export default async function TeamPage({ params, searchParams }: PageProps<"/tea
   const team = teams.find((t) => t.id === id);
   if (!team) notFound();
   const mine = me?.team?.id === id;
-  return <TeamView team={team} editable={mine} base={mine ? "/team" : `/teams/${id}`} sp={sp} back="/league" />;
+  return <TeamView team={team} editable={mine} base={mine ? "/team" : `/teams/${id}`} sp={sp} back="/league" tradeHref={!mine && me?.team ? `/trade/${id}` : undefined} />;
 }

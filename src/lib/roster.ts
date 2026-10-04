@@ -163,16 +163,18 @@ export async function trade(o: { teamA: string; teamB: string; fromA: string[]; 
 }
 
 export type Move = {
-  id: string; kind: "sign" | "release" | "trade"; created_at: string; group_id: string | null; note: string | null;
-  salary: number | null; years: number | null; team: string; other_team: string | null; player: string; player_id: string;
+  id: string; kind: "sign" | "release" | "trade" | "pick"; created_at: string; group_id: string | null; note: string | null;
+  salary: number | null; years: number | null; team: string; other_team: string | null;
+  player: string; player_id: string | null; // kind "pick": `player` is the pick's name ("2027 pick (Thiros)"), no player_id
 };
 
 // The transactions log, newest first.
 export async function recentMoves(limit = 50): Promise<Move[]> {
   const { data } = await db().from("transactions")
-    .select("id, kind, created_at, group_id, note, salary, years, player_id, team:teams!transactions_team_id_fkey(name), other:teams!transactions_other_team_id_fkey(name), player:players(name)")
+    .select("id, kind, created_at, group_id, note, salary, years, player_id, team:teams!transactions_team_id_fkey(name), other:teams!transactions_other_team_id_fkey(name), player:players(name), pick:draft_picks(year, original:teams!draft_picks_original_team_fkey(name))")
     .order("created_at", { ascending: false }).limit(limit);
-  return (data ?? []).map(({ team, other, player, ...m }) => ({
-    ...m, kind: m.kind as Move["kind"], team: team?.name ?? "?", other_team: other?.name ?? null, player: player?.name ?? "?",
+  return (data ?? []).map(({ team, other, player, pick, ...m }) => ({
+    ...m, kind: m.kind as Move["kind"], team: team?.name ?? "?", other_team: other?.name ?? null,
+    player: pick ? `${pick.year} pick (${pick.original?.name ?? "?"})` : player?.name ?? "?",
   }));
 }

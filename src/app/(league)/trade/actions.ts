@@ -20,13 +20,13 @@ export async function sendOffer(f: FormData) {
   let err = "";
   try {
     const me = await requireTeam();
-    await propose({ teamId: me.id, contracts: ids(f, "give") }, { teamId: them, contracts: ids(f, "get") }, await site());
+    await propose({ teamId: me.id, contracts: ids(f, "give"), picks: ids(f, "givep") }, { teamId: them, contracts: ids(f, "get"), picks: ids(f, "getp") }, await site());
   } catch (e) {
     err = e instanceof Error ? e.message : "Something went wrong.";
   }
   revalidatePath("/", "layout");
   if (err) {
-    const q = new URLSearchParams([["step", "give"], ...ids(f, "get").map((v) => ["get", v]), ...ids(f, "give").map((v) => ["give", v]), ["err", err]]);
+    const q = new URLSearchParams([["step", "give"], ...["get", "give", "getp", "givep"].flatMap((k) => ids(f, k).map((v) => [k, v])), ["err", err]]);
     redirect(`/trade/${encodeURIComponent(them)}?${q}`, RedirectType.replace);
   }
   redirect("/team", RedirectType.replace);
