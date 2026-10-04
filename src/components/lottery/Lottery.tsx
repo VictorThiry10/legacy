@@ -72,34 +72,33 @@ export default function Lottery({ onClose }: { onClose: () => void }) {
     setShown(order.length + 1);
     setPhase("running");
     scroller.current?.scrollTo({ top: 0, behavior: "smooth" }); // on a phone the drum takes over the screen
-    m.mix(0.3);
+    m.mix(0.45);
     // the picks set by record, last first
     for (let p = order.length; p > combos.length; p--) {
-      await wait(1100);
+      await wait(1200);
       if (!live()) return;
       setShown(p);
     }
     // the lottery picks, up to #1: the four balls, then the team
     for (let p = combos.length; p >= 1; p--) {
-      await wait(1300);
+      await wait(1200);
       if (!live()) return;
       setDrawing(p);
       m.back();
       m.mix(1);
-      await wait(p === 1 ? 2400 : 1200);
-      for (let s = 0; s < 4; s++) {
-        if (!live()) return;
-        await m.draw(combos[p - 1][s], s);
-        await wait(120);
-      }
+      await wait(p === 1 ? 2600 : 1500);
       if (!live()) return;
-      m.mix(0.2);
-      await wait(p === 1 ? 1100 : 500);
+      // one ball every 0.8 s; the outer places fill first, so no ball passes through another
+      await Promise.all(combos[p - 1].map((n, k) => wait(k * 800).then(() => m.draw(n, [0, 3, 1, 2][k]))));
+      if (!live()) return;
+      m.mix(0.35);
+      await wait(p === 1 ? 1300 : 600);
       if (!live()) return;
       setShown(p);
       setDrawing(null);
+      await wait(600);
     }
-    await wait(1800);
+    await wait(1600);
     if (!live()) return;
     m.mix(0);
     setPhase("done");
@@ -147,28 +146,28 @@ export default function Lottery({ onClose }: { onClose: () => void }) {
 
         <section aria-label="Lottery machine" className={`mx-auto w-full max-w-[420px] md:col-start-1 md:row-span-2 md:row-start-1 ${phase === "idle" ? "hidden md:block" : ""}`}>
           {/* the tray's four balls take the team's colour once it's named */}
-          <div className={phase === "done" ? "hidden md:block" : ""}>
+          <div className={phase === "done" ? "hidden md:block" : "animate-[fade_500ms_ease-out]"}>
             <Machine ref={machine} tint={latest && shown <= draw.top ? latest.color : null} />
           </div>
           {/* The pick being revealed, right under the drum so it's in view on a phone too */}
           <div aria-live="polite" className="relative mt-2 flex h-24 items-center justify-center text-center">
             <AnimatePresence mode="wait" initial={false}>
-              <motion.div
-                key={drawing !== null ? `drawing-${drawing}` : latest ? `pick-${shown}` : "none"}
-                initial={{ opacity: 0, y: 10, scale: 0.96 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: -8 }}
-                transition={{ duration: 0.2 }}
-              >
-                {(drawing !== null || latest) && (
-                  <>
-                    <div className="font-display num text-2xl leading-none text-white/50">#{drawing ?? shown}</div>
-                    <div className="font-display text-6xl leading-none" style={{ color: drawing === null ? latest?.color : undefined }}>
-                      {drawing === null ? latest?.name : <span className="animate-pulse text-white/40">…</span>}
-                    </div>
-                  </>
-                )}
-              </motion.div>
+              {drawing !== null ? (
+                <motion.div key={`drawing-${drawing}`} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.3 }} className="font-display num text-5xl leading-none text-white/35">
+                  #{drawing}
+                </motion.div>
+              ) : latest ? (
+                <motion.div
+                  key={`pick-${shown}`}
+                  initial={{ opacity: 0, scale: 0.9, filter: "blur(8px)" }}
+                  animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
+                  exit={{ opacity: 0, transition: { duration: 0.2 } }}
+                  transition={{ type: "spring", stiffness: 220, damping: 22 }}
+                >
+                  <div className="font-display num text-2xl leading-none text-white/50">#{shown}</div>
+                  <div className="font-display text-6xl leading-none" style={{ color: latest.color }}>{latest.name}</div>
+                </motion.div>
+              ) : null}
             </AnimatePresence>
           </div>
         </section>
@@ -205,15 +204,15 @@ export default function Lottery({ onClose }: { onClose: () => void }) {
                     const t = k + 1 >= shown ? byId[id] : undefined;
                     const moved = t ? t.slot - (k + 1) : 0;
                     return (
-                      <li key={k} className="grid h-11 grid-cols-[2rem_1fr_auto] items-center gap-x-3 sm:h-12">
+                      <li key={k} className={`grid h-11 grid-cols-[2rem_1fr_auto] items-center gap-x-3 px-2 transition-colors duration-700 sm:h-12 ${t && drawing === null && k + 1 === shown && phase === "running" ? "bg-white/[0.06]" : ""}`}>
                         <span className="font-display num text-2xl text-white/40">{k + 1}</span>
                         {t ? (
-                          <motion.div className="flex min-w-0 items-center gap-2.5" initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.35 }}>
+                          <motion.div className="flex min-w-0 items-center gap-2.5" initial={{ opacity: 0, x: -12 }} animate={{ opacity: 1, x: 0 }} transition={{ type: "spring", stiffness: 260, damping: 26 }}>
                             <Chip color={t.color} size={16} />
                             <span className="truncate font-medium">{t.name}</span>
                           </motion.div>
                         ) : (
-                          <span className={drawing === k + 1 ? "animate-pulse text-white/60" : "text-white/20"}>{drawing === k + 1 ? "…" : "—"}</span>
+                          <span className={`h-px w-10 transition-colors duration-500 ${drawing === k + 1 ? "bg-white/50" : "bg-white/10"}`} />
                         )}
                         {t && moved !== 0 && (
                           <motion.span
