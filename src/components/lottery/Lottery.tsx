@@ -67,7 +67,11 @@ export default function Lottery({ onClose }: { onClose: () => void }) {
     if (!m || phase !== "idle") return;
     const me = ++run.current;
     const live = () => run.current === me;
-    const { order, combos } = drawLottery(teams.map((t) => t.id), Math.random, Object.fromEntries(teams.map((t) => [t.id, t.odds])));
+    // TEST: drawn again until I hold #1, to try the pick screen. The odds on screen stay the random ones.
+    const odds = Object.fromEntries(teams.map((t) => [t.id, t.odds]));
+    let result = drawLottery(teams.map((t) => t.id), Math.random, odds);
+    while (result.order[0] !== ME) result = drawLottery(teams.map((t) => t.id), Math.random, odds);
+    const { order, combos } = result;
     setDraw({ order, top: combos.length });
     setShown(order.length + 1);
     setPhase("running");
