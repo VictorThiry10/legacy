@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { resolveRound, revealRound, maxBid, yearsLeft, DEFAULT_SETTINGS as S, drawLottery, lotteryOdds, fantasyPoints, rosterProblems, teamState, rankWaiverBids, type TeamState, type Bid } from "./rules";
+import { resolveRound, revealRound, maxBid, yearsLeft, DEFAULT_SETTINGS as S, drawLottery, lotteryOdds, fantasyPoints, scoreRows, rosterProblems, teamState, rankWaiverBids, type TeamState, type Bid } from "./rules";
 
 const M = 1_000_000;
 const team = (id: string, salary = 0, rosterCount = 0): TeamState => ({ id, salary, rosterCount, slotsUsed: {} });
@@ -140,4 +140,16 @@ test("waivers: highest sealed bid first, ties to more cap space, then the earlie
 test("waivers: bids under the minimum salary don't count", () => {
   const ranked = rankWaiverBids([{ id: "1", teamId: "A", amount: 500_000, createdAt: "" }], () => 0, S.minSalary);
   assert.equal(ranked.length, 0);
+});
+
+test("scoreRows: one row per category that happened, adding up to the fantasy points", () => {
+  // Ace Bailey's line in ESPN's pop-up: 2 points, 2 assists, 4 rebounds, 1 turnover, 1 of 5 shooting
+  const line = { pts: 2, fgm: 1, fga: 5, reb: 4, ast: 2, stl: 0, blk: 0, to: 1, tf: 0, ej: 0, win: 0 };
+  const w = { pts: 1, fgm: 1, fgmi: -1, reb: 1, ast: 1.5, stl: 2.5, blk: 2.5, to: -2, tf: -1, ej: -2, win: 0 };
+  const rows = scoreRows(line, w);
+  assert.deepEqual(rows.map((r) => [r.label, r.per, r.n, r.score]), [
+    ["Points", 1, 2, 2], ["Assists", 1.5, 2, 3], ["Rebounds", 1, 4, 4], ["Turnovers", -2, 1, -2],
+    ["Field Goals Made", 1, 1, 1], ["Field Goals Missed", -1, 4, -4],
+  ]);
+  assert.equal(rows.reduce((a, r) => a + r.score, 0), fantasyPoints(line, w));
 });

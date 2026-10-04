@@ -242,6 +242,18 @@ export function fantasyPoints(l: StatLine, w: Scoring = SCORING): number {
   return Math.round(p * 10) / 10;
 }
 
+// The same sum, category by category, for the scoring pop-up: how many of each, what one is worth, what they add
+// up to. In ESPN's order; categories with none are left out.
+const ROW_ORDER: (keyof Scoring)[] = ["pts", "ast", "reb", "stl", "blk", "to", "fgm", "fgmi", "tf", "ej", "win"];
+export const SCORING_LABELS: Record<keyof Scoring, string> = {
+  pts: "Points", ast: "Assists", reb: "Rebounds", stl: "Steals", blk: "Blocks", to: "Turnovers",
+  fgm: "Field Goals Made", fgmi: "Field Goals Missed", tf: "Technical Fouls", ej: "Ejections", win: "Team Win",
+};
+export function scoreRows(l: StatLine, w: Scoring = SCORING) {
+  const n: Record<keyof Scoring, number> = { ...l, fgmi: l.fga - l.fgm };
+  return ROW_ORDER.filter((k) => n[k]).map((k) => ({ key: k, label: SCORING_LABELS[k], per: w[k], n: n[k], score: Math.round(n[k] * w[k] * 10) / 10 }));
+}
+
 // A team's cap picture from its contracts. Every active contract counts against the cap; a player on IR
 // doesn't take a roster spot; this season's signings use contract-length slots.
 export function teamState(

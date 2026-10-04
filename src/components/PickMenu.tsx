@@ -3,14 +3,11 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 
-export type PickItem = { label: string; href: string; on?: boolean; section?: string }; // `section` starts a titled group
+export type PickItem = { label: string; href: string; on?: boolean };
 
 // ESPN style picker: tap the label, a menu drops under it with a little pointer, the page dims, the current
-// choice has a tick. Used for the day on Matchup, the week on the Scoreboard and the Players filters.
-// `bare` drops the label's own look (colour, chevron) for a trigger styled by `className`, like an icon chip.
-export default function PickMenu({ label, items, className = "", width = 240, bare, ariaLabel }: {
-  label: React.ReactNode; items: PickItem[]; className?: string; width?: number; bare?: boolean; ariaLabel?: string;
-}) {
+// choice has a tick. Used for the day on Matchup and the week on the Scoreboard.
+export default function PickMenu({ label, items, className = "", width = 240 }: { label: React.ReactNode; items: PickItem[]; className?: string; width?: number }) {
   const button = useRef<HTMLButtonElement>(null);
   const [at, setAt] = useState<{ x: number; top: number; bottom: number } | null>(null);
   const close = () => setAt(null);
@@ -34,7 +31,7 @@ export default function PickMenu({ label, items, className = "", width = 240, ba
   const w = at ? Math.min(width, window.innerWidth - 24) : width;
   const left = at ? Math.min(Math.max(12, at.x - w / 2), window.innerWidth - w - 12) : 0;
   // Opens upwards when there isn't room below the label (rows are about 49 px; the list scrolls past 60% of the screen).
-  const tall = Math.min(items.length * 49 + items.filter((it) => it.section).length * 30 + 8, (at ? window.innerHeight : 0) * 0.6);
+  const tall = Math.min(items.length * 49 + 8, (at ? window.innerHeight : 0) * 0.6);
   const up = !!at && at.bottom + 12 + tall > window.innerHeight - 12 && at.top > window.innerHeight - at.bottom;
 
   return (
@@ -45,15 +42,12 @@ export default function PickMenu({ label, items, className = "", width = 240, ba
         onClick={() => (at ? close() : open())}
         aria-expanded={!!at}
         aria-haspopup="menu"
-        aria-label={ariaLabel}
-        className={bare ? className : `inline-flex items-center gap-1 font-semibold text-accent transition-opacity active:opacity-60 ${className}`}
+        className={`inline-flex items-center gap-1 font-semibold text-accent transition-opacity active:opacity-60 ${className}`}
       >
         {label}
-        {!bare && (
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" className={`transition-transform duration-200 ${at ? "rotate-180" : ""}`}>
-            <path d="m6 9 6 6 6-6" />
-          </svg>
-        )}
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" className={`transition-transform duration-200 ${at ? "rotate-180" : ""}`}>
+          <path d="m6 9 6 6 6-6" />
+        </svg>
       </button>
       {at &&
         createPortal(
@@ -69,7 +63,6 @@ export default function PickMenu({ label, items, className = "", width = 240, ba
               <ul className="relative max-h-[60dvh] overflow-y-auto overscroll-contain py-1">
                 {items.map((it) => (
                   <li key={`${it.label}|${it.href}`} className="border-b border-line/70 last:border-0">
-                    {it.section && <div className="px-4 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-wide text-muted">{it.section}</div>}
                     <Link
                       href={it.href}
                       role="menuitem"

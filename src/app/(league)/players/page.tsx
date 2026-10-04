@@ -4,7 +4,11 @@ import { getSettings, type Player } from "@/lib/league";
 import { STAT_COLS, fmt, seasonLabel, stat, type StatKey } from "@/lib/player-stats";
 import LocalTime from "@/components/LocalTime";
 import SearchBar from "@/components/SearchBar";
-import PickMenu from "@/components/PickMenu";
+import PlayerFilters from "@/components/PlayerFilters";
+import { getMe } from "@/lib/auth";
+import { gamesBetween } from "@/lib/nba";
+import { NBA_TEAMS } from "@/lib/nba-teams";
+import { addDays, isDay, monthDay, today, weekday } from "@/lib/dates";
 import Slide from "@/components/Slide";
 import { headshot, initials } from "@/lib/names";
 import { openWaivers } from "@/lib/waivers";
@@ -39,15 +43,18 @@ async function StatsTable({ sp }: { sp: Params }) {
   const sort = (sp.sort ?? "avg") as StatKey;
   const asc = sp.dir === "asc";
   const show = sp.show ?? "all";
+  const play = isDay(sp.play) ? sp.play : ""; // only players whose NBA team plays that day
   const q = (sp.q ?? "").trim().toLowerCase();
   const d = db();
   const { season } = await getSettings();
 
-  const [{ data: rows }, { data: owned }, { data: games }, waivers] = await Promise.all([
+  const [{ data: rows }, { data: owned }, { data: games }, waivers, me, playing] = await Promise.all([
     d.from("players").select("id, name, position, nba_team, nba_team_id, headshot, injury_status, injury_note, last_season").limit(2000),
     d.from("contracts").select("player_id, team:teams(id, name)").eq("active", true),
     d.from("games").select("id, start, home_team_id, away_team_id").gte("start", threeHoursAgo()).neq("state", "post").order("start").limit(200),
     openWaivers(),
+    getMe(),
+    play ? gamesBetween(play, play).then((gs) => new Set(gs.flatMap((g) => [g.home_team_id, g.away_team_id]))) : null,
   ]);
   const players = (rows ?? []) as Player[];
   const owner = new Map(((owned ?? []) as unknown as { player_id: string; team: { id: string; name: string } }[]).map((o) => [o.player_id, o.team]));
@@ -61,7 +68,10 @@ async function StatsTable({ sp }: { sp: Params }) {
   const list = players
     .filter((p) => !q || p.name.toLowerCase().includes(q))
     .filter((p) => !sp.pos || fits(p.position, sp.pos))
-    .filter((p) => (show === "fa" ? !owner.has(p.id) : show === "wa" ? waivers.has(p.id) : show === "owned" ? owner.has(p.id) : true))
+    .filter((p) => (show === "av" ? !owner.has(p.id) : show === "fa" ? !owner.has(p.id) && !waivers.has(p.id) : show === "wa" ? waivers.has(p.id) : show === "owned" ? owner.has(p.id) : true))
+    .filter((p) => sp.mine !== "0" || owner.get(p.id)?.id !== me?.team?.id)
+    .filter((p) => !playing || (!!p.nba_team_id && playing.has(p.nba_team_id)))
+    .filter((p) => !sp.team || p.nba_team === sp.team)
     .map((p) => ({ p, v: stat(p.last_season, sort, perGame) }))
     .sort((a, b) => (a.v == null ? 1 : b.v == null ? -1 : asc ? a.v - b.v : b.v - a.v) || a.p.name.localeCompare(b.p.name));
   const count = Math.max(50, Number(sp.n) || 50);
@@ -70,7 +80,7 @@ async function StatsTable({ sp }: { sp: Params }) {
 
   return (
     <>
-      <FilterBar sp={sp} show={show} perGame={perGame} />
+      <FilterBar sp={sp} show={show} play={play} perGame={perGame} teams={[...new Set(players.map((p) => p.nba_team).filter((t): t is string => !!t && t in NBA_TEAMS))].sort((a, b) => NBA_TEAMS[a].localeCompare(NBA_TEAMS[b]))} />
 
       <div className="-mx-4 overflow-x-auto border-y border-line bg-card sm:mx-0 sm:rounded-xl sm:border">
         <table className="t players whitespace-nowrap">
@@ -164,29 +174,25 @@ const pill = "h-10 min-w-12 px-4 inline-flex items-center justify-center rounded
 const chip = (on: boolean) => `${pill} transition-colors active:opacity-70 ${on ? "border-2 border-fg text-fg bg-card" : "bg-line/70 text-muted hover:text-fg"}`;
 
 // ESPN style filter row: search and filter buttons, then position chips. Search opens a full width box instead.
-function FilterBar({ sp, show, perGame }: { sp: Params; show: string; perGame: boolean }) {
-  const filtered = show !== "all" || !perGame;
+function FilterBar({ sp, show, play, perGame, teams }: { sp: Params; show: string; play: string; perGame: boolean; teams: string[] }) {
+  const filtered = show !== "all" || !perGame || sp.mine === "0" || !!play || !!sp.team;
   if (sp.search || sp.q) {
     const keep = Object.fromEntries(Object.entries(sp).filter(([k, v]) => v && k !== "q" && k !== "search")) as Record<string, string>;
     return <SearchBar path="/players" params={keep} initial={sp.q ?? ""} cancelHref={href(sp, { q: undefined, search: undefined })} />;
   }
-  // The filters open as a menu over the dimmed page (PickMenu): it sits on top of everything, never wider than the
-  // screen, and closes on a pick.
-  const pick = (section: string, name: string, value: string, options: [string, string][]) =>
-    options.map(([v, label], i) => ({ label, href: href(sp, { [name]: v || undefined, n: undefined }), on: value === v, section: i ? undefined : section }));
+  // The filter button opens ESPN's filter sheet (PlayerFilters): availability, who plays on a day this week, NBA team.
+  const now = today();
+  const days = Array.from({ length: 7 }, (_, i) => addDays(now, i)).map((d): [string, string] => [d, `${weekday(d).charAt(0)}${weekday(d).slice(1).toLowerCase()}, ${monthDay(d)}`]);
+  const keep = Object.fromEntries(Object.entries({ pos: sp.pos, sort: sp.sort, dir: sp.dir }).filter(([, v]) => v)) as Record<string, string>;
   return (
     <div className="flex items-center gap-2 overflow-x-auto pb-1 -mx-4 px-4 sm:mx-0 sm:px-0">
       <Link href={href(sp, { search: "1" })} prefetch={false} scroll={false} className={`${chip(false)} shrink-0`} aria-label="Search"><SearchIcon /></Link>
-      <PickMenu
-        bare
-        ariaLabel="Filters"
-        label={<FilterIcon />}
+      <PlayerFilters
         className={`${chip(filtered)} shrink-0`}
-        width={260}
-        items={[
-          ...pick("Players", "show", show, [["all", "All players"], ["fa", "Free agents"], ["wa", "Waivers"], ["owned", "Rostered"]]),
-          ...pick("Stats", "view", perGame ? "" : "tot", [["", "Averages"], ["tot", "Totals"]]),
-        ]}
+        value={{ show, mine: sp.mine === "0" ? "0" : "", play, team: sp.team ?? "", view: perGame ? "" : "tot" }}
+        days={days}
+        teams={teams.map((t): [string, string] => [t, NBA_TEAMS[t]])}
+        keep={keep}
       />
       <span className="h-8 w-px bg-line shrink-0 mx-1" />
       {[["", "All"], ...POSITIONS.map((p) => [p, p])].map(([v, label]) => (
@@ -199,6 +205,4 @@ function FilterBar({ sp, show, perGame }: { sp: Params; show: string; perGame: b
 const SearchIcon = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
 );
-const FilterIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M4 6h16M7 12h10M10 18h4" /></svg>
-);
+
