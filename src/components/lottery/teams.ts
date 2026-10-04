@@ -5,7 +5,7 @@ export type LotteryTeam = DrumTeam & { odds: number }; // odds: % chance at the 
 // The eight teams and their ball colours.
 const TEAMS: [name: string, color: string][] = [
   ["Theo", "#ef4444"], ["Elliot", "#f97316"], ["Ilan", "#facc15"], ["Benji", "#22c55e"],
-  ["Thiry", "#14b8a6"], ["Award", "#3b82f6"], ["Chomi", "#a855f7"], ["Brunson", "#ec4899"],
+  ["Thiry", "#14b8a6"], ["Awad", "#3b82f6"], ["Chomi", "#a855f7"], ["Brunson", "#ec4899"],
 ];
 const BALLS = 40; // 2.5% each, numbered 1 to 40
 
