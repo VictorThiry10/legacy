@@ -6,13 +6,13 @@ import TeamLogo from "./TeamLogo";
 import { useScrollLock } from "./ScrollLock";
 
 type Option = [value: string, label: string];
-export type FilterValues = { show: string; mine: string; play: string; team: string; view: string };
-const DEFAULTS: FilterValues = { show: "all", mine: "", play: "", team: "", view: "" };
+export type FilterValues = { show: string; mine: string; play: string; team: string; stats: string; view: string };
+const DEFAULTS: FilterValues = { show: "all", mine: "", play: "", team: "", stats: "", view: "" };
 
 // The Players filters, ESPN style: the button opens a sheet with one row per filter; a row opens its list of
 // choices; nothing changes until Apply. `keep` is the rest of the address (position, sort) to carry along.
-export default function PlayerFilters({ value, days, teams, keep, className }: {
-  value: FilterValues; days: Option[]; teams: Option[]; keep: Record<string, string>; className: string;
+export default function PlayerFilters({ value, days, teams, periods, keep, className }: {
+  value: FilterValues; days: Option[]; teams: Option[]; periods: Option[]; keep: Record<string, string>; className: string;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -26,7 +26,8 @@ export default function PlayerFilters({ value, days, teams, keep, className }: {
     { key: "show", title: "Availability", options: [["all", "All"], ["av", "Available"], ["fa", "Free agents"], ["wa", "Waivers"], ["owned", "Rostered"]] },
     { key: "play", title: "Playing", options: [["", "All"], ...days] },
     { key: "team", title: "Pro team", options: [["", "All teams"], ...teams] },
-    { key: "view", title: "Stats", options: [["", "Averages"], ["tot", "Totals"]] },
+    { key: "stats", title: "Stats", options: periods },
+    { key: "view", title: "Show as", options: [["", "Averages"], ["tot", "Totals"]] },
   ];
   const current = fields.find((f) => f.key === field)!;
   const dirty = (Object.keys(DEFAULTS) as (keyof FilterValues)[]).some((k) => draft[k] !== DEFAULTS[k]);

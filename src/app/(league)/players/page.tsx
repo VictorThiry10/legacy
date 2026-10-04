@@ -6,7 +6,9 @@ import LocalTime from "@/components/LocalTime";
 import SearchBar from "@/components/SearchBar";
 import PlayerFilters from "@/components/PlayerFilters";
 import { getMe } from "@/lib/auth";
-import { gamesBetween } from "@/lib/nba";
+import { gamesBetween, regularSeasonStarted } from "@/lib/nba";
+import { rpc } from "@/lib/db";
+import type { SeasonLine } from "@/lib/espn-parse";
 import { NBA_TEAMS } from "@/lib/nba-teams";
 import { addDays, isDay, monthDay, today, weekday } from "@/lib/dates";
 import Slide from "@/components/Slide";
@@ -16,6 +18,10 @@ import { openWaivers } from "@/lib/waivers";
 export const dynamic = "force-dynamic";
 
 type Params = Record<string, string | undefined>;
+// Which stat line the table shows: last season (the default), ESPN's projection, this season so far, or the last
+// 7, 14 or 30 days. The last three come from our own box scores, added up by the player_totals database function.
+const PERIODS = ["last", "proj", "season", "7", "14", "30"] as const;
+type Period = (typeof PERIODS)[number];
 const POSITIONS = ["PG", "SG", "SF", "PF", "C"];
 
 export default async function Players({ searchParams }: PageProps<"/players">) {
@@ -44,18 +50,28 @@ async function StatsTable({ sp }: { sp: Params }) {
   const asc = sp.dir === "asc";
   const show = sp.show ?? "all";
   const play = isDay(sp.play) ? sp.play : ""; // only players whose NBA team plays that day
+  const period: Period = PERIODS.includes(sp.stats as Period) ? (sp.stats as Period) : "last";
   const q = (sp.q ?? "").trim().toLowerCase();
   const d = db();
   const { season } = await getSettings();
 
-  const [{ data: rows }, { data: owned }, { data: games }, waivers, me, playing] = await Promise.all([
-    d.from("players").select("id, name, position, nba_team, nba_team_id, headshot, injury_status, injury_note, last_season").limit(2000),
+  const ours = period === "season" || period === "7" || period === "14" || period === "30";
+  const [{ data: rows }, { data: owned }, { data: games }, waivers, me, playing, totals] = await Promise.all([
+    d.from("players").select("id, name, position, nba_team, nba_team_id, headshot, injury_status, injury_note, last_season, projection").limit(2000),
     d.from("contracts").select("player_id, team:teams(id, name)").eq("active", true),
     d.from("games").select("id, start, home_team_id, away_team_id").gte("start", threeHoursAgo()).neq("state", "post").order("start").limit(200),
     openWaivers(),
     getMe(),
     play ? gamesBetween(play, play).then((gs) => new Set(gs.flatMap((g) => [g.home_team_id, g.away_team_id]))) : null,
+    ours
+      ? regularSeasonStarted().then((regular) => rpc("player_totals", { p_from: period === "season" ? `${season}-09-01` : addDays(today(), 1 - Number(period)), p_regular: regular }))
+      : null,
   ]);
+  const recent = new Map<string, SeasonLine>((totals ?? []).map((t) => [t.player_id, {
+    season: season + 1, gp: t.gp, min: Number(t.min), fgm: Number(t.fgm), fga: Number(t.fga), reb: Number(t.reb), ast: Number(t.ast),
+    stl: Number(t.stl), blk: Number(t.blk), to: Number(t.tov), tf: Number(t.tf), ej: Number(t.ej), pts: Number(t.pts), fpts: Number(t.fpts),
+  }]));
+  const lineOf = (p: Player) => (period === "last" ? p.last_season : period === "proj" ? p.projection : recent.get(p.id));
   const players = (rows ?? []) as Player[];
   const owner = new Map(((owned ?? []) as unknown as { player_id: string; team: { id: string; name: string } }[]).map((o) => [o.player_id, o.team]));
   const abbr = new Map(players.filter((p) => p.nba_team_id).map((p) => [p.nba_team_id!, p.nba_team ?? ""]));
@@ -72,15 +88,20 @@ async function StatsTable({ sp }: { sp: Params }) {
     .filter((p) => sp.mine !== "0" || owner.get(p.id)?.id !== me?.team?.id)
     .filter((p) => !playing || (!!p.nba_team_id && playing.has(p.nba_team_id)))
     .filter((p) => !sp.team || p.nba_team === sp.team)
-    .map((p) => ({ p, v: stat(p.last_season, sort, perGame) }))
+    .map((p) => ({ p, v: stat(lineOf(p), sort, perGame) }))
     .sort((a, b) => (a.v == null ? 1 : b.v == null ? -1 : asc ? a.v - b.v : b.v - a.v) || a.p.name.localeCompare(b.p.name));
   const count = Math.max(50, Number(sp.n) || 50);
   const shown = list.slice(0, count);
   const lastYear = players.find((p) => p.last_season?.season)?.last_season?.season ?? season;
+  const periods: [string, string][] = [
+    ["proj", `Projections (${seasonLabel(season + 1)})`], ["", `Last season (${seasonLabel(lastYear)})`],
+    ["7", "Last 7 days"], ["14", "Last 14 days"], ["30", "Last 30 days"], ["season", `This season (${seasonLabel(season + 1)})`],
+  ];
+  const heading = { last: `${seasonLabel(lastYear)} stats`, proj: `${seasonLabel(season + 1)} projections`, season: `${seasonLabel(season + 1)} stats`, 7: "Last 7 days", 14: "Last 14 days", 30: "Last 30 days" }[period];
 
   return (
     <>
-      <FilterBar sp={sp} show={show} play={play} perGame={perGame} teams={[...new Set(players.map((p) => p.nba_team).filter((t): t is string => !!t && t in NBA_TEAMS))].sort((a, b) => NBA_TEAMS[a].localeCompare(NBA_TEAMS[b]))} />
+      <FilterBar sp={sp} show={show} play={play} perGame={perGame} period={period} periods={periods} teams={[...new Set(players.map((p) => p.nba_team).filter((t): t is string => !!t && t in NBA_TEAMS))].sort((a, b) => NBA_TEAMS[a].localeCompare(NBA_TEAMS[b]))} />
 
       <div className="-mx-4 overflow-x-auto border-y border-line bg-card sm:mx-0 sm:rounded-xl sm:border">
         <table className="t players whitespace-nowrap">
@@ -88,7 +109,7 @@ async function StatsTable({ sp }: { sp: Params }) {
             <tr className="group">
               <th colSpan={3} className="text-center">Players</th>
               <th colSpan={2} className="text-center border-l border-line">Next game</th>
-              <th colSpan={STAT_COLS.length} className="text-center border-l border-line">{seasonLabel(lastYear)} stats</th>
+              <th colSpan={STAT_COLS.length} className="text-center border-l border-line">{heading}</th>
               <th colSpan={2} className="text-center border-l border-line">Fantasy pts</th>
             </tr>
             <tr>
@@ -100,13 +121,13 @@ async function StatsTable({ sp }: { sp: Params }) {
               {STAT_COLS.map((c, i) => (
                 <SortTh key={c.key} sp={sp} sort={sort} asc={asc} k={c.key} label={c.label} title={c.title} className={i === 0 ? "border-l border-line" : ""} />
               ))}
-              <SortTh sp={sp} sort={sort} asc={asc} k="tot" label="TOT" title="Fantasy points, whole season" className="border-l border-line" />
+              <SortTh sp={sp} sort={sort} asc={asc} k="tot" label="TOT" title="Fantasy points, total" className="border-l border-line" />
               <SortTh sp={sp} sort={sort} asc={asc} k="avg" label="AVG" title="Fantasy points per game" />
             </tr>
           </thead>
           <tbody>
             {shown.map(({ p }) => {
-              const ls = p.last_season;
+              const ls = lineOf(p);
               const o = owner.get(p.id);
               const g = p.nba_team_id ? nextGame.get(p.nba_team_id) : undefined;
               return (
@@ -174,13 +195,16 @@ const pill = "h-10 min-w-12 px-4 inline-flex items-center justify-center rounded
 const chip = (on: boolean) => `${pill} transition-colors active:opacity-70 ${on ? "border-2 border-fg text-fg bg-card" : "bg-line/70 text-muted hover:text-fg"}`;
 
 // ESPN style filter row: search and filter buttons, then position chips. Search opens a full width box instead.
-function FilterBar({ sp, show, play, perGame, teams }: { sp: Params; show: string; play: string; perGame: boolean; teams: string[] }) {
-  const filtered = show !== "all" || !perGame || sp.mine === "0" || !!play || !!sp.team;
+function FilterBar({ sp, show, play, perGame, period, periods, teams }: {
+  sp: Params; show: string; play: string; perGame: boolean; period: Period; periods: [string, string][]; teams: string[];
+}) {
+  const filtered = show !== "all" || !perGame || sp.mine === "0" || !!play || !!sp.team || period !== "last";
   if (sp.search || sp.q) {
     const keep = Object.fromEntries(Object.entries(sp).filter(([k, v]) => v && k !== "q" && k !== "search")) as Record<string, string>;
     return <SearchBar path="/players" params={keep} initial={sp.q ?? ""} cancelHref={href(sp, { q: undefined, search: undefined })} />;
   }
-  // The filter button opens ESPN's filter sheet (PlayerFilters): availability, who plays on a day this week, NBA team.
+  // The filter button opens ESPN's filter sheet (PlayerFilters): availability, who plays on a day this week, NBA team,
+  // which stats.
   const now = today();
   const days = Array.from({ length: 7 }, (_, i) => addDays(now, i)).map((d): [string, string] => [d, `${weekday(d).charAt(0)}${weekday(d).slice(1).toLowerCase()}, ${monthDay(d)}`]);
   const keep = Object.fromEntries(Object.entries({ pos: sp.pos, sort: sp.sort, dir: sp.dir }).filter(([, v]) => v)) as Record<string, string>;
@@ -189,7 +213,8 @@ function FilterBar({ sp, show, play, perGame, teams }: { sp: Params; show: strin
       <Link href={href(sp, { search: "1" })} prefetch={false} scroll={false} className={`${chip(false)} shrink-0`} aria-label="Search"><SearchIcon /></Link>
       <PlayerFilters
         className={`${chip(filtered)} shrink-0`}
-        value={{ show, mine: sp.mine === "0" ? "0" : "", play, team: sp.team ?? "", view: perGame ? "" : "tot" }}
+        value={{ show, mine: sp.mine === "0" ? "0" : "", play, team: sp.team ?? "", stats: period === "last" ? "" : period, view: perGame ? "" : "tot" }}
+        periods={periods}
         days={days}
         teams={teams.map((t): [string, string] => [t, NBA_TEAMS[t]])}
         keep={keep}

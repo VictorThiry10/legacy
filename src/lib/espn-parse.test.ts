@@ -47,7 +47,7 @@ test("injury report: player id pulled from profile link", () => {
 });
 
 // Real ESPN season totals, 2025-26 (trimmed to two players).
-import { parseSeasonStats, parseOverview } from "./espn-parse";
+import { parseSeasonStats, parseOverview, parseProjections } from "./espn-parse";
 const season = parseSeasonStats(JSON.parse(readFileSync(new URL("./fixtures/byathlete-2026.json", import.meta.url), "utf8")));
 
 test("season totals: Wembanyama 2025-26", () => {
@@ -93,4 +93,16 @@ test("fantasy positions: real ESPN eligibility slots", async () => {
   assert.equal(m.get("5104157"), "C");
   assert.equal(m.get("3945274"), "PG");
   assert.equal(m.has("1"), false);
+});
+
+test("parseProjections: ESPN's projected season line, scored our way; players without one are skipped", () => {
+  const proj = parseProjections(JSON.parse(readFileSync(new URL("./fixtures/fantasy-projections-2027.json", import.meta.url), "utf8")), 2027);
+  assert.equal(proj.size, 2);
+  const wemby = proj.get("5104157")!;
+  assert.deepEqual(
+    { season: wemby.season, gp: wemby.gp, min: wemby.min, pts: wemby.pts, reb: wemby.reb, ast: wemby.ast, stl: wemby.stl, blk: wemby.blk, to: wemby.to, fgm: wemby.fgm, fga: wemby.fga, tf: wemby.tf, ej: wemby.ej },
+    { season: 2027, gp: 67, min: 2137, pts: 1764, reb: 817, ast: 235, stl: 74, blk: 235, to: 194, fgm: 616, fga: 1226, tf: 0, ej: 0 },
+  );
+  // 1764 + 616 - 610 + 817 + 235*1.5 + 74*2.5 + 235*2.5 - 194*1.5
+  assert.equal(wemby.fpts, 3421);
 });

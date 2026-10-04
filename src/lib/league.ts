@@ -8,9 +8,10 @@ import { onIR } from "./lineup-store";
 
 export type Team = Row<"teams">;
 
-export type Player = Omit<Row<"players">, "updated_at" | "last_season" | "nba_team_id"> & {
+export type Player = Omit<Row<"players">, "updated_at" | "last_season" | "projection" | "nba_team_id"> & {
   nba_team_id?: string | null;
   last_season?: SeasonLine | null;
+  projection?: SeasonLine | null;
 };
 
 // League settings (one row). Everything the commissioner can change lives here. Read once per page (cache).
