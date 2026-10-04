@@ -1,14 +1,13 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { Bebas_Neue } from "next/font/google";
 import { AnimatePresence, motion } from "motion/react";
 import { useScrollLock } from "@/components/ScrollLock";
 import { drawLottery } from "@/lib/rules";
 import Machine, { type MachineApi } from "./Machine";
-import { randomField } from "./teams";
-
-// Same display face as the bidding site. Not preloaded: only whoever gets the pop-up downloads it.
-const display = Bebas_Neue({ weight: "400", subsets: ["latin"], variable: "--font-display", preload: false });
+import RookiePick from "./RookiePick";
+import { saveDraft } from "./draft";
+import { display } from "./font";
+import { ME, randomField } from "./teams";
 
 const wait = (ms: number) => new Promise((done) => setTimeout(done, ms));
 const pct = (n: number) => `${n % 1 ? n.toFixed(1) : n}%`;
@@ -38,6 +37,7 @@ export default function Lottery({ onClose }: { onClose: () => void }) {
   const [shown, setShown] = useState(0); // picks from this one down the board are revealed
   const [drawing, setDrawing] = useState<number | null>(null); // the pick whose balls are coming out
   const [closing, setClosing] = useState(false);
+  const [picking, setPicking] = useState(false); // the rookie pick screen, if I got #1
   const byId = Object.fromEntries(teams.map((t, i) => [t.id, { ...t, slot: i + 1 }]));
   const teamAt = (pick: number) => byId[draw.order[pick - 1]];
   const latest = phase !== "idle" && drawing === null && shown <= draw.order.length ? teamAt(shown) : undefined;
@@ -103,6 +103,8 @@ export default function Lottery({ onClose }: { onClose: () => void }) {
     m.mix(0);
     setPhase("done");
     scroller.current?.scrollTo({ top: 0, behavior: "smooth" });
+    // the draft starts: #1 is on the clock (the Team page's row and the pick screen read this)
+    saveDraft({ order: order.map((id) => ({ name: byId[id].name, color: byId[id].color })), at: Date.now() });
   }
 
   // New random odds, back to the start.
@@ -110,6 +112,7 @@ export default function Lottery({ onClose }: { onClose: () => void }) {
     run.current++;
     machine.current?.back();
     machine.current?.mix(0);
+    saveDraft(null);
     setTeams(randomField());
     setDraw({ order: [], top: 0 });
     setDrawing(null);
@@ -233,9 +236,15 @@ export default function Lottery({ onClose }: { onClose: () => void }) {
                     <button onClick={again} className="inline-flex items-center justify-center rounded-full border border-white/15 px-6 py-3 text-sm font-medium text-white/80 transition hover:bg-white/5">
                       Again
                     </button>
-                    <button onClick={() => setClosing(true)} className="btn-primary inline-flex items-center justify-center rounded-full px-6 py-3 text-sm font-semibold">
-                      Close
-                    </button>
+                    {draw.order[0] === ME ? (
+                      <button onClick={() => setPicking(true)} className="btn-primary inline-flex items-center justify-center rounded-full px-6 py-3 text-sm font-semibold">
+                        Pick your rookie
+                      </button>
+                    ) : (
+                      <button onClick={() => setClosing(true)} className="btn-primary inline-flex items-center justify-center rounded-full px-6 py-3 text-sm font-semibold">
+                        Close
+                      </button>
+                    )}
                   </motion.div>
                 )}
               </motion.div>
@@ -243,6 +252,7 @@ export default function Lottery({ onClose }: { onClose: () => void }) {
           </AnimatePresence>
         </section>
       </div>
+      {picking && <RookiePick onClose={() => setClosing(true)} />}
     </motion.div>
   );
 }

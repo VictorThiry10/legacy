@@ -7,6 +7,11 @@ const TEAMS: [name: string, color: string][] = [
 ];
 const STEP = 2.5; // odds come in steps of 2.5%
 
+// Who gets the lottery pop-up and the draft that follows. A test for now: Victor's team only, shown as Thiry.
+const OPEN_TO = new Set(["95b613dc-64b6-4d2f-8774-ba38fa257b60"]);
+export const inLotteryTest = (teamId: string) => OPEN_TO.has(teamId);
+export const ME = "Thiry";
+
 // Test field: random odds, in a random order of teams, best odds first (standing in for worst record first).
 // 100% is cut into eight random runs of 2.5%, so every team has a chance.
 export function randomField(): LotteryTeam[] {
