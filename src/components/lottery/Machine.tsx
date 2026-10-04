@@ -1,26 +1,25 @@
 "use client";
 import { useEffect, useImperativeHandle, useRef, type Ref } from "react";
-
-export type DrumTeam = { id: string; name: string; color: string; balls: number[] };
+import { LOTTERY_BALLS } from "@/lib/rules";
 
 // What the show (Lottery.tsx) asks of the machine.
 export type MachineApi = {
   mix: (level: number) => void; // air through the drum: 0 off, 1 full
-  draw: (teamId: string) => Promise<number>; // one of the team's balls goes up the tube; resolves with its number once it's in the cup
-  drain: (teamId: string) => void; // the team's balls still in the drum leave it
-  clearCup: () => void;
+  draw: (n: number, slot: number) => Promise<void>; // ball n goes up the tube into tray slot 0 to 3; resolves once it's there
+  back: () => void; // the tray's balls drop back into the drum
 };
 
 // World units: the drum is a circle of radius 1 around (0, 0), y grows downwards. The canvas shows WIDTH x (BOTTOM - TOP).
 const R = 1;
-const r = 0.09; // ball radius
-const BIG = 2.4; // a drawn ball grows this much in the cup
-const CUP_Y = -1.5;
-const TUBE_TOP = CUP_Y + r * BIG;
+const r = 0.13; // ball radius
+const BIG = 1.3; // a drawn ball grows this much in the tray
+const TRAY_Y = -1.5;
+const SLOTS = [-0.6, -0.2, 0.2, 0.6]; // the tray's four places
+const MOUTH = -(R - r); // where the tube takes a ball
 const TOP = -1.8;
 const BOTTOM = 1.25;
 const WIDTH = 2.4;
-export const ASPECT = WIDTH / (BOTTOM - TOP);
+const ASPECT = WIDTH / (BOTTOM - TOP);
 
 // Physics, per second, tuned so the balls tumble all over the drum (not round the wall). Fixed steps of H seconds,
 // so the turbulence feels the same on 60 and 120 Hz screens.
@@ -31,13 +30,14 @@ const SWIRL = 0.4; // air going round
 const NOISE = 200; // turbulence
 const DAMP = 0.6;
 const MAX = 3.4; // top speed
-const T_SUCK = 0.5; // s for a drawn ball to reach the top of the drum
-const T_RISE = 0.7; // s up the tube into the cup
-const T_POP = 0.32; // s for a ball leaving to pop and fade
+const T_SUCK = 0.35; // s for a drawn ball to reach the top of the drum
+const T_RISE = 0.4; // s up the tube
+const T_SLIDE = 0.25; // s along the tray to its place
+const T_BACK = 0.45; // s from the tray back into the drum
 
 type Ball = {
-  n: number; team: number; x: number; y: number; vx: number; vy: number;
-  state: "in" | "up" | "cup" | "out"; t: number; x0: number; y0: number; size: number; done?: (n: number) => void;
+  n: number; x: number; y: number; vx: number; vy: number;
+  state: "in" | "up" | "tray" | "back"; t: number; x0: number; y0: number; slot: number; size: number; done?: () => void;
 };
 
 type Look = { color: string; light: string; dark: string };
@@ -46,7 +46,7 @@ const TAU = Math.PI * 2;
 const lerp = (a: number, b: number, k: number) => a + (b - a) * k;
 const clamp = (v: number, lo = 0, hi = 1) => Math.min(hi, Math.max(lo, v));
 const easeIn = (k: number) => k * k * k;
-const easeOutBack = (k: number) => 1 + 2.2 * (k - 1) ** 3 + 1.2 * (k - 1) ** 2;
+const easeOut = (k: number) => 1 - (1 - k) ** 3;
 // #rrggbb mixed with white (amount > 0) or black (amount < 0)
 const shade = (hex: string, amount: number) => {
   const to = amount > 0 ? 255 : 0;
@@ -55,21 +55,19 @@ const shade = (hex: string, amount: number) => {
 };
 
 // Every ball somewhere in the drum, not overlapping. Gravity piles them up on the first frames.
-function seed(teams: DrumTeam[]): Ball[] {
+function seed(): Ball[] {
   const balls: Ball[] = [];
-  teams.forEach((tm, team) =>
-    tm.balls.forEach((n) => {
-      for (let k = 0; k < 300; k++) {
-        const a = Math.random() * TAU;
-        const d = Math.sqrt(Math.random()) * (R - r);
-        const x = Math.cos(a) * d;
-        const y = Math.sin(a) * d;
-        if (k < 299 && balls.some((b) => (b.x - x) ** 2 + (b.y - y) ** 2 < 4 * r * r)) continue;
-        balls.push({ n, team, x, y, vx: 0, vy: 0, state: "in", t: 0, x0: 0, y0: 0, size: 1 });
-        break;
-      }
-    }),
-  );
+  for (let n = 1; n <= LOTTERY_BALLS; n++) {
+    for (let k = 0; k < 300; k++) {
+      const a = Math.random() * TAU;
+      const d = Math.sqrt(Math.random()) * (R - r);
+      const x = Math.cos(a) * d;
+      const y = Math.sin(a) * d;
+      if (k < 299 && balls.some((b) => (b.x - x) ** 2 + (b.y - y) ** 2 < 4 * r * r)) continue;
+      balls.push({ n, x, y, vx: 0, vy: 0, state: "in", t: 0, x0: 0, y0: 0, slot: 0, size: 1 });
+      break;
+    }
+  }
   return balls;
 }
 
@@ -137,7 +135,7 @@ function step(balls: Ball[], air: number, dt: number) {
   }
 }
 
-// Balls on their way out: up the tube, sitting in the cup, or popping.
+// Balls outside the drum: on their way up the tube and along the tray, or on their way back.
 function animate(balls: Ball[], dt: number) {
   for (const b of balls) {
     if (b.state === "up") {
@@ -145,49 +143,59 @@ function animate(balls: Ball[], dt: number) {
       if (b.t < T_SUCK) {
         const k = easeIn(b.t / T_SUCK);
         b.x = lerp(b.x0, 0, k);
-        b.y = lerp(b.y0, -(R - r), k);
-      } else {
-        const k = clamp((b.t - T_SUCK) / T_RISE);
+        b.y = lerp(b.y0, MOUTH, k);
+      } else if (b.t < T_SUCK + T_RISE) {
+        const k = easeOut((b.t - T_SUCK) / T_RISE);
         b.x = 0;
-        b.y = lerp(-(R - r), CUP_Y, easeOutBack(k));
-        b.size = 1 + (BIG - 1) * clamp((TUBE_TOP - b.y) / (TUBE_TOP - CUP_Y));
+        b.y = lerp(MOUTH, TRAY_Y, k);
+        b.size = 1 + (BIG - 1) * clamp((k - 0.6) / 0.4);
+      } else {
+        const k = clamp((b.t - T_SUCK - T_RISE) / T_SLIDE);
+        b.x = lerp(0, SLOTS[b.slot], easeOut(k));
+        b.y = TRAY_Y;
+        b.size = BIG;
         if (k === 1) {
-          b.state = "cup";
-          b.t = 0;
-          b.done?.(b.n);
+          b.state = "tray";
+          b.done?.();
         }
       }
-    } else if (b.state === "cup") b.t += dt;
-    else if (b.state === "out") b.t += dt;
+    } else if (b.state === "back") {
+      b.t += dt; // starts below 0: the four leave one after the other
+      const k = clamp(b.t / T_BACK);
+      b.x = lerp(b.x0, 0, easeOut(clamp(k / 0.4)));
+      b.y = lerp(TRAY_Y, MOUTH, easeIn(clamp((k - 0.4) / 0.6)));
+      b.size = lerp(BIG, 1, clamp((k - 0.4) / 0.3));
+      if (k === 1) Object.assign(b, { state: "in", vx: (Math.random() - 0.5) * 0.6, vy: 1.2, size: 1 });
+    }
   }
-  return balls.filter((b) => !(b.state === "out" && b.t > T_POP));
 }
 
-function drawBall(ctx: CanvasRenderingContext2D, x: number, y: number, rad: number, look: Look, n: number, alpha: number) {
-  ctx.globalAlpha = alpha;
+// A white ping-pong ball with its number; in `tint` (the tray, once the team is known) a ball in the team's colour.
+function drawBall(ctx: CanvasRenderingContext2D, x: number, y: number, rad: number, n: number, tint: Look | null) {
   const g = ctx.createRadialGradient(x - rad * 0.35, y - rad * 0.4, rad * 0.05, x, y, rad);
-  g.addColorStop(0, look.light);
-  g.addColorStop(0.5, look.color);
-  g.addColorStop(1, look.dark);
+  g.addColorStop(0, tint ? tint.light : "#ffffff");
+  g.addColorStop(0.55, tint ? tint.color : "#e6e6ea");
+  g.addColorStop(1, tint ? tint.dark : "#8d8d98");
   ctx.fillStyle = g;
   ctx.beginPath();
   ctx.arc(x, y, rad, 0, TAU);
   ctx.fill();
-  ctx.fillStyle = "rgba(255,255,255,0.94)";
-  ctx.beginPath();
-  ctx.arc(x, y, rad * 0.56, 0, TAU);
-  ctx.fill();
+  if (tint) {
+    ctx.fillStyle = "rgba(255,255,255,0.94)";
+    ctx.beginPath();
+    ctx.arc(x, y, rad * 0.6, 0, TAU);
+    ctx.fill();
+  }
   ctx.fillStyle = "#111114";
-  ctx.font = `700 ${rad * (n > 9 ? 0.56 : 0.66)}px ui-sans-serif, system-ui, -apple-system, sans-serif`;
-  ctx.fillText(String(n), x, y + rad * 0.04);
-  ctx.fillStyle = "rgba(255,255,255,0.45)";
+  ctx.font = `700 ${rad * (tint ? 0.7 : 0.9)}px ui-sans-serif, system-ui, -apple-system, sans-serif`;
+  ctx.fillText(String(n), x, y + rad * 0.05);
+  ctx.fillStyle = "rgba(255,255,255,0.5)";
   ctx.beginPath();
-  ctx.ellipse(x - rad * 0.42, y - rad * 0.5, rad * 0.22, rad * 0.12, -0.6, 0, TAU);
+  ctx.ellipse(x - rad * 0.42, y - rad * 0.5, rad * 0.2, rad * 0.11, -0.6, 0, TAU);
   ctx.fill();
-  ctx.globalAlpha = 1;
 }
 
-function render(ctx: CanvasRenderingContext2D, w: number, balls: Ball[], looks: Look[], teamIds: string[], hi: string | null) {
+function render(ctx: CanvasRenderingContext2D, w: number, balls: Ball[], tint: Look | null) {
   const s = w / WIDTH;
   const cx = w / 2;
   const cy = -TOP * s;
@@ -227,45 +235,35 @@ function render(ctx: CanvasRenderingContext2D, w: number, balls: Ball[], looks: 
   ctx.arc(cx, cy, Rp, 0, TAU);
   ctx.fill();
 
-  // tube from the top of the drum up to the cup
-  const tw = rp * 1.3;
+  // tube from the top of the drum up to the tray; the tray glows in the team's colour once it's known
+  const tw = rp * 1.2;
+  const trayH = rp * BIG + 0.045 * s;
   ctx.fillStyle = "rgba(255,255,255,0.045)";
-  ctx.fillRect(cx - tw, Y(TUBE_TOP), tw * 2, Y(-R + 0.02) - Y(TUBE_TOP));
-
-  // cup ring, glowing in the colour of the ball sitting in it
-  const inCup = balls.find((b) => b.state === "cup" || (b.state === "up" && b.size > 1.6));
+  ctx.fillRect(cx - tw, Y(TRAY_Y) + trayH, tw * 2, Y(-R + 0.02) - Y(TRAY_Y) - trayH);
   ctx.lineWidth = 1.5;
   ctx.strokeStyle = "rgba(255,255,255,0.16)";
-  if (inCup) {
-    ctx.shadowColor = looks[inCup.team].color;
-    ctx.shadowBlur = 28;
+  if (tint) {
+    ctx.shadowColor = tint.color;
+    ctx.shadowBlur = 26;
   }
   ctx.beginPath();
-  ctx.arc(cx, Y(CUP_Y), rp * BIG + 0.035 * s, 0, TAU);
+  ctx.roundRect(X(SLOTS[0]) - trayH, Y(TRAY_Y) - trayH, X(SLOTS[3]) - X(SLOTS[0]) + trayH * 2, trayH * 2, trayH);
+  ctx.fill();
   ctx.stroke();
   ctx.shadowBlur = 0;
 
-  // balls: the drum's first, then the ones leaving on top
-  const order = { in: 0, out: 1, up: 2, cup: 2 };
-  for (const b of [...balls].sort((a, c) => order[a.state] - order[c.state])) {
-    let rad = rp * b.size;
-    let alpha = hi === null || teamIds[b.team] === hi || b.state !== "in" ? 1 : 0.16;
-    if (b.state === "out") {
-      const k = clamp(b.t / T_POP);
-      rad *= 1 + 0.35 * k;
-      alpha = 1 - k;
-    }
-    const bob = b.state === "cup" ? Math.sin(b.t * 2.4) * 0.012 * s : 0;
-    drawBall(ctx, X(b.x), Y(b.y) + bob, rad, looks[b.team], b.n, alpha);
+  // balls: the drum's first, then the ones outside it on top
+  for (const b of [...balls].sort((a, c) => Number(a.state !== "in") - Number(c.state !== "in"))) {
+    drawBall(ctx, X(b.x), Y(b.y), rp * b.size, b.n, b.state === "tray" ? tint : null);
   }
 
   // glass in front: tube walls, rim, a reflection
   ctx.strokeStyle = "rgba(255,255,255,0.22)";
   ctx.lineWidth = 1.5;
   ctx.beginPath();
-  ctx.moveTo(cx - tw, Y(TUBE_TOP));
+  ctx.moveTo(cx - tw, Y(TRAY_Y) + trayH);
   ctx.lineTo(cx - tw, Y(-R + 0.02));
-  ctx.moveTo(cx + tw, Y(TUBE_TOP));
+  ctx.moveTo(cx + tw, Y(TRAY_Y) + trayH);
   ctx.lineTo(cx + tw, Y(-R + 0.02));
   ctx.stroke();
   ctx.lineWidth = 2;
@@ -279,51 +277,39 @@ function render(ctx: CanvasRenderingContext2D, w: number, balls: Ball[], looks: 
   ctx.beginPath();
   ctx.arc(cx, cy, Rp * 0.86, Math.PI * 1.08, Math.PI * 1.42);
   ctx.stroke();
-  ctx.lineWidth = Rp * 0.025;
-  ctx.strokeStyle = "rgba(255,255,255,0.05)";
-  ctx.beginPath();
-  ctx.arc(cx, cy, Rp * 0.86, Math.PI * 1.5, Math.PI * 1.56);
-  ctx.stroke();
   ctx.lineCap = "butt";
 }
 
-// The lottery drum: every team's balls bouncing in a glass sphere, blown around when the air is on,
-// drawn balls going up a tube into a cup on top. Driven from Lottery.tsx through `ref`.
-export default function Machine({ teams, highlight, ref }: { teams: DrumTeam[]; highlight: string | null; ref: Ref<MachineApi> }) {
+// The lottery drum, like the NBA's: 14 numbered balls in a glass sphere, blown around when the air is on. Four are
+// drawn up a tube into a tray for each pick, then dropped back in. Driven from Lottery.tsx through `ref`.
+export default function Machine({ tint, ref }: { tint: string | null; ref: Ref<MachineApi> }) {
   const canvas = useRef<HTMLCanvasElement>(null);
-  const sim = useRef({ balls: [] as Ball[], air: 0, target: 0, hi: null as string | null });
+  const sim = useRef({ balls: [] as Ball[], air: 0, target: 0, tint: null as Look | null });
 
   useEffect(() => {
-    sim.current.hi = highlight;
-  }, [highlight]);
+    sim.current.tint = tint ? { color: tint, light: shade(tint, 0.55), dark: shade(tint, -0.45) } : null;
+  }, [tint]);
 
   useImperativeHandle(ref, () => ({
     mix: (level) => void (sim.current.target = level),
-    draw: (teamId) =>
-      new Promise<number>((done) => {
-        const team = teams.findIndex((t) => t.id === teamId);
-        // the suction grabs the team's ball nearest the top
-        const b = sim.current.balls.filter((b) => b.team === team && b.state === "in").sort((a, c) => a.y - c.y)[0];
-        if (!b) return done(0);
-        Object.assign(b, { state: "up", t: 0, x0: b.x, y0: b.y, done });
+    draw: (n, slot) =>
+      new Promise<void>((done) => {
+        const b = sim.current.balls.find((b) => b.n === n && b.state === "in");
+        if (!b) return done();
+        Object.assign(b, { state: "up", t: 0, x0: b.x, y0: b.y, slot, done });
       }),
-    drain: (teamId) => {
-      const team = teams.findIndex((t) => t.id === teamId);
+    back: () =>
       sim.current.balls
-        .filter((b) => b.team === team && b.state === "in")
-        .forEach((b, k) => Object.assign(b, { state: "out", t: -k * 0.05 }));
-    },
-    clearCup: () => sim.current.balls.filter((b) => b.state === "cup").forEach((b) => Object.assign(b, { state: "out", t: 0 })),
-  }), [teams]);
+        .filter((b) => b.state === "tray" || b.state === "up")
+        .forEach((b) => Object.assign(b, { state: "back", t: -b.slot * 0.07, x0: b.x, done: undefined })),
+  }), []);
 
   useEffect(() => {
     const el = canvas.current;
     const ctx = el?.getContext("2d");
     if (!el || !ctx) return;
-    const looks = teams.map((t) => ({ color: t.color, light: shade(t.color, 0.55), dark: shade(t.color, -0.45) }));
-    const ids = teams.map((t) => t.id);
     const state = sim.current;
-    Object.assign(state, { balls: seed(teams), air: 0, target: 0 }); // a new set of teams refills the drum
+    Object.assign(state, { balls: seed(), air: 0, target: 0 });
     let w = 0;
     const size = () => {
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -343,8 +329,8 @@ export default function Machine({ teams, highlight, ref }: { teams: DrumTeam[]; 
       last = now;
       state.air += (state.target - state.air) * Math.min(1, dt * 2.5);
       for (acc += dt; acc >= H; acc -= H) step(state.balls, state.air, H);
-      state.balls = animate(state.balls, dt);
-      if (w) render(ctx, w, state.balls, looks, ids, state.hi); // w is 0 while the drum is hidden (phones, before Play)
+      animate(state.balls, dt);
+      if (w) render(ctx, w, state.balls, state.tint); // w is 0 while the drum is hidden (phones, before Play)
       raf = requestAnimationFrame(frame);
     };
     raf = requestAnimationFrame(frame);
@@ -352,13 +338,13 @@ export default function Machine({ teams, highlight, ref }: { teams: DrumTeam[]; 
       cancelAnimationFrame(raf);
       ro.disconnect();
     };
-  }, [teams]);
+  }, []);
 
   return (
     <canvas
       ref={canvas}
       role="img"
-      aria-label="Lottery machine: a glass drum of numbered balls, one colour per team"
+      aria-label="Lottery machine: a glass drum of 14 numbered balls"
       className="block h-auto w-full"
       style={{ aspectRatio: ASPECT }}
     />

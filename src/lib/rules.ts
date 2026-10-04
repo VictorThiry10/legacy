@@ -193,26 +193,56 @@ export function lotteryOdds(worstToBest: string[]): Record<string, number> {
   return odds;
 }
 
-// Draw the full order: pick #1 by odds, then repeat with remaining teams (odds renormalised).
-export function drawLottery(worstToBest: string[], rand: () => number = Math.random): string[] {
-  const odds = lotteryOdds(worstToBest);
-  const left = [...worstToBest];
-  const order: string[] = [];
-  while (left.length) {
-    const total = left.reduce((a, id) => a + odds[id], 0);
-    let r = rand() * total;
-    let pick = left[left.length - 1];
-    for (const id of left) {
-      r -= odds[id];
-      if (r < 0) {
-        pick = id;
-        break;
-      }
-    }
-    order.push(pick);
-    left.splice(left.indexOf(pick), 1);
+// The draw works like the NBA's. 14 numbered balls, 4 drawn: 1,001 possible combinations, 1,000 of them handed out
+// by odds (25% is 250 combinations; one belongs to nobody). Only the top 4 picks are drawn, #1 first; a combination
+// that is nobody's, or belongs to a team already drawn, is drawn again. Everyone else follows, worst record first.
+export const LOTTERY_BALLS = 14;
+export const LOTTERY_PICKS = 4;
+
+export type Lottery = { order: string[]; combos: number[][] }; // combos[k]: the four balls that won pick k + 1, as drawn
+
+// Who owns each combination ("3-7-9-12" -> index of the team). The same table every time: the combinations are
+// shuffled with a fixed seed, then dealt out, so a team's share is spread over all the balls.
+const tables = new Map<string, Map<string, number>>();
+function lotteryTable(counts: number[]): Map<string, number> {
+  const key = counts.join();
+  const known = tables.get(key);
+  if (known) return known;
+  const all: string[] = [];
+  const N = LOTTERY_BALLS;
+  for (let a = 1; a <= N; a++) for (let b = a + 1; b <= N; b++) for (let c = b + 1; c <= N; c++) for (let d = c + 1; d <= N; d++) all.push(`${a}-${b}-${c}-${d}`);
+  all.pop(); // 11-12-13-14 is nobody's
+  let seed = 2026;
+  for (let i = all.length - 1; i > 0; i--) {
+    seed = (seed * 16807) % 2147483647;
+    const j = seed % (i + 1);
+    [all[i], all[j]] = [all[j], all[i]];
   }
-  return order;
+  const table = new Map<string, number>();
+  let next = 0;
+  counts.forEach((n, team) => {
+    for (let k = 0; k < n && next < all.length; k++) table.set(all[next++], team);
+  });
+  tables.set(key, table);
+  return table;
+}
+
+// Draw the lottery. `odds` are % chances at the #1 pick per team (the league's by default).
+export function drawLottery(worstToBest: string[], rand: () => number = Math.random, odds: Record<string, number> = lotteryOdds(worstToBest)): Lottery {
+  const counts = worstToBest.map((id) => Math.round((odds[id] ?? 0) * 10));
+  const owner = lotteryTable(counts);
+  const picks = Math.min(LOTTERY_PICKS, counts.filter((n) => n > 0).length);
+  const top: string[] = [];
+  const combos: number[][] = [];
+  while (top.length < picks) {
+    const balls = Array.from({ length: LOTTERY_BALLS }, (_, i) => i + 1);
+    const drawn = Array.from({ length: 4 }, () => balls.splice(Math.floor(rand() * balls.length), 1)[0]);
+    const team = worstToBest[owner.get([...drawn].sort((a, b) => a - b).join("-")) ?? -1];
+    if (!team || top.includes(team)) continue;
+    top.push(team);
+    combos.push(drawn);
+  }
+  return { order: [...top, ...worstToBest.filter((id) => !top.includes(id))], combos };
 }
 
 // Fantasy points from one box score line.
