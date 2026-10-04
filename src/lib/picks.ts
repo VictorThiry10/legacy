@@ -22,8 +22,11 @@ const clean = (rows: Raw[] | null): Pick[] =>
 // first time they're asked for, and topped up when a team joins or the season moves on.
 export async function picksOf(teamIds?: string[]): Promise<Pick[]> {
   const { season } = await getSettings();
-  const read = async () => {
-    const { data, error } = await db().from("draft_picks").select(SELECT).gte("year", season).lt("year", season + DRAFTS);
+  // `again` asks in a slightly different way (sorted). While a page is being drawn, an identical request gets the
+  // first one's answer back, so the read after creating picks would still come back short.
+  const read = async (again = false) => {
+    const q = db().from("draft_picks").select(SELECT).gte("year", season).lt("year", season + DRAFTS);
+    const { data, error } = await (again ? q.order("year") : q);
     if (error) fail(error);
     return clean(data as Raw[] | null);
   };
@@ -31,7 +34,7 @@ export async function picksOf(teamIds?: string[]): Promise<Pick[]> {
   let all = first;
   if (all.length < (teams ?? 0) * DRAFTS) {
     await rpc("draft_picks_fill", { p_first: season, p_years: DRAFTS });
-    all = await read();
+    all = await read(true);
   }
   return teamIds ? all.filter((p) => teamIds.includes(p.team_id)) : all;
 }
