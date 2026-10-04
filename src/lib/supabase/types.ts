@@ -68,11 +68,11 @@ export type Database = {
       players: Table<
         {
           espn_salary: number | null; headshot: string | null; id: string; injury_note: string | null; injury_status: string | null; last_season: Json | null;
-          name: string; nba_team: string | null; nba_team_id: string | null; position: string | null; rank: number | null; updated_at: string;
+          name: string; nba_team: string | null; nba_team_id: string | null; position: string | null; projection: Json | null; rank: number | null; updated_at: string;
         },
         {
           espn_salary?: number | null; headshot?: string | null; id: string; injury_note?: string | null; injury_status?: string | null; last_season?: Json | null;
-          name: string; nba_team?: string | null; nba_team_id?: string | null; position?: string | null; rank?: number | null; updated_at?: string;
+          name: string; nba_team?: string | null; nba_team_id?: string | null; position?: string | null; projection?: Json | null; rank?: number | null; updated_at?: string;
         }
       >;
       renounces: Table<
@@ -148,6 +148,10 @@ export type Database = {
       current_lineups: {
         Args: { p_teams: string[] | null; p_day: string };
         Returns: { day: string; player_id: string; saved_at: string; slot: string; team_id: string }[];
+      };
+      player_totals: {
+        Args: { p_from: string; p_regular: boolean };
+        Returns: { player_id: string; gp: number; min: number; pts: number; fgm: number; fga: number; reb: number; ast: number; stl: number; blk: number; tov: number; tf: number; ej: number; fpts: number }[];
       };
       extensions_decide: { Args: { p_team: string; p_season: number; p_rows: Json; p_note: string }; Returns: undefined };
       rescore_all: { Args: { w: Json }; Returns: undefined };

@@ -3,7 +3,7 @@ import "server-only";
 import { db } from "./supabase/server";
 import { getSettings } from "./league";
 import { refreshScores } from "./season";
-import { parseEligibility, parseInjuries, parseOverview, parseRoster, parseScoreboard, parseSeasonStats, parseSummary, type GameRow, type PlayerRow } from "./espn-parse";
+import { parseEligibility, parseInjuries, parseOverview, parseProjections, parseRoster, parseScoreboard, parseSeasonStats, parseSummary, type GameRow, type PlayerRow } from "./espn-parse";
 import { etDay } from "./dates";
 
 // ESPN's free public data feed (unofficial: if ESPN changes it, espn-parse.ts is the file to fix).
@@ -19,7 +19,7 @@ async function get<T>(path: string, base = BASE): Promise<T> {
 
 type EspnTeams = { sports: { leagues: { teams: { team: { id: string; abbreviation: string } }[] }[] }[] };
 
-// Every NBA roster, the league injury report and last season's stat line -> players table.
+// Every NBA roster, the league injury report, last season's stat line and this season's projection -> players table.
 export async function syncPlayers() {
   const { season } = await getSettings();
   const teams = (await get<EspnTeams>("/teams")).sports[0].leagues[0].teams.map((t) => t.team);
@@ -27,11 +27,11 @@ export async function syncPlayers() {
   const players: PlayerRow[] = rosters.flat();
   const injuries = new Map(parseInjuries(await get("/injuries")).map((i) => [i.playerId, i]));
   // ESPN names a season by the year it ends: our 2026-27 season's "last season" is ESPN's 2026.
-  const [last, positions] = await Promise.all([lastSeasonStats(season), fantasyPositions(season)]);
+  const [last, positions, projected] = await Promise.all([lastSeasonStats(season), fantasyPositions(season), projections(season)]);
   const now = new Date().toISOString();
   const rows = players.map((p) => {
     const inj = injuries.get(p.id);
-    return { ...p, position: positions.get(p.id) ?? p.position, injury_status: inj?.status ?? p.injury_status, injury_note: inj?.note ?? null, last_season: last.get(p.id) ?? null, updated_at: now };
+    return { ...p, position: positions.get(p.id) ?? p.position, injury_status: inj?.status ?? p.injury_status, injury_note: inj?.note ?? null, last_season: last.get(p.id) ?? null, projection: projected.get(p.id) ?? null, updated_at: now };
   });
   const { error } = await db().from("players").upsert(rows);
   if (error) throw new Error(error.message);
@@ -115,6 +115,25 @@ async function fantasyPositions(season: number) {
     return parseEligibility(await res.json());
   } catch {
     return new Map<string, string>(); // keep ESPN's basic G / F / C if this feed is down
+  }
+}
+
+// ESPN's projected stat line for every player, for the season being played (ESPN names it by the year it ends).
+async function projections(season: number) {
+  try {
+    const { scoring } = await getSettings();
+    const res = await fetch(`${FANTASY}/seasons/${season + 1}/segments/0/leaguedefaults/3?view=kona_player_info`, {
+      cache: "no-store",
+      headers: {
+        "x-fantasy-filter": JSON.stringify({
+          players: { limit: 1500, sortPercOwned: { sortPriority: 1, sortAsc: false }, filterStatsForTopScoringPeriodIds: { value: 2, additionalValue: [`10${season + 1}`] } },
+        }),
+      },
+    });
+    if (!res.ok) throw new Error(String(res.status));
+    return parseProjections(await res.json(), season + 1, scoring);
+  } catch {
+    return new Map(); // a bonus, like last season's stats: never block the roster refresh
   }
 }
 

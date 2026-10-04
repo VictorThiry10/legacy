@@ -178,6 +178,24 @@ export function parseSeasonStats(json: ByAthlete, w: Scoring = SCORING): Map<str
   return out;
 }
 
+// ---------- projected stat lines for the season about to be played (ESPN's fantasy game, one call) ----------
+// Each player carries a list of stat lines; the projection is the one with id "10" + the season's ESPN year. ESPN
+// numbers the stats (0 points, 1 blocks, 2 steals, 3 assists, 6 rebounds, 11 turnovers, 13 and 14 field goals made
+// and tried, 40 minutes, 42 games) and projects no technical fouls or ejections.
+type FantasyPlayers = { players?: { player?: { id: number | string; stats?: { id: string; stats?: Record<string, number> }[] } }[] };
+
+export function parseProjections(json: FantasyPlayers, espnYear: number, w: Scoring = SCORING): Map<string, SeasonLine> {
+  const out = new Map<string, SeasonLine>();
+  for (const { player } of json.players ?? []) {
+    const st = player?.stats?.find((s) => s.id === `10${espnYear}`)?.stats;
+    const n = (k: number) => Math.round(st?.[k] ?? 0);
+    if (!player || !st || !n(42)) continue;
+    const s = { pts: n(0), fgm: n(13), fga: n(14), reb: n(6), ast: n(3), stl: n(2), blk: n(1), to: n(11), tf: 0, ej: 0, win: 0 };
+    out.set(String(player.id), { season: espnYear, gp: n(42), min: n(40), ...s, fpts: fantasyPoints(s, w) });
+  }
+  return out;
+}
+
 // ---------- one player's page: latest note, outlook, ranks, headlines ----------
 export type NewsItem = { headline: string; description: string | null; published: string | null; url: string | null; image?: string | null; athleteIds?: string[] };
 export type Overview = {
