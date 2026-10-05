@@ -9,7 +9,7 @@ import { money } from "@/lib/rules";
 import PendingRow, { ContractIcon } from "./PendingRow";
 import { useScrollLock } from "./ScrollLock";
 
-// The one-off contract extensions pop-up: tick last season's players to keep for 1 year at last season's salary.
+// The one-off contract extensions pop-up: pick one of last season's players to keep for 1 year at last season's salary.
 // It opens by itself on the first page of a visit; "Later" closes it, and the Team page's to-do row opens it again.
 // Deciding (even "no extensions") closes it for good.
 export default function Extensions({ offer }: { offer: ExtensionOffer }) {
@@ -35,12 +35,12 @@ export function ExtensionsRow({ offer }: { offer: ExtensionOffer }) {
 function Sheet({ offer, onClose }: { offer: ExtensionOffer; onClose: () => void }) {
   useScrollLock();
   const router = useRouter();
-  const [picked, setPicked] = useState<Set<string>>(new Set());
+  const [picked, setPicked] = useState<string | null>(null); // one player at most
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
   const [pending, start] = useTransition();
 
-  const chosen = offer.players.filter((p) => picked.has(p.id));
+  const chosen = offer.players.filter((p) => p.id === picked);
   const total = chosen.reduce((a, p) => a + p.salary, 0);
   const spaceAfter = offer.capSpace - total;
   const rosterAfter = offer.rosterCount + chosen.length;
@@ -48,17 +48,13 @@ function Sheet({ offer, onClose }: { offer: ExtensionOffer; onClose: () => void 
 
   const toggle = (id: string) => {
     setError(null);
-    setPicked((s) => {
-      const next = new Set(s);
-      if (!next.delete(id)) next.add(id);
-      return next;
-    });
+    setPicked((was) => (was === id ? null : id));
   };
 
   const decide = () => {
     const ask = chosen.length
-      ? `Extend ${chosen.map((p) => p.name).join(", ")} for ${money(total)}? This is final.`
-      : "No extensions? This is final.";
+      ? `Extend ${chosen[0].name} for ${money(total)}? This is final.`
+      : "No extension? This is final.";
     if (!window.confirm(ask)) return;
     start(async () => {
       const r = await decideExtensions(chosen.map((p) => p.id));
@@ -79,7 +75,7 @@ function Sheet({ offer, onClose }: { offer: ExtensionOffer; onClose: () => void 
         <div className="p-5 pb-3">
           <h2 id="ext-title" className="text-lg font-semibold">Contract extensions</h2>
           <p className="mt-1 text-sm text-muted">
-            {done ?? "One more year at last season's salary."}
+            {done ?? "One player, one more year at last season's salary."}
           </p>
         </div>
 
@@ -87,7 +83,7 @@ function Sheet({ offer, onClose }: { offer: ExtensionOffer; onClose: () => void 
           <>
             <ul data-scrolls className="min-h-0 flex-1 space-y-1.5 overflow-y-auto overscroll-contain px-3">
               {offer.players.map((p) => {
-                const on = picked.has(p.id);
+                const on = picked === p.id;
                 return (
                   <li key={p.id}>
                     <button
@@ -125,7 +121,7 @@ function Sheet({ offer, onClose }: { offer: ExtensionOffer; onClose: () => void 
               <div className="flex gap-2">
                 <button type="button" onClick={close} disabled={pending} className="btn-ghost">Later</button>
                 <button type="button" onClick={decide} disabled={pending || tooMany} className="btn flex-1">
-                  {pending ? "Saving…" : chosen.length ? `Extend ${chosen.length} · ${money(total)}` : "No extensions"}
+                  {pending ? "Saving…" : chosen.length ? `Extend · ${money(total)}` : "No extension"}
                 </button>
               </div>
             </div>

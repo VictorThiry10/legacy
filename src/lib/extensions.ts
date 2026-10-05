@@ -7,8 +7,8 @@ import { capSpaces, problemsFor, rosters } from "./roster";
 import { onIR } from "./lineup-store";
 import { money } from "./rules";
 
-// Contract extensions, a one-off. Each GM can keep any of the players whose contract ran out with last season
-// (2025-26), for 1 more year at last season's salary. Rosters and salaries are from the Legacy_Draft Google sheet
+// Contract extensions, a one-off. Each GM can keep one of the players whose contract ran out with last season
+// (2025-26), for 1 more year at last season's salary (one player this season; two from next season on). Rosters and salaries are from the Legacy_Draft Google sheet
 // (each GM's own tab, the 25-26 column, players with nothing in 26-27). GMs see a pop-up once, until they decide.
 
 const VICTOR = "95b613dc-64b6-4d2f-8774-ba38fa257b60";
@@ -24,6 +24,7 @@ const ELLIOT = "34ee3e73-cbae-4375-8d22-5e68c3e28082";
 const OPEN_TO = new Set([VICTOR, NATHAN, ILAN, AWAD, CHOMSTER, THEO, BENJI, ELLIOT]);
 
 const M = 1_000_000;
+const MAX = 1; // players a GM can extend
 // ESPN player id -> last season's salary, per team.
 const EXPIRED: Record<string, Record<string, number>> = {
   [VICTOR]: {
@@ -147,11 +148,12 @@ const offerFor = cache(async (teamId: string): Promise<ExtensionOffer | null> =>
   };
 });
 
-// Extend the chosen players (none is fine: that's a decision too). Checked against the cap and roster size first.
+// Extend the chosen player (none is fine: that's a decision too). Checked against the cap and roster size first.
 export async function extend(team: Team, playerIds: string[]) {
   const expired = EXPIRED[team.id];
   if (!OPEN_TO.has(team.id) || !expired) throw new Error("Extensions aren't open for your team.");
   const ids = [...new Set(playerIds)];
+  if (ids.length > MAX) throw new Error(`You can extend ${MAX} player this season.`);
   if (ids.some((id) => !(id in expired))) throw new Error("You can only extend your own players from last season.");
   const { season } = await getSettings();
   const rows = ids.map((id) => ({ player: id, salary: expired[id] }));
