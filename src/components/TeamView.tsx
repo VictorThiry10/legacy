@@ -10,7 +10,7 @@ import type { SeasonLine } from "@/lib/espn-parse";
 import Slide, { BACK, FORWARD } from "./Slide";
 import DatePicker from "./DatePicker";
 import Pending from "./Pending";
-import { inLotteryTest } from "./lottery/teams";
+import { draftRow } from "@/lib/draft";
 import PushPrompt from "./PushPrompt";
 import { money } from "@/lib/rules";
 import { headshot } from "@/lib/names";
@@ -43,10 +43,11 @@ export default async function TeamView({ team, editable, base, sp, back, tradeHr
     return `${base}?${q}`;
   };
 
-  // my to-do card (free agency, trade offers, extensions): starts now, shown by Pending below
+  // my to-do card (rookie draft, free agency, trade offers, extensions): starts now, shown by Pending below
   const offers = editable ? openOffers(team.id) : null;
   const extensions = editable ? extensionOffer(team).catch(() => null) : null;
   const freeAgency = editable ? appStatus(team).catch(() => null) : null;
+  const rookieDraft = editable ? draftRow(team).catch(() => null) : null;
   const [{ rules, season }, roster, games, abbr] = await Promise.all([getSettings(), rosters([team.id]), gamesBetween(day, day), teamAbbrs()]);
   const [rows, lines] = await Promise.all([lineupFor(team.id, day, roster), boxLines(roster.map((p) => p.id))]);
   const players = new Map(roster.map((p) => [p.id, p]));
@@ -124,7 +125,7 @@ export default async function TeamView({ team, editable, base, sp, back, tradeHr
       )}
 
       {editable && <PushPrompt />}
-      {offers && extensions && freeAgency && <Pending offers={offers} extensions={extensions} freeAgency={freeAgency} rookieDraft={inLotteryTest(team.id)} />}
+      {offers && extensions && freeAgency && rookieDraft && <Pending offers={offers} extensions={extensions} freeAgency={freeAgency} rookieDraft={rookieDraft} />}
 
       <div className="flex items-center border-y border-line -mx-4 sm:mx-0 sm:rounded-xl sm:border sm:bg-card">
         <Link href={href({ d: addDays(day, -1) })} replace={!!back} prefetch={true} transitionTypes={BACK} className="px-4 py-2 text-xl text-muted hover:text-fg" aria-label="Previous day">‹</Link>
