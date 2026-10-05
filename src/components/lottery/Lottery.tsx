@@ -41,12 +41,7 @@ export default function Lottery({ field, onClose }: { field: LotteryTeam[]; onCl
   const [myTurn, setMyTurn] = useState(false); // after the show: I hold the first pick
   const [closing, setClosing] = useState(false);
   const [picking, setPicking] = useState(false);
-  // The places a team's record gave it before the draw (teams level on record share theirs): moving out of them is the news.
-  const places = (id: string) => {
-    const mine = field.find((t) => t.id === id);
-    const tied = field.map((t, i) => (t.record === mine?.record ? i + 1 : 0)).filter(Boolean);
-    return { first: Math.min(...tied), last: Math.max(...tied) };
-  };
+  const place = (id: string) => field.findIndex((t) => t.id === id) + 1; // where its record put a team before the draw
 
   useScrollLock(); // the app behind stays still; the pop-up itself scrolls (data-scrolls)
 
@@ -199,8 +194,7 @@ export default function Lottery({ field, onClose }: { field: LotteryTeam[]; onCl
                 <ol className="divide-y divide-white/[0.07] border-y border-white/[0.07]">
                   {order.map((id, k) => {
                     const t = k + 1 >= shown ? gm(id) : undefined;
-                    const was = places(id);
-                    const moved = !t ? 0 : k + 1 < was.first ? was.first - (k + 1) : k + 1 > was.last ? was.last - (k + 1) : 0;
+                    const moved = t ? place(id) - (k + 1) : 0;
                     return (
                       <li key={k} className={`grid h-10 grid-cols-[2rem_1fr_auto] items-center gap-x-3 px-2 transition-colors duration-700 sm:h-12 ${t && drawing === null && k + 1 === shown && phase === "running" ? "bg-white/[0.06]" : ""}`}>
                         <span className="font-display num text-2xl text-white/40">{k + 1}</span>
