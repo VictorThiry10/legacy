@@ -5,6 +5,8 @@ import { currentOf, matchups, scores, standings, type Matchup, type Standing } f
 import { money } from "@/lib/rules";
 import { recentMoves } from "@/lib/roster";
 import { picksOf } from "@/lib/picks";
+import { draftRecord } from "@/lib/draft";
+import type { Team } from "@/lib/league";
 import { initials } from "@/lib/names";
 import { weekLabel } from "@/lib/dates";
 import { load } from "@/lib/guard";
@@ -13,6 +15,7 @@ import TeamAvatar from "@/components/TeamAvatar";
 import PickMenu from "@/components/PickMenu";
 import Slide from "@/components/Slide";
 import PushToggle from "@/components/PushToggle";
+import LotteryButton from "@/components/lottery/LotteryButton";
 
 export const dynamic = "force-dynamic";
 
@@ -43,7 +46,7 @@ export default async function League({ searchParams }: PageProps<"/league">) {
         {view === "standings" && <Standings teams={teams} myId={myId} />}
         {view === "scoreboard" && <Scoreboard team={team} pick={typeof sp.week === "string" ? sp.week : undefined} />}
         {view === "playoffs" && <Playoffs team={team} />}
-        {view === "cap" && <Cap teams={teams} myId={myId} rosterMax={rules.rosterMax} />}
+        {view === "cap" && <Cap teams={teams} me={me?.team ?? undefined} rosterMax={rules.rosterMax} />}
 
         <div className="flex flex-wrap items-center gap-3 border-t border-line bg-card px-4 py-4 text-sm sm:rounded-b-2xl">
           {me?.team?.is_commish && <Link href="/settings" transitionTypes={["nav-forward"]} className="btn-ghost">Commissioner settings</Link>}
@@ -182,8 +185,9 @@ async function Playoffs({ team }: { team: (id: string | null) => TeamSummary | u
   );
 }
 
-async function Cap({ teams, myId, rosterMax }: { teams: TeamSummary[]; myId?: string; rosterMax: number }) {
-  const [moves, picks] = await Promise.all([recentMoves(20), picksOf()]);
+async function Cap({ teams, me, rosterMax }: { teams: TeamSummary[]; me?: Team; rosterMax: number }) {
+  const myId = me?.id;
+  const [moves, picks, draft] = await Promise.all([recentMoves(20), picksOf(), me ? draftRecord(me).catch(() => null) : null]);
   return (
     <div className="bg-card">
       <div className={`grid grid-cols-[minmax(0,1fr)_3rem_4rem_4rem] items-center gap-2 border-y border-line px-4 py-2 ${head}`}>
@@ -197,6 +201,45 @@ async function Cap({ teams, myId, rosterMax }: { teams: TeamSummary[]; myId?: st
           <span className={`text-right num font-semibold ${t.capSpace < 0 ? "text-bad" : ""}`}>{money(t.capSpace)}</span>
         </div>
       ))}
+      {/* this year's rookie draft: the lottery's order and who took whom, with the lottery to watch again.
+          A GM who hasn't watched it yet only gets the button: no spoiler. */}
+      {draft && (
+        <>
+          <div className={`flex items-center justify-between border-y border-line px-4 py-2 ${head}`}>
+            <span>Rookie draft</span>
+            {draft.watched && <LotteryButton field={draft.field} className="font-semibold normal-case tracking-normal text-accent">Replay the lottery</LotteryButton>}
+          </div>
+          {!draft.watched && (
+            <div className="border-b border-line/60 px-4 py-3">
+              <LotteryButton field={draft.field} className="btn w-full">Watch the lottery</LotteryButton>
+            </div>
+          )}
+          {draft.picks.map((p) => {
+            const t = teams.find((x) => x.id === p.team);
+            const from = p.original !== p.team ? teams.find((x) => x.id === p.original) : undefined;
+            return (
+              <div key={p.slot} className={`grid grid-cols-[1.25rem_minmax(0,1fr)_auto] items-center gap-3 border-b border-line/60 px-4 py-2.5 ${p.team === myId ? "bg-blue/10" : ""}`}>
+                <span className="num text-sm font-bold text-muted">{p.slot}</span>
+                <span className="flex min-w-0 items-center gap-2.5">
+                  <TeamAvatar name={t?.name} size="sm" />
+                  <span className="min-w-0 leading-tight">
+                    <span className="block truncate text-sm font-semibold">{t?.name ?? "?"}</span>
+                    {from && <span className="block truncate text-xs text-muted">from {from.name}</span>}
+                  </span>
+                </span>
+                {p.rookie ? (
+                  <span className="text-right leading-tight">
+                    <span className="block text-sm font-medium">{p.rookie.name}</span>
+                    <span className="num block text-xs text-muted">{money(p.rookie.salary)} · {p.rookie.years} yr</span>
+                  </span>
+                ) : (
+                  <span className={`text-xs ${p.slot === draft.onClock ? "font-semibold text-accent" : "text-muted"}`}>{p.slot === draft.onClock ? "On the clock" : "—"}</span>
+                )}
+              </div>
+            );
+          })}
+        </>
+      )}
       {/* rookie draft picks: who holds what. A traded pick carries the initials of the team it came from. */}
       <div className={`border-y border-line px-4 py-2 ${head}`}>Draft picks</div>
       {teams.map((t) => {

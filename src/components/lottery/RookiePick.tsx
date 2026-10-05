@@ -107,6 +107,19 @@ export default function RookiePick({ onClose }: { onClose: () => void }) {
       </button>
       <h1 className="font-display silver-text px-4 pt-[max(3.5rem,env(safe-area-inset-top))] text-center text-5xl leading-none">{slot ? `Pick #${slot}` : "Rookie Draft"}</h1>
 
+      {/* the draft order: who has picked (dimmed), who is on the clock (lit) */}
+      {data && !drafted && !player && (
+        <ol aria-label="Draft order" className="mx-auto flex w-full max-w-md flex-wrap justify-center gap-1.5 px-4 pt-4">
+          {data.picks.map((p) => (
+            <li key={p.slot} className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs ${p.slot === data.onClock ? "border-white bg-white/10" : "border-white/10"} ${p.player ? "opacity-40" : ""}`}>
+              <span className="num text-white/50">{p.slot}</span>
+              <span aria-hidden className="h-2 w-2 rounded-full" style={{ background: gm(p.team).color }} />
+              {gm(p.team).name}
+            </li>
+          ))}
+        </ol>
+      )}
+
       {player ? (
         <div key={player.id} data-scrolls className="mx-auto flex min-h-0 w-full max-w-md flex-1 animate-[fade_250ms_ease-out] flex-col items-center justify-center overflow-y-auto px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] text-center">
           <img src={photo(player, 400)} alt="" className="h-44 w-60 shrink-0 object-cover object-top" />
