@@ -45,13 +45,14 @@ const EXPIRED: Record<string, Record<string, number>> = {
     "4066354": 1 * M, // Payton Pritchard
     "4683692": 3 * M, // Cason Wallace
   },
+  // Ilan's list is from the Team tab (his roster on draft day, the players with 1 year), not his own tab: Victor's call.
   [ILAN]: {
-    "4066383": 5 * M, // Miles Bridges
     "3147657": 6 * M, // Mikal Bridges
-    "4576087": 2 * M, // Peyton Watson
-    "4278129": 6 * M, // Deandre Ayton
-    "4869780": 3 * M, // Derik Queen
-    "4278039": 2 * M, // Nickeil Alexander-Walker
+    "4066383": 5 * M, // Miles Bridges
+    "4437244": 5 * M, // Jalen Green
+    "4066457": 5 * M, // Austin Reaves
+    "3934719": 4 * M, // OG Anunoby
+    "4397140": 3 * M, // Kevin Porter Jr.
     "5160992": 3 * M, // Alex Sarr
   },
   [AWAD]: {
@@ -95,8 +96,8 @@ const EXPIRED: Record<string, Record<string, number>> = {
     "3059318": 2 * M, // Joel Embiid
     "4251": 1 * M, // Paul George
   },
-  // Elliot's tab also lists Ayton at 1, but so does Ilan's at 6 (above): left with Ilan until the two agree.
   [ELLIOT]: {
+    "4278129": 1 * M, // Deandre Ayton
     "3059319": 1 * M, // Andrew Wiggins
     "4433287": 1 * M, // Brandon Miller ("Miller" on the sheet)
     "4395724": 1 * M, // Immanuel Quickley
