@@ -26,5 +26,5 @@ export function lotteryField(): LotteryTeam[] {
   return GMS.map((g) => ({ ...g, odds: odds[g.id] }));
 }
 
-// Draw the lottery for the field (rules.ts): the draft order, team ids, #1 first.
+// Draw the lottery for the field (rules.ts): the draft order, team ids, #1 first. Every pick is drawn.
 export const drawField = (rand: () => number = Math.random) => drawLottery(GMS.map((g) => g.id), rand).order;

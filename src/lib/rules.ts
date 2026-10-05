@@ -193,13 +193,13 @@ export function lotteryOdds(worstToBest: string[]): Record<string, number> {
   return odds;
 }
 
-// The draw works like the NBA's. 14 numbered balls, 4 drawn: 1,001 possible combinations, 1,000 of them handed out
-// by odds (25% is 250 combinations; one belongs to nobody). Only the top 4 picks are drawn, #1 first; a combination
-// that is nobody's, or belongs to a team already drawn, is drawn again. Everyone else follows, worst record first.
+// The draw uses the NBA's machine: 14 numbered balls, 4 drawn, so 1,001 possible combinations, 1,000 of them handed
+// out by odds (25% is 250 combinations; one belongs to nobody). Unlike the NBA, every pick is drawn, #1 first:
+// a combination that is nobody's, or belongs to a team already drawn, is drawn again, so each pick goes to one of
+// the teams still left, by their odds. The last team left takes the last pick.
 export const LOTTERY_BALLS = 14;
-export const LOTTERY_PICKS = 4;
 
-export type Lottery = { order: string[]; combos: number[][] }; // combos[k]: the four balls that won pick k + 1, as drawn
+export type Lottery = { order: string[]; combos: number[][] }; // combos[k]: the four balls that won pick k + 1, as drawn (none for the last team left)
 
 // Who owns each combination ("3-7-9-12" -> index of the team). The same table every time: the combinations are
 // shuffled with a fixed seed, then dealt out, so a team's share is spread over all the balls.
@@ -231,7 +231,8 @@ function lotteryTable(counts: number[]): Map<string, number> {
 export function drawLottery(worstToBest: string[], rand: () => number = Math.random, odds: Record<string, number> = lotteryOdds(worstToBest)): Lottery {
   const counts = worstToBest.map((id) => Math.round((odds[id] ?? 0) * 10));
   const owner = lotteryTable(counts);
-  const picks = Math.min(LOTTERY_PICKS, counts.filter((n) => n > 0).length);
+  const inPlay = counts.filter((n) => n > 0).length;
+  const picks = inPlay === worstToBest.length ? inPlay - 1 : inPlay; // the last team left needs no draw
   const top: string[] = [];
   const combos: number[][] = [];
   while (top.length < picks) {

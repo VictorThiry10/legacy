@@ -82,11 +82,11 @@ export default function Lottery({ field, onClose }: { field: LotteryTeam[]; onCl
     setShown(picks.length + 1);
     setPhase("running");
     scroller.current?.scrollTo({ top: 0, behavior: "smooth" }); // on a phone the drum takes over the screen
-    // last pick first, up to #1. The picks the balls decide (the top four) get a longer mix.
+    // last pick first, up to #1, which gets the longest mix
     for (let p = picks.length; p >= 1; p--) {
       setDrawing(p);
       m.mix(1);
-      await wait(p === 1 ? 2800 : p <= 4 ? 1500 : 1100);
+      await wait(p === 1 ? 2800 : p <= 3 ? 1600 : 1200);
       if (!live()) return;
       await m.draw();
       if (!live()) return;
