@@ -15,9 +15,13 @@ const VICTOR = "95b613dc-64b6-4d2f-8774-ba38fa257b60";
 const NATHAN = "0fd155b1-6b98-4888-95ca-4c51f4a7d383";
 const ILAN = "3801e216-2d94-4a2f-8127-d93f23349271";
 const AWAD = "9e6068c5-bed0-4056-b4c7-33a6bc30f26f";
+const CHOMSTER = "27b5d5b3-b282-44d9-9eea-d59f1dc5d9e3";
+const THEO = "6d5b886f-4f6e-4ac1-a76d-3ac1e9f02f55";
+const BENJI = "eadbbfbf-84dd-4e9a-a4bf-5ac10295035d";
+const ELLIOT = "34ee3e73-cbae-4375-8d22-5e68c3e28082";
 
-// Who gets the pop-up. Victor tests it first; add NATHAN, ILAN and AWAD to open it to everyone.
-const OPEN_TO = new Set([VICTOR]);
+// Who gets the pop-up: every GM, now that all eight teams are in.
+const OPEN_TO = new Set([VICTOR, NATHAN, ILAN, AWAD, CHOMSTER, THEO, BENJI, ELLIOT]);
 
 const M = 1_000_000;
 // ESPN player id -> last season's salary, per team.
@@ -60,6 +64,45 @@ const EXPIRED: Record<string, Record<string, number>> = {
     "4396971": 1 * M, // Naz Reid
     "4432848": 1 * M, // Jaime Jaquez Jr.
     "5061575": 1 * M, // Kon Knueppel
+  },
+  [CHOMSTER]: {
+    "6478": 15 * M, // Nikola Vucevic
+    "4066320": 9 * M, // Desmond Bane
+    "4395651": 7 * M, // Coby White
+    "6430": 5 * M, // Jimmy Butler III
+    "3913176": 2 * M, // Brandon Ingram
+    "4066336": 2 * M, // Lauri Markkanen
+    "4278067": 1 * M, // Nic Claxton
+  },
+  // Théo's tab has two tables: the right-hand one is his roster at the end of the season.
+  [THEO]: {
+    "3992": 15 * M, // James Harden
+    "3995": 1 * M, // Jrue Holiday
+    "4683634": 1 * M, // Bennedict Mathurin
+    "4222252": 1 * M, // Isaiah Hartenstein
+    "3064290": 1 * M, // Aaron Gordon ("Gordon" on the sheet)
+    "4591725": 1 * M, // Ryan Rollins
+    "4431671": 1 * M, // Jaden McDaniels ("McDaniels" on the sheet)
+    "4576060": 1 * M, // Ryan Kalkbrenner
+  },
+  // Paul George and Joel Embiid: the 25-26 column (1 and 2), not the bigger number before their names.
+  [BENJI]: {
+    "4066261": 17 * M, // Bam Adebayo
+    "3978": 7 * M, // DeMar DeRozan
+    "4433621": 4 * M, // Jalen Duren
+    "3064440": 4 * M, // Zach LaVine
+    "4396907": 3 * M, // Darius Garland
+    "3059318": 2 * M, // Joel Embiid
+    "4251": 1 * M, // Paul George
+  },
+  // Elliot's tab also lists Ayton at 1, but so does Ilan's at 6 (above): left with Ilan until the two agree.
+  [ELLIOT]: {
+    "3059319": 1 * M, // Andrew Wiggins
+    "4433287": 1 * M, // Brandon Miller ("Miller" on the sheet)
+    "4395724": 1 * M, // Immanuel Quickley
+    "4711272": 1 * M, // Reed Sheppard
+    "4914336": 1 * M, // Shaedon Sharpe
+    "4431736": 1 * M, // Toumani Camara
   },
 };
 
