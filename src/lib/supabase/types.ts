@@ -29,9 +29,15 @@ export type Database = {
         [FK<"cap_adjustments_team_id_fkey", "team_id", "teams">]
       >;
       draft_picks: Table<
-        { id: string; original_team: string; team_id: string; year: number },
-        { id?: string; original_team: string; team_id: string; year: number },
-        [FK<"draft_picks_original_team_fkey", "original_team", "teams">, FK<"draft_picks_team_id_fkey", "team_id", "teams">]
+        { id: string; original_team: string; picked_at: string | null; player_id: string | null; slot: number | null; team_id: string; year: number },
+        { id?: string; original_team: string; picked_at?: string | null; player_id?: string | null; slot?: number | null; team_id: string; year: number },
+        [FK<"draft_picks_original_team_fkey", "original_team", "teams">, FK<"draft_picks_team_id_fkey", "team_id", "teams">, FK<"draft_picks_player_id_fkey", "player_id", "players">]
+      >;
+      rookie_lotteries: Table<{ drawn_at: string; odds: Json; year: number }, { drawn_at?: string; odds: Json; year: number }>;
+      rookie_lottery_views: Table<
+        { seen_at: string; team_id: string; year: number },
+        { seen_at?: string; team_id: string; year: number },
+        [FK<"rookie_lottery_views_team_id_fkey", "team_id", "teams">]
       >;
       contracts: Table<
         { acquired_via: string; active: boolean; created_at: string; id: string; player_id: string; salary: number; season_signed: number; team_id: string; years: number },
@@ -180,6 +186,8 @@ export type Database = {
         Returns: string;
       };
       draft_picks_fill: { Args: { p_first: number; p_years: number }; Returns: undefined };
+      rookie_lottery_save: { Args: { p_year: number; p_order: string[]; p_odds: Json }; Returns: boolean };
+      rookie_pick: { Args: { p_year: number; p_team: string; p_player: string; p_salary: number; p_years: number; p_season: number; p_note: string }; Returns: number };
       trade_offer_accept: { Args: { p_offer: string; p_season: number }; Returns: undefined };
       save_lineup: { Args: { p_day: string; p_rows: Json; p_team: string }; Returns: undefined };
       score_lineup_points: { Args: { p_from: string; p_to: string }; Returns: undefined };

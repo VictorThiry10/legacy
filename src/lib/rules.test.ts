@@ -98,22 +98,33 @@ test("lottery odds match the deck and sum to 100", () => {
   assert.ok(Math.abs(counts.t4 / 20000 - 0.075) < 0.01);
 });
 
-test("lottery draws the top 4 like the NBA, the rest go by record", () => {
+test("lottery draws every pick: each one among the teams left, by their odds", () => {
   const ids = ["w1", "w2", "w3", "w4", "t1", "t2", "t3", "t4"];
   let seed = 7;
   const rand = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
-  for (let i = 0; i < 500; i++) {
+  const last: Record<string, number> = {};
+  const second: Record<string, number> = {}; // who picks 2nd when w1 picks 1st
+  let w1First = 0;
+  const N = 20000;
+  for (let i = 0; i < N; i++) {
     const { order, combos } = drawLottery(ids, rand);
     assert.deepEqual([...order].sort(), [...ids].sort()); // every team once
-    assert.equal(combos.length, 4);
+    assert.equal(combos.length, 7); // the last team left isn't drawn
     for (const c of combos) {
       assert.equal(new Set(c).size, 4);
       assert.ok(c.every((n) => n >= 1 && n <= 14));
     }
-    // picks 5 to 8: the teams not drawn, worst record first, so nobody drops more than 4 places
-    assert.deepEqual(order.slice(4), ids.filter((id) => !order.slice(0, 4).includes(id)));
-    order.forEach((id, k) => assert.ok(k - ids.indexOf(id) <= 4));
+    last[order[7]] = (last[order[7]] ?? 0) + 1;
+    if (order[0] === "w1") {
+      w1First++;
+      second[order[1]] = (second[order[1]] ?? 0) + 1;
+    }
   }
+  // the bottom picks aren't set by record: the worst team can fall to last, and does so less often than a top team
+  assert.ok(last.w1 > 0 && last.w1 < last.t4);
+  // with w1 gone, w2 has 20 of the 75 points left
+  assert.ok(Math.abs(second.w2 / w1First - 20 / 75) < 0.02);
+  assert.ok(Math.abs(second.t1 / w1First - 7.5 / 75) < 0.02);
 });
 
 test("lottery takes other odds, and a team with none is never drawn", () => {

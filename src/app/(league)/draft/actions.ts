@@ -1,32 +1,33 @@
 "use server";
 import { requireTeam } from "@/lib/auth";
-import { rookieClass } from "@/lib/espn";
-import { getSettings } from "@/lib/league";
-import { yearsLeft } from "@/lib/rules";
-import { db } from "@/lib/supabase/server";
-import { LENGTHS, ROOKIES, type DraftOptions } from "@/components/lottery/rookies";
+import { draftBoard, draftOptions, lotteryWatched, pickRookie, playLottery, type DraftBoard, type DraftOptions } from "@/lib/draft";
+import { guard, type ActionResult } from "@/lib/guard";
 
-// The rookie pick screen: every other rookie nobody has under contract (at the minimum salary), and the contract
-// lengths my team has a slot for. The limits are free agency's (1 x 4 years, 2 x 3, 3 x 2): they count every
-// active contract by the seasons it has left, this one included. 1 year is always open.
-export async function draftOptions(): Promise<DraftOptions> {
+// The lottery pop-up's Play: the saved draft order, original teams, #1 first (drawn now if nobody has yet).
+export async function playRookieLottery(): Promise<{ order: string[] } | { error: string }> {
+  try {
+    await requireTeam();
+    return { order: await playLottery() };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Something went wrong." };
+  }
+}
+
+// The show is over for this GM: his pop-up doesn't open again. Says whether he is on the clock.
+export async function watchedRookieLottery(): Promise<{ myTurn: boolean }> {
   const team = await requireTeam();
-  const [{ season, rules }, rookies, { data: mine }] = await Promise.all([
-    getSettings(),
-    rookieClass(),
-    db().from("contracts").select("years, season_signed").eq("team_id", team.id).eq("active", true),
-  ]);
-  const priced = new Set(ROOKIES.map((r) => r.id));
-  const rest = rookies.filter((r) => !priced.has(r.id));
-  const { data: signed } = await db().from("contracts").select("player_id").eq("active", true).in("player_id", rest.map((r) => r.id));
-  const gone = new Set((signed ?? []).map((c) => c.player_id));
-  const held: Record<number, number> = {};
-  for (const c of mine ?? []) held[yearsLeft(c, season)] = (held[yearsLeft(c, season)] ?? 0) + 1;
-  return {
-    others: rest
-      .filter((r) => !gone.has(r.id))
-      .map((r) => ({ id: r.id, name: r.name, position: r.position ?? "", nba: r.nba_team, salary: rules.minSalary }))
-      .sort((a, b) => a.name.localeCompare(b.name)),
-    open: LENGTHS.filter((len) => rules.slotLimits[len] === undefined || (held[len] ?? 0) < rules.slotLimits[len]),
-  };
+  await lotteryWatched(team);
+  return { myTurn: (await draftBoard(team)).myTurn };
+}
+
+// The pick screen: where the draft stands, the rest of the rookie class, the contract lengths I can still sign.
+export async function rookieDraft(): Promise<DraftBoard & DraftOptions> {
+  const team = await requireTeam();
+  const [board, options] = await Promise.all([draftBoard(team), draftOptions(team)]);
+  return { ...board, ...options };
+}
+
+// Make my pick.
+export async function draftRookie(playerId: string, years: number): Promise<ActionResult> {
+  return guard(async () => pickRookie(await requireTeam(), playerId, years));
 }

@@ -7,7 +7,7 @@ import TimeZone from "@/components/TimeZone";
 import NavTracker from "@/components/NavTracker";
 import Extensions from "@/components/Extensions";
 import LotteryPopup from "@/components/lottery/Popup";
-import { inLotteryTest } from "@/components/lottery/teams";
+import { lotteryPrompt } from "@/lib/draft";
 
 // The league app: tab bar on top once you have a team.
 export default async function LeagueLayout({ children }: { children: React.ReactNode }) {
@@ -25,8 +25,11 @@ export default async function LeagueLayout({ children }: { children: React.React
           <ExtensionsPrompt team={me.team} />
         </Suspense>
       )}
-      {/* the rookie lottery pop-up: a test for now, with random odds */}
-      {me?.team && inLotteryTest(me.team.id) && <LotteryPopup />}
+      {me?.team && (
+        <Suspense fallback={null}>
+          <LotteryPrompt team={me.team} />
+        </Suspense>
+      )}
       <TimeZone />
       <NavTracker />
     </>
@@ -37,4 +40,10 @@ export default async function LeagueLayout({ children }: { children: React.React
 async function ExtensionsPrompt({ team }: { team: Team }) {
   const offer = await extensionOffer(team).catch(() => null);
   return offer ? <Extensions offer={offer} /> : null;
+}
+
+// The rookie lottery pop-up, until this GM has watched it (lib/draft.ts). It never holds up or breaks the page.
+async function LotteryPrompt({ team }: { team: Team }) {
+  const field = await lotteryPrompt(team).catch(() => null);
+  return field ? <LotteryPopup field={field} /> : null;
 }

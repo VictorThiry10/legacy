@@ -36,6 +36,10 @@ export async function picksOf(teamIds?: string[]): Promise<Pick[]> {
     await rpc("draft_picks_fill", { p_first: season, p_years: DRAFTS });
     all = await read(true);
   }
+  // a pick already used in the rookie draft (lib/draft.ts) is no longer something to trade
+  const { data: used } = await db().from("draft_picks").select("id").not("player_id", "is", null);
+  const spent = new Set((used ?? []).map((p) => p.id));
+  all = all.filter((p) => !spent.has(p.id));
   return teamIds ? all.filter((p) => teamIds.includes(p.team_id)) : all;
 }
 

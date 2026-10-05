@@ -2,16 +2,15 @@
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { useScrollLock } from "@/components/ScrollLock";
-import { drawLottery } from "@/lib/rules";
+import { playRookieLottery, watchedRookieLottery } from "@/app/(league)/draft/actions";
+import { gm, type LotteryTeam } from "@/lib/lottery";
 import Capsule from "./Capsule";
 import Machine, { type MachineApi } from "./Machine";
 import RookiePick from "./RookiePick";
-import { saveDraft } from "./draft";
 import { display } from "./font";
-import { ME, randomField } from "./teams";
 
 const wait = (ms: number) => new Promise((done) => setTimeout(done, ms));
-const pct = (n: number) => `${n % 1 ? n.toFixed(1) : n}%`;
+const pct = (n: number) => `${Number.isInteger(n) ? n : n.toFixed(1)}%`;
 
 // A team's colour as a small ball, for lists.
 function Chip({ color, size = 14 }: { color: string; size?: number }) {
@@ -24,24 +23,25 @@ function Chip({ color, size = 14 }: { color: string; size?: number }) {
   );
 }
 
-// The rookie draft lottery as a full screen show over the league app: the odds, then Play. The draw is the league's
-// (rules.ts, like the NBA's) and is made up front; the show reveals it last pick first. For every pick a ball is
-// drawn from the drum, comes to the middle, opens, and the GM's name is inside (Capsule.tsx).
-// TEST for now: random odds (teams.ts) and a draw made in this browser, so nobody else sees the same order.
-export default function Lottery({ onClose }: { onClose: () => void }) {
+// The rookie draft lottery as a full screen show over the league app: the odds, then Play. Play asks the server
+// for the draft order (drawn once, for everybody: lib/draft.ts) and the show reveals it last pick first. For every
+// pick a ball is drawn from the drum, comes to the middle, opens, and the GM's name is inside (Capsule.tsx).
+// `field`: the teams, worst record first, with their odds.
+export default function Lottery({ field, onClose }: { field: LotteryTeam[]; onClose: () => void }) {
   const machine = useRef<MachineApi>(null);
   const scroller = useRef<HTMLDivElement>(null);
-  const run = useRef(0); // bumped by Again and on close, so a show in progress stops
+  const run = useRef(0); // bumped on close, so a show in progress stops
   const opened = useRef<(() => void) | null>(null); // the ball on screen has just opened
-  const [teams, setTeams] = useState(randomField);
-  const [phase, setPhase] = useState<"idle" | "running" | "done">("idle");
-  const [order, setOrder] = useState<string[]>([]); // the draw, #1 first
+  const [phase, setPhase] = useState<"idle" | "loading" | "running" | "done">("idle");
+  const [order, setOrder] = useState<string[]>([]); // the draw: team ids, #1 first
   const [shown, setShown] = useState(0); // picks from this one down the board are revealed
   const [drawing, setDrawing] = useState<number | null>(null); // the pick whose ball is on its way
   const [reveal, setReveal] = useState<number | null>(null); // the pick whose ball is in the middle of the screen
+  const [error, setError] = useState<string | null>(null);
+  const [myTurn, setMyTurn] = useState(false); // after the show: I hold the first pick
   const [closing, setClosing] = useState(false);
-  const [picking, setPicking] = useState(false); // the rookie pick screen, if I got #1
-  const byId = Object.fromEntries(teams.map((t, i) => [t.id, { ...t, slot: i + 1 }]));
+  const [picking, setPicking] = useState(false);
+  const place = (id: string) => field.findIndex((t) => t.id === id) + 1; // where its record put a team before the draw
 
   useScrollLock(); // the app behind stays still; the pop-up itself scrolls (data-scrolls)
 
@@ -68,20 +68,25 @@ export default function Lottery({ onClose }: { onClose: () => void }) {
     if (!m || phase !== "idle") return;
     const me = ++run.current;
     const live = () => run.current === me;
-    // TEST: drawn again until I hold #3, to try waiting for the two teams ahead. The odds on screen stay the random ones.
-    const odds = Object.fromEntries(teams.map((t) => [t.id, t.odds]));
-    let result = drawLottery(teams.map((t) => t.id), Math.random, odds);
-    for (let i = 0; i < 5000 && result.order[2] !== ME; i++) result = drawLottery(teams.map((t) => t.id), Math.random, odds);
-    const { order, combos } = result;
-    setOrder(order);
-    setShown(order.length + 1);
+    setError(null);
+    setPhase("loading");
+    const drawn = await playRookieLottery().catch(() => ({ error: "Could not reach the server. Try again." }));
+    if (!live()) return;
+    if ("error" in drawn || !drawn.order.length) {
+      setError("error" in drawn ? drawn.error : "The lottery isn't ready yet.");
+      setPhase("idle");
+      return;
+    }
+    const picks = drawn.order;
+    setOrder(picks);
+    setShown(picks.length + 1);
     setPhase("running");
     scroller.current?.scrollTo({ top: 0, behavior: "smooth" }); // on a phone the drum takes over the screen
-    // last pick first, up to #1. The picks the lottery decides (the top ones) get a longer mix.
-    for (let p = order.length; p >= 1; p--) {
+    // last pick first, up to #1, which gets the longest mix
+    for (let p = picks.length; p >= 1; p--) {
       setDrawing(p);
       m.mix(1);
-      await wait(p === 1 ? 2800 : p <= combos.length ? 1500 : 1100);
+      await wait(p === 1 ? 2800 : p <= 3 ? 1600 : 1200);
       if (!live()) return;
       await m.draw();
       if (!live()) return;
@@ -100,24 +105,15 @@ export default function Lottery({ onClose }: { onClose: () => void }) {
       }
     }
     m.mix(0);
+    // watched: the pop-up won't open again, and the draft's row appears on the Team page
+    const after = await watchedRookieLottery().catch(() => ({ myTurn: false }));
+    if (!live()) return;
+    setMyTurn(after.myTurn);
     setPhase("done"); // #1's name stays up
     scroller.current?.scrollTo({ top: 0, behavior: "smooth" });
-    // the draft starts: #1 is on the clock (the Team page's row and the pick screen read this)
-    saveDraft({ order: order.map((id) => ({ name: byId[id].name, color: byId[id].color })), at: Date.now() });
   }
 
-  // New random odds, back to the start.
-  function again() {
-    run.current++;
-    machine.current?.reset();
-    saveDraft(null);
-    setTeams(randomField());
-    setOrder([]);
-    setDrawing(null);
-    setReveal(null);
-    setPhase("idle");
-  }
-
+  const showing = phase === "running" || phase === "done";
   return (
     <motion.div
       ref={scroller}
@@ -143,21 +139,20 @@ export default function Lottery({ onClose }: { onClose: () => void }) {
       <div className={`mx-auto grid max-w-5xl items-start gap-x-12 gap-y-6 px-4 pb-[max(3rem,env(safe-area-inset-bottom))] sm:px-6 md:grid-cols-2 md:grid-rows-[auto_1fr] md:pt-[max(3.5rem,env(safe-area-inset-top))] ${phase === "running" ? "pt-[max(1rem,env(safe-area-inset-top))]" : "pt-[max(3.5rem,env(safe-area-inset-top))]"}`}>
         <header className={`text-center md:col-start-2 md:text-left ${phase === "running" ? "hidden md:block" : ""}`}>
           <h1 className="font-display silver-text text-[2.5rem] leading-none sm:text-6xl">Rookie Draft Lottery</h1>
-          <div className="mt-2 inline-block rounded-full border border-white/15 px-2.5 py-1 text-[10px] font-semibold uppercase leading-none tracking-[0.2em] text-white/60">Test</div>
         </header>
 
         {/* On a phone the drum is sized by the screen's height, so the whole board fits under it. */}
         <section aria-label="Lottery machine" className={`mx-auto w-full max-w-[min(420px,42dvh)] md:col-start-1 md:row-span-2 md:row-start-1 md:max-w-[420px] ${phase === "running" ? "" : "hidden md:block"}`}>
           <div className="relative animate-[fade_500ms_ease-out]">
             <div className={`transition-opacity duration-500 ${reveal !== null ? "opacity-25" : ""}`}>
-              <Machine ref={machine} count={teams.length} />
+              <Machine ref={machine} count={field.length} />
             </div>
             {/* the ball that was just drawn, over the dimmed drum */}
             <div aria-live="polite">
               <AnimatePresence>
                 {reveal !== null && (
                   <motion.div key={reveal} className="absolute inset-0" exit={{ opacity: 0 }} transition={{ duration: 0.25 }}>
-                    <Capsule pick={reveal} name={byId[order[reveal - 1]].name} color={byId[order[reveal - 1]].color} long={reveal === 1} onOpen={() => opened.current?.()} />
+                    <Capsule pick={reveal} name={gm(order[reveal - 1]).name} color={gm(order[reveal - 1]).color} long={reveal === 1} onOpen={() => opened.current?.()} />
                   </motion.div>
                 )}
               </AnimatePresence>
@@ -167,35 +162,39 @@ export default function Lottery({ onClose }: { onClose: () => void }) {
 
         <section className="w-full md:col-start-2">
           <AnimatePresence mode="wait" initial={false}>
-            {phase === "idle" ? (
+            {!showing ? (
               <motion.div key="odds" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.25 }}>
                 <h2 className="text-[11px] font-semibold uppercase tracking-[0.3em] text-white/50">#1 pick odds</h2>
                 <ul className="mt-3 divide-y divide-white/[0.07] border-y border-white/[0.07]">
-                  {teams.map((t) => (
+                  {field.map((t) => (
                     <li key={t.id} className="grid grid-cols-[auto_1fr_auto] items-center gap-x-3 py-2.5">
                       <Chip color={t.color} size={18} />
                       <div className="min-w-0">
-                        <div className="font-medium">{t.name}</div>
+                        <div className="flex items-baseline gap-2">
+                          <span className="font-medium">{t.name}</span>
+                          <span className="num text-xs text-white/40">{t.record}</span>
+                        </div>
                         <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-white/[0.07]">
-                          <div className="h-full rounded-full" style={{ width: `${(t.odds / teams[0].odds) * 100}%`, background: t.color }} />
+                          <div className="h-full rounded-full" style={{ width: `${(t.odds / field[0].odds) * 100}%`, background: t.color }} />
                         </div>
                       </div>
                       <div className="font-display num text-2xl leading-none">{pct(t.odds)}</div>
                     </li>
                   ))}
                 </ul>
-                <button onClick={play} className="btn-primary mt-6 inline-flex w-full items-center justify-center gap-2 rounded-full px-6 py-3.5 text-base font-semibold transition active:scale-[0.98]">
+                <button onClick={play} disabled={phase !== "idle"} className="btn-primary mt-6 inline-flex w-full items-center justify-center gap-2 rounded-full px-6 py-3.5 text-base font-semibold transition active:scale-[0.98] disabled:opacity-60">
                   <svg aria-hidden viewBox="0 0 16 16" className="h-4 w-4 fill-current"><path d="M4 2.5v11l9-5.5z" /></svg>
                   Play
                 </button>
+                {error && <p role="alert" className="mt-3 text-center text-sm text-rose-400">{error}</p>}
               </motion.div>
             ) : (
               <motion.div key="order" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
                 {/* the board fills from the bottom: the last pick is revealed first */}
                 <ol className="divide-y divide-white/[0.07] border-y border-white/[0.07]">
                   {order.map((id, k) => {
-                    const t = k + 1 >= shown ? byId[id] : undefined;
-                    const moved = t ? t.slot - (k + 1) : 0;
+                    const t = k + 1 >= shown ? gm(id) : undefined;
+                    const moved = t ? place(id) - (k + 1) : 0;
                     return (
                       <li key={k} className={`grid h-10 grid-cols-[2rem_1fr_auto] items-center gap-x-3 px-2 transition-colors duration-700 sm:h-12 ${t && drawing === null && k + 1 === shown && phase === "running" ? "bg-white/[0.06]" : ""}`}>
                         <span className="font-display num text-2xl text-white/40">{k + 1}</span>
@@ -222,19 +221,10 @@ export default function Lottery({ onClose }: { onClose: () => void }) {
                   })}
                 </ol>
                 {phase === "done" && (
-                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-6 grid grid-cols-2 gap-3">
-                    <button onClick={again} className="inline-flex items-center justify-center rounded-full border border-white/15 px-6 py-3 text-sm font-medium text-white/80 transition hover:bg-white/5">
-                      Again
+                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-6">
+                    <button onClick={() => (myTurn ? setPicking(true) : setClosing(true))} className="btn-primary inline-flex w-full items-center justify-center rounded-full px-6 py-3.5 text-base font-semibold">
+                      {myTurn ? "Pick your rookie" : "Close"}
                     </button>
-                    {order[0] === ME ? (
-                      <button onClick={() => setPicking(true)} className="btn-primary inline-flex items-center justify-center rounded-full px-6 py-3 text-sm font-semibold">
-                        Pick your rookie
-                      </button>
-                    ) : (
-                      <button onClick={() => setClosing(true)} className="btn-primary inline-flex items-center justify-center rounded-full px-6 py-3 text-sm font-semibold">
-                        Close
-                      </button>
-                    )}
                   </motion.div>
                 )}
               </motion.div>
