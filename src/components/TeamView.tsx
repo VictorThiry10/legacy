@@ -47,7 +47,8 @@ export default async function TeamView({ team, editable, base, sp, back, tradeHr
   // my to-do card (rookie draft, free agency, trade offers, extensions): starts now, shown by Pending below
   const offers = editable ? openOffers(team.id) : null;
   const extensions = editable ? extensionOffer(team).catch(() => null) : null;
-  const freeAgency = editable && !AUCTION_ON_HOLD ? appStatus(team).catch(() => null) : null;
+  // on hold: no row, but still a promise (the card below is shown when all four are there)
+  const freeAgency = editable ? (AUCTION_ON_HOLD ? Promise.resolve(null) : appStatus(team).catch(() => null)) : null;
   const rookieDraft = editable ? draftRow(team).catch(() => null) : null;
   const [{ rules, season }, roster, games, abbr] = await Promise.all([getSettings(), rosters([team.id]), gamesBetween(day, day), teamAbbrs()]);
   const [rows, lines] = await Promise.all([lineupFor(team.id, day, roster), boxLines(roster.map((p) => p.id))]);
