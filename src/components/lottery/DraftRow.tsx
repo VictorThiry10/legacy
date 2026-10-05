@@ -10,8 +10,9 @@ import { gm } from "@/lib/lottery";
 
 const RookiePick = dynamic(() => import("./RookiePick"), { ssr: false });
 
-// The rookie draft's line in the Team page's to-do card (Pending.tsx): waiting on the GM who is on the clock
-// (checked again every 20 seconds), then my pick. Either way it opens the pick screen.
+// The rookie draft's line in the Team page's to-do card (Pending.tsx), until the last pick is made: waiting on the
+// GM who is on the clock (checked again every 20 seconds), or my pick. Either way it opens the pick screen, which
+// shows the order and who took whom.
 export default function DraftRow({ info }: { info: DraftRowInfo }) {
   const [open, setOpen] = useState(false);
   const router = useRouter();

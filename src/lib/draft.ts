@@ -83,13 +83,44 @@ export async function draftBoard(team: Team, again = false): Promise<DraftBoard>
   };
 }
 
-// The Team page's to-do row: only once the team has watched the lottery (no spoiler), while it still has a pick to make.
-export type DraftRowInfo = { slot: number; myTurn: boolean; onClock: { slot: number; team: string } };
+// The Team page's to-do row: only once the team has watched the lottery (no spoiler), and until the last pick is
+// made. slot: my own pick still to make, if I have one.
+export type DraftRowInfo = { slot: number | null; myTurn: boolean; onClock: { slot: number; team: string } };
 export async function draftRow(team: Team): Promise<DraftRowInfo | null> {
   if (await lotteryPrompt(team)) return null;
   const b = await draftBoard(team);
   const next = b.picks.find((p) => p.slot === b.onClock);
-  return b.mine && next ? { slot: b.mine, myTurn: b.myTurn, onClock: { slot: next.slot, team: next.team } } : null;
+  return next ? { slot: b.mine, myTurn: b.myTurn, onClock: { slot: next.slot, team: next.team } } : null;
+}
+
+// The draft as a record, for the League page: the lottery's order and who took whom, there for good. A GM who
+// hasn't watched the lottery yet gets no order (no spoiler), only the field to go and watch it.
+export type DraftRecord = {
+  field: LotteryTeam[];
+  watched: boolean;
+  onClock: number | null;
+  picks: { slot: number; team: string; original: string; rookie: { name: string; salary: number; years: number } | null }[];
+};
+export async function draftRecord(team: Team): Promise<DraftRecord> {
+  const field = lotteryField();
+  if (await lotteryPrompt(team)) return { field, watched: false, onClock: null, picks: [] };
+  const { season } = await getSettings();
+  const { data, error } = await db().from("draft_picks").select("slot, team_id, original_team, player_id, player:players(name)").eq("year", season).not("slot", "is", null).order("slot");
+  if (error) fail(error);
+  const taken = (data ?? []).flatMap((p) => (p.player_id ? [p.player_id] : []));
+  const { data: deals } = taken.length ? await db().from("contracts").select("player_id, salary, years").eq("acquired_via", "rookie").eq("season_signed", season).in("player_id", taken) : { data: [] };
+  return {
+    field,
+    watched: true,
+    onClock: (data ?? []).find((p) => !p.player_id)?.slot ?? null,
+    picks: (data ?? []).map((p) => {
+      const deal = deals?.find((c) => c.player_id === p.player_id);
+      return {
+        slot: p.slot!, team: p.team_id, original: p.original_team,
+        rookie: p.player_id ? { name: p.player?.name ?? "?", salary: Number(deal?.salary ?? 0), years: deal?.years ?? 0 } : null,
+      };
+    }),
+  };
 }
 
 // What the pick screen offers: every rookie outside the priced eight that nobody has under contract (at the minimum
