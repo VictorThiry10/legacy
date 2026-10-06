@@ -7,7 +7,7 @@ import { useScrollLock } from "./ScrollLock";
 
 type Option = [value: string, label: string];
 export type FilterValues = { show: string; mine: string; play: string; team: string; stats: string; view: string };
-const DEFAULTS: FilterValues = { show: "all", mine: "", play: "", team: "", stats: "", view: "" };
+const DEFAULTS: FilterValues = { show: "av", mine: "", play: "", team: "", stats: "", view: "" }; // show: as on the page, the players nobody has
 
 // The Players filters, ESPN style: the button opens a sheet with one row per filter; a row opens its list of
 // choices; nothing changes until Apply. `keep` is the rest of the address (position, sort) to carry along.

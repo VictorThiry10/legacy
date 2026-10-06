@@ -48,10 +48,11 @@ async function StatsTable({ sp }: { sp: Params }) {
   const perGame = sp.view !== "tot";
   const sort = (sp.sort ?? "avg") as StatKey;
   const asc = sp.dir === "asc";
-  const show = sp.show ?? "all";
+  const q = (sp.q ?? "").trim().toLowerCase();
+  // Who's listed: the players nobody has, unless the filter says otherwise. A search by name looks at everyone.
+  const show = sp.show ?? (q ? "all" : "av");
   const play = isDay(sp.play) ? sp.play : ""; // only players whose NBA team plays that day
   const period: Period = PERIODS.includes(sp.stats as Period) ? (sp.stats as Period) : "last";
-  const q = (sp.q ?? "").trim().toLowerCase();
   const d = db();
   const { season } = await getSettings();
 
@@ -198,7 +199,7 @@ const chip = (on: boolean) => `${pill} transition-colors active:opacity-70 ${on 
 function FilterBar({ sp, show, play, perGame, period, periods, teams }: {
   sp: Params; show: string; play: string; perGame: boolean; period: Period; periods: [string, string][]; teams: string[];
 }) {
-  const filtered = show !== "all" || !perGame || sp.mine === "0" || !!play || !!sp.team || period !== "last";
+  const filtered = show !== "av" || !perGame || sp.mine === "0" || !!play || !!sp.team || period !== "last";
   if (sp.search || sp.q) {
     const keep = Object.fromEntries(Object.entries(sp).filter(([k, v]) => v && k !== "q" && k !== "search")) as Record<string, string>;
     return <SearchBar path="/players" params={keep} initial={sp.q ?? ""} cancelHref={href(sp, { q: undefined, search: undefined })} />;
