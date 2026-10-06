@@ -138,9 +138,33 @@ export function resolveRound(
   throw new Error("resolveRound did not settle");
 }
 
-// Free agency rounds: 3 minutes of sealed bids each, bids in whole millions.
-export const ROUND_SECONDS = 180;
+// Free agency bids are in whole millions.
 export const BID_STEP = 1_000_000;
+
+// Free agency runs by the clock, a round a day: bidding opens, the results come out when it closes, winners can
+// renounce for a while, then they sign. `start` is when the round after `from` others have opened opens (so the
+// schedule can be set again halfway through); the next ones follow every `everyMinutes`.
+export type Schedule = { start: string; from: number; bidMinutes: number; renounceMinutes: number; everyMinutes: number };
+
+// The league's plan: 8:00 to 18:00 bidding, renounce until 20:00, every day.
+export const DAILY = { bidMinutes: 600, renounceMinutes: 120, everyMinutes: 1440 } as const;
+
+// When the round that opens after `opened` others opens, closes (results) and settles (winners sign), in ms.
+export function slot(s: Schedule, opened: number) {
+  const opens = Date.parse(s.start) + (opened - s.from) * s.everyMinutes * 60_000;
+  const closes = opens + s.bidMinutes * 60_000;
+  return { opens, closes, settles: closes + s.renounceMinutes * 60_000 };
+}
+
+// A schedule as stored (settings.fa_schedule), or null if it's missing or broken.
+export function parseSchedule(x: unknown): Schedule | null {
+  const s = x as Partial<Schedule> | null;
+  const ok = (n: unknown, min: number) => typeof n === "number" && Number.isFinite(n) && n >= min;
+  if (!s || typeof s.start !== "string" || Number.isNaN(Date.parse(s.start))) return null;
+  if (!ok(s.from, 0) || !ok(s.bidMinutes, 1) || !ok(s.renounceMinutes, 0) || !ok(s.everyMinutes, 1)) return null;
+  if (s.bidMinutes! + s.renounceMinutes! > s.everyMinutes!) return null; // a round must be over before the next opens
+  return s as Schedule;
+}
 
 // Renounce Rights: each GM can give up 3 signings per season, in any rounds. The player goes to the next bidder.
 export const RENOUNCE_RIGHTS = 3;

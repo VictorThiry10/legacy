@@ -1,27 +1,25 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { bidTeam, commishVerified, PER_ROUND, searchFreeAgents, setupRounds } from "@/lib/bidding";
+import { bidTeam, commishVerified, PER_ROUND, REGULAR_ROUNDS, scheduleView, searchFreeAgents, setupRounds } from "@/lib/bidding";
 import { getSettings, teamSummaries } from "@/lib/league";
 import { money } from "@/lib/rules";
 import ActionForm from "@/components/ActionForm";
 import PlayerCard from "@/components/bidding/PlayerCard";
+import Schedule from "@/components/bidding/Schedule";
 import { Gm, Label } from "@/components/bidding/ui";
 import * as A from "../actions";
 
 export const dynamic = "force-dynamic";
 
-// The round lengths the commissioner can pick (seconds, label). It applies from the next round that opens.
-const ROUND_LENGTHS = [[30, "30 s"], [60, "1 min"], [120, "2 min"], [180, "3 min"], [300, "5 min"]] as const;
-
-// Commissioner: which free agents go in which round, the GMs who can sign in, and a restart for test runs.
+// Commissioner: which free agents go in which round, when the rounds open, the GMs who can sign in, and a restart for test runs.
 export default async function Setup({ searchParams }: PageProps<"/bidding/setup">) {
   const team = await bidTeam();
   if (!team || !(await commishVerified(team))) redirect("/bidding");
   const sp = await searchParams;
   const q = typeof sp.q === "string" ? sp.q : "";
-  const [rounds, results, { leagueSize, roundSeconds }, teams] = await Promise.all([setupRounds(), searchFreeAgents(q), getSettings(), teamSummaries()]);
+  const [rounds, results, { leagueSize }, teams, schedule] = await Promise.all([setupRounds(), searchFreeAgents(q), getSettings(), teamSummaries(), scheduleView()]);
   const open = (n: number) => rounds.find((r) => r.number === n)!;
-  const canAdd = (n: number) => open(n).status === "setup" && open(n).players.length < PER_ROUND;
+  const canAdd = (n: number) => n <= REGULAR_ROUNDS && open(n).status === "setup" && open(n).players.length < PER_ROUND;
   const btn = "rounded-full px-4 py-2 text-sm font-semibold transition active:scale-95 disabled:opacity-40";
 
   return (
@@ -29,7 +27,7 @@ export default async function Setup({ searchParams }: PageProps<"/bidding/setup"
       <Link href="/bidding" className="text-sm text-white/55 hover:text-white">← Room</Link>
       <h1 className="font-display mt-2 text-6xl leading-[0.85]">Rounds</h1>
       <p className="mt-3 max-w-md text-sm text-white/55">
-        The free agents up for auction, {PER_ROUND} per round, in the order they come up. Search a free agent and tap a round number to
+        The free agents up for auction: {REGULAR_ROUNDS} rounds of {PER_ROUND}, a round a day. Search a free agent and tap a round number to
         add him, ✕ to take him out. Auto fill tops every round up with the best free agents left.
       </p>
 
@@ -37,20 +35,12 @@ export default async function Setup({ searchParams }: PageProps<"/bidding/setup"
         <ActionForm action={A.autoFill} confirm="Fill every empty spot with the best free agents left (last season's fantasy points per game)?">
           <button className={`${btn} btn-primary`}>Auto fill</button>
         </ActionForm>
-        <ActionForm action={A.restart} confirm="Restart free agency? Every bid and free agency signing is deleted. The player lists stay.">
+        <ActionForm action={A.restart} confirm="Restart free agency? Every bid and free agency signing is deleted, and the schedule is cleared. The player lists stay.">
           <button className={`${btn} text-red-400 hover:bg-white/[0.05]`}>Restart</button>
         </ActionForm>
       </div>
 
-      <Label className="mt-6">Bidding time per round</Label>
-      <div className="mt-2 flex flex-wrap gap-1.5">
-        {ROUND_LENGTHS.map(([secs, label]) => (
-          <ActionForm key={secs} action={A.setRoundSeconds}>
-            <input type="hidden" name="seconds" value={secs} />
-            <button className={`${btn} ${secs === roundSeconds ? "btn-primary" : "bg-white/[0.06] text-white/70 hover:text-white"}`}>{label}</button>
-          </ActionForm>
-        ))}
-      </div>
+      <Schedule {...schedule} />
 
       <form className="mt-6 flex gap-2">
         <input name="q" defaultValue={q} placeholder="Find a free agent" className="h-12 min-w-0 flex-1 rounded-2xl bg-white/[0.06] px-4 outline-none ring-1 ring-inset ring-white/10 focus:ring-white/30" />

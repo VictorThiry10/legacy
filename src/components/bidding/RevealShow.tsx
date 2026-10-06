@@ -1,7 +1,7 @@
 "use client";
 import { Fragment, useEffect, useRef, useState } from "react";
 import { animate, AnimatePresence, motion, MotionConfig, useIsPresent, useMotionValue, useReducedMotion, useTransform } from "motion/react";
-import type { CardPlayer, Room, RoomTeam } from "@/lib/bidding";
+import type { CardPlayer, Results, RoomTeam } from "@/lib/bidding";
 import { BID_STEP, money, type RevealItem } from "@/lib/rules";
 import PlayerCard, { CardBack, cardImages } from "./PlayerCard";
 import { preload, ready } from "./preload";
@@ -20,18 +20,18 @@ const TREMBLE = 1, FLIPPED = 2, TEAM = 3, AMOUNT = 4, LANDED = 5, OTHERS = 6;
 
 // Full screen, one player at a time, after a title card for the round. Everyone watches every signing to the end;
 // only the last chance round (dozens of leftovers) can be tapped through or skipped.
-export default function RevealShow({ data, onDone }: { data: Room; onDone: () => void }) {
-  const items = data.reveal ?? [];
+export default function RevealShow({ results, teams, meId, onDone }: { results: Results; teams: RoomTeam[]; meId: string; onDone: () => void }) {
+  const { round, items, players } = results;
   const reduce = useReducedMotion();
-  const skippable = data.round?.kind === "leftovers";
+  const skippable = round.kind === "leftovers";
   const [intro, setIntro] = useState(true);
   const [i, setI] = useState(0);
   const [started, setStarted] = useState(-1); // the player whose clock is running (his photo is decoded)
   const next = () => (i + 1 < items.length ? setI(i + 1) : onDone());
   const item = items[i];
-  const player = item && data.players.find((p) => p.id === item.playerId);
+  const player = item && players.find((p) => p.id === item.playerId);
   // Start decoding every photo of the round now, so each player is ready by the time he's up.
-  const photos = data.players.flatMap((p) => Object.values(cardImages(p, "large"))).join("\n");
+  const photos = players.flatMap((p) => Object.values(cardImages(p, "large"))).join("\n");
   useEffect(() => preload(photos.split("\n")), [photos]);
   useEffect(() => {
     if (!intro) return;
@@ -49,7 +49,7 @@ export default function RevealShow({ data, onDone }: { data: Room; onDone: () =>
       <div className="pointer-events-none absolute inset-0" style={{ background: "radial-gradient(42rem 30rem at 50% 34%, rgba(233,196,106,0.07), transparent 70%)" }} />
       {!reduce && <Dust />}
       <div className="absolute inset-x-0 top-0 z-10 flex items-center gap-3 px-5 pt-[max(1rem,env(safe-area-inset-top))]">
-        <div className="shrink-0 text-[11px] font-semibold uppercase tracking-[0.3em] text-white/55">{roundName(data.round)}</div>
+        <div className="shrink-0 text-[11px] font-semibold uppercase tracking-[0.3em] text-white/55">{roundName(round)}</div>
         {/* Progress: done players are a plain full bar, only the current one fills (a transform, so it stays off the main thread).
             It's a timer the show depends on, so it still runs when the device asks for less motion. */}
         <MotionConfig reducedMotion="never">
@@ -74,15 +74,15 @@ export default function RevealShow({ data, onDone }: { data: Room; onDone: () =>
       </div>
       <AnimatePresence>
         {intro ? (
-          <Intro key="intro" title={roundName(data.round)} count={items.length} onTap={skippable ? () => setIntro(false) : undefined} />
+          <Intro key="intro" title={roundName(round)} count={items.length} onTap={skippable ? () => setIntro(false) : undefined} />
         ) : (
           item && player && (
             <Stage
               key={item.playerId}
               item={item}
               player={player}
-              teams={data.teams}
-              meId={data.meId}
+              teams={teams}
+              meId={meId}
               leftovers={skippable}
               onStart={() => setStarted(i)}
               onFinish={next}

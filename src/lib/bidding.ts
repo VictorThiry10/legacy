@@ -6,17 +6,18 @@ import { db } from "./supabase/server";
 import { getMe } from "./auth";
 import { fail, rpc } from "./db";
 import { getSettings, teamSummaries, type Team } from "./league";
-import { BID_STEP, maxBid, money, revealRound, RENOUNCE_RIGHTS, yearsLeft, type Bid, type RevealItem } from "./rules";
-import type { Row } from "./supabase/types";
+import { BID_STEP, maxBid, money, parseSchedule, revealRound, RENOUNCE_RIGHTS, slot, yearsLeft, type Bid, type RevealItem, type Schedule } from "./rules";
+import type { Json, Row } from "./supabase/types";
 import type { SeasonLine } from "./espn-parse";
 
-// Free agency bidding (/bidding). Rounds of players open for a few minutes of sealed bids (settings.round_seconds,
-// set on the Rounds page), then everyone sees the
-// reveal at once. Winners can renounce until the commissioner moves on, which signs the winners and opens the next
-// round. The pure rules (who wins, ties, over the cap) are resolveRound / revealRound in rules.ts.
+// Free agency bidding (/bidding), by the clock: a round of players a day. Sealed bids while the round is open (8:00
+// to 18:00), then everyone sees the results; winners can renounce until the window closes (20:00), when they sign.
+// The next round opens the next morning, and after the last one every unsigned player gets one last chance round.
+// The commissioner only sets the schedule (settings.fa_schedule): advance() moves everything along.
+// The pure rules (who wins, ties, over the cap, the schedule's times) are in rules.ts.
 
 export const PER_ROUND = 8;
-export const REGULAR_ROUNDS = 8;
+export const REGULAR_ROUNDS = 7;
 const COOKIE = "bid_session";
 
 // ---------- sign in: email only, no code, or the league app's login ----------
@@ -80,9 +81,16 @@ export function cardOf(p: Row<"players">): CardPlayer {
 export type RoomTeam = {
   id: string; name: string; manager: string | null; capSpace: number; maxBid: number; roster: number; spots: number; renouncesLeft: number; hasBid: boolean;
 };
-export type RoundInfo = { id: string; number: number; kind: "regular" | "leftovers"; status: string; closesAt: string | null };
+// A round and its three moments: bidding opens, closes (the results), settles (the renounce window ends, winners sign).
+// A round still waiting gets them from the schedule (null with no schedule).
+export type RoundInfo = {
+  id: string; number: number; kind: "regular" | "leftovers"; status: string;
+  opensAt: string | null; closesAt: string | null; settlesAt: string | null;
+};
 export type Signing = { contractId: string; teamId: string; salary: number; years: number; player: CardPlayer };
 export type Phase = "waiting" | "bidding" | "reveal" | "contracts" | "done";
+// A round's results: the frozen ones of a finished round, or the live ones during the renounce window.
+export type Results = { round: RoundInfo; items: RevealItem[]; players: CardPlayer[] };
 
 export type Room = {
   now: number; // server clock, so every countdown agrees
@@ -97,20 +105,30 @@ export type Room = {
   players: CardPlayer[];
   myBids: Record<string, number>;
   reveal: RevealItem[] | null;
+  canRenounce: boolean; // the results are in and the renounce window is still open
+  last: Results | null; // the round that just finished, shown while waiting for the next one
   signings: Signing[];
   held: Signing[]; // my other contracts with 2+ seasons left (years = seasons left): they use length slots too
   limits: Record<number, number>; // contract lengths: years left -> how many a team can have
   minSalary: number;
-  roundSeconds: number; // how long a round's bidding lasts (the time bar's full width)
   v: string; // the room's fingerprint (what pulse() returns), so the page knows if a poll brings news
 };
 
-const roundInfo = (r: Row<"rounds">): RoundInfo => ({
-  id: r.id, number: r.number, kind: r.kind === "leftovers" ? "leftovers" : "regular", status: r.status, closesAt: r.closes_at,
+type Times = { opens: number; closes: number; settles: number } | null;
+const iso = (ms: number) => new Date(ms).toISOString();
+
+// `times`: for a round still waiting, when the schedule has it open.
+const roundInfo = (r: Row<"rounds">, times: Times = null): RoundInfo => ({
+  id: r.id, number: r.number, kind: r.kind === "leftovers" ? "leftovers" : "regular", status: r.status,
+  opensAt: r.opens_at ?? (times ? iso(times.opens) : null),
+  closesAt: r.closes_at ?? (times ? iso(times.closes) : null),
+  settlesAt: r.settles_at ?? (times ? iso(times.settles) : null),
 });
 
+type RoundTimes = { status: string; closes_at: string | null; settles_at: string | null };
+
 // Where free agency is, from the season's rounds (in order): the live round, else the next one set up.
-function phaseOf<R extends { status: string; closes_at: string | null }>(rounds: R[], faLocked: boolean, now: number) {
+function phaseOf<R extends RoundTimes>(rounds: R[], faLocked: boolean, now: number) {
   const live = rounds.find((r) => r.status === "open") ?? null;
   const next = rounds.find((r) => r.status === "setup") ?? null;
   const phase: Phase = live
@@ -119,9 +137,67 @@ function phaseOf<R extends { status: string; closes_at: string | null }>(rounds:
   return { phase, live, next };
 }
 
+// When the next round to open opens, closes and settles: the schedule's slot after the rounds already opened.
+// Null with no schedule, or once that slot's bidding time has gone by (a stale schedule opens nothing).
+function nextTimes<R extends RoundTimes>(rounds: R[], schedule: Schedule | null, now: number): Times {
+  if (!schedule) return null;
+  const t = slot(schedule, rounds.filter((r) => r.status !== "setup").length);
+  return t.closes > now ? t : null;
+}
+
+// What advance() has to do right now, if anything: sign the live round, or open the next one.
+function due<R extends RoundTimes>(rounds: R[], schedule: Schedule | null, now: number): { settle: R } | { open: R; times: NonNullable<Times> } | null {
+  const { live, next } = phaseOf(rounds, false, now);
+  if (live) return live.settles_at && Date.parse(live.settles_at) <= now ? { settle: live } : null;
+  const times = next ? nextTimes(rounds, schedule, now) : null;
+  return next && times && times.opens <= now ? { open: next, times } : null;
+}
+
+// Moves free agency along by the clock: signs the round whose renounce window is over, opens the next one when its
+// time comes. Called by every screen's poll (pulse) and by a timer every minute (/api/cron/bidding), so it happens
+// on time with nobody on the site. Safe to call from several places at once: the database lets one of them act.
+export async function advance(): Promise<void> {
+  const { season, faSchedule } = await getSettings();
+  for (let i = 0; i < 3; i++) {
+    const { data: rounds, error } = await db().from("rounds").select("id, status, closes_at, settles_at").eq("season", season).order("number");
+    if (error) fail(error);
+    const todo = due(rounds ?? [], faSchedule, Date.now());
+    if (!todo) return;
+    if ("settle" in todo) await settle(todo.settle.id, season);
+    else await rpc("bidding_open", { p_round: todo.open.id, p_opens: iso(todo.times.opens), p_closes: iso(todo.times.closes), p_settles: iso(todo.times.settles) });
+  }
+}
+
+// A round's players still free: one who joined a team some other way after his round was set up (a free agent
+// pickup) is out of the auction: no card, no results, nobody signs him twice.
+type RoundPlayer = { player: (Row<"players"> & { contracts: { active: boolean }[] }) | (Row<"players"> & { contracts: { active: boolean }[] })[] | null };
+const freeCards = (rows: RoundPlayer[]) =>
+  rows.map((x) => one(x.player)).filter((p) => !!p && !p.contracts.some((c) => c.active)).map((p) => cardOf(p!));
+
+const bidOf = (b: Row<"bids">): Bid => ({ id: b.id, teamId: b.team_id, playerId: b.player_id, amount: Number(b.amount), years: b.years, createdAt: b.created_at });
+
+// The renounce window is over: sign the round's winners and freeze its results.
+async function settle(roundId: string, season: number) {
+  const { rules } = await getSettings();
+  const d = db();
+  const [summaries, rp, bidRows, ren] = await Promise.all([
+    teamSummaries(),
+    d.from("round_players").select("pos, player:players(*, contracts(active))").eq("round_id", roundId).order("pos"),
+    d.from("bids").select("*").eq("round_id", roundId),
+    d.from("renounces").select("bid_id, round_id").eq("season", season),
+  ]);
+  const players = freeCards(rp.data ?? []);
+  const renounced = new Set((ren.data ?? []).map((r) => r.bid_id));
+  const items = revealRound(players.map((p) => p.id), (bidRows.data ?? []).map(bidOf), summaries.map((t) => t.state), rules, renounced, roundId).items;
+  const awards = items.flatMap((i) => (i.winner ? [{ player_id: i.playerId, team_id: i.winner.teamId, amount: i.winner.amount }] : []));
+  await rpc("bidding_settle", {
+    p_round: roundId, p_awards: awards, p_result: items as unknown as Json, p_renounces: (ren.data ?? []).filter((r) => r.round_id === roundId).length,
+  });
+}
+
 export async function room(team: Team): Promise<Room> {
   const verified = commishVerified(team); // league login check, only does work for the commissioner
-  const { season, rules, faLocked, roundSeconds } = await getSettings();
+  const { season, rules, faLocked, faSchedule } = await getSettings();
   const d = db();
   // Everything in one wave of reads: the open round's players and bids come through an inner join on the
   // round (status and season), so they don't wait for the rounds list.
@@ -138,18 +214,20 @@ export async function room(team: Team): Promise<Room> {
   const now = Date.now();
   const { phase, live, next } = phaseOf(rounds, faLocked, now);
   const current = live ?? (phase === "waiting" ? next : null);
+  // The round that just finished (the latest final one), for its results under the next round.
+  const done = phase === "waiting" || phase === "bidding" || phase === "contracts" ? (rounds.findLast((r) => r.status === "final") ?? null) : null;
+  const doneItems = (done?.result ?? []) as unknown as RevealItem[];
 
-  // Only the contracts screens need these: a second wave once the phase is known (nothing is live then). The signings,
-  // and my other contracts, since the ones with 2+ seasons left count against the length limits too.
-  const [signed, myContracts] = phase === "contracts" || phase === "done"
-    ? await Promise.all([
-        d.from("contracts").select("id, team_id, salary, years, player:players(*)").eq("season_signed", season).eq("acquired_via", "draft").eq("active", true),
-        d.from("contracts").select("id, team_id, salary, years, season_signed, acquired_via, player:players(*)").eq("team_id", team.id).eq("active", true),
-      ])
-    : [null, null];
+  // A second wave once the phase is known (nothing is live then). The finished round's players; for the contracts
+  // screens the signings, and my other contracts, since the ones with 2+ seasons left count against the length limits.
+  const contracts = phase === "contracts" || phase === "done";
+  const [signed, myContracts, donePlayers] = await Promise.all([
+    contracts ? d.from("contracts").select("id, team_id, salary, years, player:players(*)").eq("season_signed", season).eq("acquired_via", "draft").eq("active", true) : null,
+    contracts ? d.from("contracts").select("id, team_id, salary, years, season_signed, acquired_via, player:players(*)").eq("team_id", team.id).eq("active", true) : null,
+    doneItems.length ? d.from("players").select("*").in("id", doneItems.map((i) => i.playerId)) : null,
+  ]);
   // Rows of the live round only (the reads ran side by side, so check they agree on which round that is).
-  const bids: Bid[] = (bidRows.data ?? []).filter((b) => b.round_id === live?.id)
-    .map((b) => ({ id: b.id, teamId: b.team_id, playerId: b.player_id, amount: Number(b.amount), years: b.years, createdAt: b.created_at }));
+  const bids: Bid[] = (bidRows.data ?? []).filter((b) => b.round_id === live?.id).map(bidOf);
   const used = new Map<string, number>();
   (ren.data ?? []).forEach((r) => used.set(r.team_id, (used.get(r.team_id) ?? 0) + 1));
   const bidders = new Set(bids.map((b) => b.teamId));
@@ -158,25 +236,25 @@ export async function room(team: Team): Promise<Room> {
     id: t.id, name: t.name, manager: t.manager_name, capSpace: t.capSpace, maxBid: Math.floor(maxBid(t.state, rules) / BID_STEP) * BID_STEP, roster: t.state.rosterCount,
     spots: Math.max(0, rules.rosterMax - t.state.rosterCount), renouncesLeft: RENOUNCE_RIGHTS - (used.get(t.id) ?? 0), hasBid: phase === "bidding" && bidders.has(t.id),
   }));
-  // A player who joined a team some other way after his round was set up (a free agent pickup) is out of the auction:
-  // no card, no reveal, nobody signs him twice.
-  const players = phase === "waiting" || !live ? [] : (rp.data ?? []).filter((x) => x.round_id === live.id).map((x) => one(x.player))
-    .filter((p) => !!p && !p.contracts.some((c) => c.active)).map((p) => cardOf(p!));
+  const players = phase === "waiting" || !live ? [] : freeCards((rp.data ?? []).filter((x) => x.round_id === live.id));
 
   let reveal: RevealItem[] | null = null;
   if (phase === "reveal" && live) {
     const renounced = new Set((ren.data ?? []).map((r) => r.bid_id));
     reveal = revealRound(players.map((p) => p.id), bids, summaries.map((t) => t.state), rules, renounced, live.id).items;
   }
+  const cards = new Map((donePlayers?.data ?? []).map((p) => [p.id, cardOf(p)]));
 
   return {
     now, phase, meId: team.id, isCommish: await verified, needsLeagueLogin: team.is_commish && !(await verified), teams,
-    rounds: rounds.map(roundInfo),
-    round: current ? roundInfo(current) : null,
+    rounds: rounds.map((r) => roundInfo(r)),
+    round: current ? roundInfo(current, current === next ? nextTimes(rounds, faSchedule, now) : null) : null,
     cardsWaiting: phase === "waiting" ? (current?.round_players[0]?.count ?? 0) : 0,
     players,
     myBids: Object.fromEntries(bids.filter((b) => b.teamId === team.id).map((b) => [b.playerId, b.amount])),
     reveal,
+    canRenounce: phase === "reveal" && (!live?.settles_at || Date.parse(live.settles_at) > now),
+    last: done && doneItems.length ? { round: roundInfo(done), items: doneItems, players: doneItems.flatMap((i) => cards.get(i.playerId) ?? []) } : null,
     signings: (signed?.data ?? []).flatMap((c) => {
       const p = one(c.player);
       return p ? [{ contractId: c.id, teamId: c.team_id, salary: Number(c.salary), years: c.years, player: cardOf(p) }] : [];
@@ -189,7 +267,6 @@ export async function room(team: Team): Promise<Room> {
     }).sort((a, b) => b.years - a.years || b.salary - a.salary),
     limits: rules.slotLimits,
     minSalary: rules.minSalary,
-    roundSeconds,
     v: fingerprint({
       rounds, faLocked, bidders: [...bidders], renounces: ren.data?.length ?? 0, years: (lens.data ?? []).map((l) => l.years), teams: summaries.length,
     }),
@@ -207,17 +284,24 @@ function fingerprint(x: {
   return createHash("sha1").update(key).digest("base64url").slice(0, 16);
 }
 
-// Polled every couple of seconds by every screen: one wave of small reads once the season is known.
+// Polled every couple of seconds by every screen: one wave of small reads once the season is known. It also moves
+// free agency along when the clock says so (advance), then reads again so the screen hears about it at once.
 export async function pulse(): Promise<string> {
-  const { season, faLocked } = await getSettings();
+  const { season, faLocked, faSchedule } = await getSettings();
   const d = db();
-  const [{ data: rounds }, { count: ren }, { data: lens }, { count: teams }, { data: bidders }] = await Promise.all([
-    d.from("rounds").select("id, status, closes_at").eq("season", season).order("number"),
+  const read = () => Promise.all([
+    d.from("rounds").select("id, status, closes_at, settles_at").eq("season", season).order("number"),
     d.from("renounces").select("id", { count: "exact", head: true }).eq("season", season),
     d.from("contracts").select("years").eq("season_signed", season).eq("acquired_via", "draft"),
     d.from("teams").select("id", { count: "exact", head: true }),
     d.from("bids").select("team_id, round:rounds!inner(status, season)").eq("round.status", "open").eq("round.season", season),
   ]);
+  let rows = await read();
+  if (due(rows[0].data ?? [], faSchedule, Date.now())) {
+    await advance().catch(() => {}); // another screen may have got there first
+    rows = await read();
+  }
+  const [{ data: rounds }, { count: ren }, { data: lens }, { count: teams }, { data: bidders }] = rows;
   return fingerprint({
     rounds: rounds ?? [], faLocked, bidders: (bidders ?? []).map((b) => b.team_id), renounces: ren ?? 0, years: (lens ?? []).map((l) => l.years), teams: teams ?? 0,
   });
@@ -228,16 +312,17 @@ export async function pulse(): Promise<string> {
 export type AppStatus = { phase: Exclude<Phase, "done">; round: RoundInfo | null; isCommish: boolean; signings: number };
 
 export async function appStatus(team: Team): Promise<AppStatus | null> {
-  const { season, faLocked } = await getSettings();
+  const { season, faLocked, faSchedule } = await getSettings();
   const { data: rounds } = await db().from("rounds").select("*").eq("season", season).order("number");
   if (!rounds?.length) return null;
-  const { phase, live, next } = phaseOf(rounds, faLocked, Date.now());
+  const now = Date.now();
+  const { phase, live, next } = phaseOf(rounds, faLocked, now);
   if (phase === "done") return null;
   const { count } = phase === "contracts"
     ? await db().from("contracts").select("id", { count: "exact", head: true }).eq("team_id", team.id).eq("season_signed", season).eq("acquired_via", "draft").eq("active", true)
     : { count: 0 };
-  const round = live ?? next;
-  return { phase, round: round ? roundInfo(round) : null, isCommish: team.is_commish, signings: count ?? 0 };
+  const round = live ? roundInfo(live) : next ? roundInfo(next, nextTimes(rounds, faSchedule, now)) : null;
+  return { phase, round, isCommish: team.is_commish, signings: count ?? 0 };
 }
 
 // ---------- GM moves ----------
@@ -257,7 +342,8 @@ export async function placeBid(team: Team, roundId: string, playerId: string, am
 
 export async function renounce(team: Team, bidId: string) {
   const r = await room(team);
-  if (r.phase !== "reveal") throw new Error("You can renounce once the round is revealed.");
+  if (r.phase !== "reveal") throw new Error("You can renounce once the results are in.");
+  if (!r.canRenounce) throw new Error("The renounce window is closed.");
   if (!r.reveal?.some((i) => i.winner?.bidId === bidId && i.winner.teamId === team.id)) throw new Error("That is not your signing.");
   await rpc("bidding_renounce", { p_bid: bidId, p_team: team.id, p_max: RENOUNCE_RIGHTS });
 }
@@ -286,46 +372,42 @@ async function commish(team: Team) {
   }
 }
 
-const closesIn = (seconds: number) => new Date(Date.now() + seconds * 1000).toISOString();
-
-export async function startNext(team: Team) {
+// When the next round opens (an ISO time) and how long bidding, the renounce window and the gap to the following
+// round last, in minutes. Rounds already opened keep their times; null stops anything from opening.
+export async function setSchedule(team: Team, plan: { start: string; bidMinutes: number; renounceMinutes: number; everyMinutes: number } | null) {
   await commish(team);
-  const { season, roundSeconds } = await getSettings();
-  const { data: rounds } = await db().from("rounds").select("id, status, number").eq("season", season).order("number");
-  if (rounds?.some((r) => r.status === "open")) throw new Error("A round is already running.");
-  const next = rounds?.find((r) => r.status === "setup");
-  if (!next) throw new Error("Set up a round first.");
-  const { error } = await db().from("rounds").update({ status: "open", closes_at: closesIn(roundSeconds) }).eq("id", next.id).eq("status", "setup");
+  let schedule: Schedule | null = null;
+  if (plan) {
+    const { season } = await getSettings();
+    const { data: rounds } = await db().from("rounds").select("status").eq("season", season);
+    schedule = parseSchedule({ ...plan, from: (rounds ?? []).filter((r) => r.status !== "setup").length });
+    if (!schedule) throw new Error("Bidding plus the renounce window must fit before the next round opens.");
+    if (slot(schedule, schedule.from).closes <= Date.now()) throw new Error("That time has already passed.");
+  }
+  const { error } = await db().from("settings").update({ fa_schedule: schedule as unknown as Json }).eq("id", 1);
   if (error) fail(error);
+  await advance(); // a round due right now opens straight away
 }
 
-export async function changeClock(team: Team, seconds: number | "now") {
-  await commish(team);
-  const { season } = await getSettings();
-  const { data: live } = await db().from("rounds").select("id, closes_at").eq("season", season).eq("status", "open").maybeSingle();
-  if (!live?.closes_at || Date.parse(live.closes_at) <= Date.now()) throw new Error("Bidding is already closed.");
-  const closes = seconds === "now" ? new Date().toISOString() : new Date(Date.parse(live.closes_at) + seconds * 1000).toISOString();
-  const { error } = await db().from("rounds").update({ closes_at: closes }).eq("id", live.id);
-  if (error) fail(error);
+// The schedule and the times it gives the rounds still to open (the last one is the last chance round), for the Rounds page.
+export async function scheduleView() {
+  const { season, faSchedule } = await getSettings();
+  const { data: rounds } = await db().from("rounds").select("number, kind, status, opens_at, closes_at, settles_at").eq("season", season).order("number");
+  const opened = (rounds ?? []).filter((r) => r.status !== "setup");
+  const waiting = (rounds ?? []).filter((r) => r.status === "setup");
+  const lastChance = !(rounds ?? []).some((r) => r.kind === "leftovers"); // it's only created once the last regular round is signed
+  const times = (i: number) => (faSchedule ? slot(faSchedule, opened.length + i) : null);
+  return {
+    schedule: faSchedule,
+    stale: !!faSchedule && waiting.length > 0 && slot(faSchedule, opened.length).closes <= Date.now(),
+    rows: [
+      ...opened.map((r) => ({ label: r.kind === "leftovers" ? "Last chance" : `Round ${r.number}`, status: r.status, opens: r.opens_at, closes: r.closes_at, settles: r.settles_at })),
+      ...waiting.map((r, i) => ({ label: r.kind === "leftovers" ? "Last chance" : `Round ${r.number}`, status: r.status, ...isoTimes(times(i)) })),
+      ...(lastChance && waiting.length ? [{ label: "Last chance", status: "setup", ...isoTimes(times(waiting.length)) }] : []),
+    ],
+  };
 }
-
-// Sign this round's winners and open the next round (or the last chance round, or finish).
-export async function nextRound(team: Team) {
-  await commish(team);
-  const [r, { roundSeconds }] = await Promise.all([room(team), getSettings()]);
-  if (r.phase !== "reveal" || !r.round || !r.reveal) throw new Error("Wait for the reveal first.");
-  const { count } = await db().from("renounces").select("id", { count: "exact", head: true }).eq("round_id", r.round.id);
-  const awards = r.reveal.flatMap((i) => (i.winner ? [{ player_id: i.playerId, team_id: i.winner.teamId, amount: i.winner.amount }] : []));
-  await rpc("bidding_finalize", { p_round: r.round.id, p_awards: awards, p_result: r.reveal, p_renounces: count ?? 0, p_seconds: roundSeconds });
-}
-
-// How long each round's bidding lasts, from the next round on.
-export async function setRoundSeconds(team: Team, seconds: number) {
-  await commish(team);
-  if (!Number.isInteger(seconds) || seconds < 15 || seconds > 900) throw new Error("Rounds last 15 seconds to 15 minutes.");
-  const { error } = await db().from("settings").update({ round_seconds: seconds }).eq("id", 1);
-  if (error) fail(error);
-}
+const isoTimes = (t: Times) => ({ opens: t ? iso(t.opens) : null, closes: t ? iso(t.closes) : null, settles: t ? iso(t.settles) : null });
 
 export async function lockContracts(team: Team, locked: boolean) {
   await commish(team);
@@ -356,7 +438,8 @@ async function taken(season: number) {
 export async function setupRounds(): Promise<SetupRound[]> {
   const { season } = await getSettings();
   const { data: rounds } = await db().from("rounds").select("id, number, status, kind, round_players(pos, player:players(*, contracts(active)))").eq("season", season).eq("kind", "regular").order("number");
-  return Array.from({ length: REGULAR_ROUNDS }, (_, i) => {
+  // Every round the plan has, and any extra one still in the database (from an older, longer plan), so nothing is hidden.
+  return Array.from({ length: Math.max(REGULAR_ROUNDS, ...(rounds ?? []).map((r) => r.number)) }, (_, i) => {
     const r = rounds?.find((x) => x.number === i + 1);
     const rows = [...(r?.round_players ?? [])].sort((a, b) => a.pos - b.pos).map((x) => one(x.player)).filter((p) => !!p);
     // A finished round's signings are on teams too: only flag players in rounds still to come or live.

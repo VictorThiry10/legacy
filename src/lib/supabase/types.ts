@@ -101,12 +101,12 @@ export type Database = {
         [FK<"round_players_player_id_fkey", "player_id", "players">, FK<"round_players_round_id_fkey", "round_id", "rounds">]
       >;
       rounds: Table<
-        { closes_at: string | null; created_at: string; id: string; kind: string; number: number; result: Json | null; season: number; status: string },
-        { closes_at?: string | null; created_at?: string; id?: string; kind?: string; number: number; result?: Json | null; season: number; status?: string }
+        { closes_at: string | null; created_at: string; id: string; kind: string; number: number; opens_at: string | null; result: Json | null; season: number; settles_at: string | null; status: string },
+        { closes_at?: string | null; created_at?: string; id?: string; kind?: string; number: number; opens_at?: string | null; result?: Json | null; season: number; settles_at?: string | null; status?: string }
       >;
       settings: Table<
-        { cap: number; fa_locked: boolean; id: number; league_name: string; league_size: number; min_salary: number; roster_max: number; round_seconds: number; scoring: Json; season: number; waiver_hours: number },
-        { cap?: number; fa_locked?: boolean; id?: number; league_name?: string; league_size?: number; min_salary?: number; roster_max?: number; round_seconds?: number; scoring?: Json; season?: number; waiver_hours?: number }
+        { cap: number; fa_locked: boolean; fa_schedule: Json | null; id: number; league_name: string; league_size: number; min_salary: number; roster_max: number; round_seconds: number; scoring: Json; season: number; waiver_hours: number },
+        { cap?: number; fa_locked?: boolean; fa_schedule?: Json | null; id?: number; league_name?: string; league_size?: number; min_salary?: number; roster_max?: number; round_seconds?: number; scoring?: Json; season?: number; waiver_hours?: number }
       >;
       sync_log: Table<{ last_run: string; name: string }, { last_run: string; name: string }>;
       teams: Table<
@@ -157,10 +157,11 @@ export type Database = {
       team_day_points: { Row: { day: string | null; pts: number | null; team_id: string | null }; Relationships: [FK<"lineup_points_team_id_fkey", "team_id", "teams">] };
     };
     Functions: {
-      bidding_finalize: { Args: { p_round: string; p_awards: Json; p_result: Json; p_renounces: number; p_seconds: number }; Returns: undefined };
+      bidding_open: { Args: { p_round: string; p_opens: string; p_closes: string; p_settles: string }; Returns: boolean };
       bidding_place: { Args: { p_round: string; p_team: string; p_player: string; p_amount: number | null }; Returns: undefined };
       bidding_renounce: { Args: { p_bid: string; p_team: string; p_max: number }; Returns: undefined };
       bidding_restart: { Args: { p_season: number }; Returns: undefined };
+      bidding_settle: { Args: { p_round: string; p_awards: Json; p_result: Json; p_renounces: number }; Returns: boolean };
       bidding_set_lengths: { Args: { p_team: string; p_season: number; p_rows: Json; p_limits: Json }; Returns: undefined };
       current_lineups: {
         Args: { p_teams: string[] | null; p_day: string };

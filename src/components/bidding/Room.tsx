@@ -3,7 +3,7 @@ import { memo, useCallback, useContext, useEffect, useOptimistic, useRef, useSta
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion, MotionConfig, PresenceContext, useReducedMotion, useSpring } from "motion/react";
-import type { CardPlayer, Room as Data, RoomTeam } from "@/lib/bidding";
+import type { CardPlayer, Results as RoundResults, Room as Data, RoomTeam } from "@/lib/bidding";
 import { money } from "@/lib/rules";
 import * as A from "@/app/bidding/actions";
 import PlayerCard, { CardBack, cardImages } from "./PlayerCard";
@@ -14,6 +14,7 @@ import Contracts from "./Contracts";
 import Portal from "./Portal";
 import { initials } from "@/lib/names";
 import { useClock } from "./clock";
+import { left, TimeLeft, useSecondsLeft, When } from "./time";
 import { ready } from "./preload";
 import { ease, Gm, Kicker, Label, roundName } from "./ui";
 
@@ -69,17 +70,24 @@ export default function Room({ data, me: who, app }: { data: Data; me: { id: str
     };
   }, [locked, router]);
 
-  // The reveal show lives here, outside the page that changes with the phase, so moving on fades it out
-  // instead of cutting it. The first time through, the results wait underneath until it's over.
-  const revealRound = data.phase === "reveal" ? (data.round?.id ?? null) : null;
+  // The results there are to watch: the live round's during its renounce window, else the round that just finished
+  // (for a GM who opens the site after the window closed). The reveal show lives here, outside the page that
+  // changes with the phase, so moving on fades it out instead of cutting it. The first time through, the live
+  // results wait underneath until it's over.
+  const results: RoundResults | null = data.phase === "reveal" && data.round && data.reveal ? { round: data.round, items: data.reveal, players: data.players } : data.last;
+  const revealRound = results?.round.id ?? null;
   const seen = useSeen(revealRound);
   const [replay, setReplay] = useState<string | null>(null); // the round being replayed
   const replaying = revealRound !== null && replay === revealRound;
-  const showing = revealRound !== null && (seen === false || replaying);
+  // It plays by itself the first time, except over a round that's open for bids (there it's one tap away).
+  const showing = revealRound !== null && ((seen === false && data.phase !== "bidding") || replaying);
   const showDone = () => {
     if (revealRound) markSeen(revealRound);
     setReplay(null);
   };
+  const onReplay = () => setReplay(revealRound);
+  // The rounds run by the clock: the commissioner only has something to press at the very end (locking contracts).
+  const bar = data.isCommish && (data.phase === "contracts" || data.phase === "done");
 
   return (
     <MotionConfig reducedMotion="user">
@@ -93,9 +101,11 @@ export default function Room({ data, me: who, app }: { data: Data; me: { id: str
           exit={{ opacity: 0, y: -10 }}
           transition={{ duration: 0.5, ease }}
         >
-          {data.phase === "waiting" && <Waiting data={data} />}
-          {data.phase === "bidding" && <Bidding data={data} me={me} myBids={myBids} skew={skew} onOpen={onOpen} />}
-          {data.phase === "reveal" && (seen || replaying) && <Results data={data} me={me} onReplay={() => setReplay(revealRound)} />}
+          {data.phase === "waiting" && <Waiting data={data} me={me} skew={skew} onReplay={onReplay} />}
+          {data.phase === "bidding" && <Bidding data={data} me={me} myBids={myBids} skew={skew} onOpen={onOpen} onReplay={onReplay} />}
+          {data.phase === "reveal" && results && (seen || replaying) && (
+            <Results results={results} teams={data.teams} me={me} skew={skew} serverNow={data.now} canRenounce={data.canRenounce} onReplay={onReplay} />
+          )}
           {(data.phase === "contracts" || data.phase === "done") && <Contracts data={data} />}
         </motion.div>
       </AnimatePresence>
@@ -117,7 +127,7 @@ export default function Room({ data, me: who, app }: { data: Data; me: { id: str
           <motion.div
             role="status"
             onClick={() => setToast("")}
-            className={`fixed inset-x-0 z-[45] mx-auto w-fit max-w-[calc(100%-2rem)] rounded-full bg-[#1c1c20] px-4 py-2 text-center text-sm text-[var(--bad)] shadow-lg ring-1 ring-white/10 ${data.isCommish ? "bottom-24" : "bottom-[max(1.25rem,env(safe-area-inset-bottom))]"}`}
+            className={`fixed inset-x-0 z-[45] mx-auto w-fit max-w-[calc(100%-2rem)] rounded-full bg-[#1c1c20] px-4 py-2 text-center text-sm text-[var(--bad)] shadow-lg ring-1 ring-white/10 ${bar ? "bottom-24" : "bottom-[max(1.25rem,env(safe-area-inset-bottom))]"}`}
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 12 }}
@@ -128,17 +138,17 @@ export default function Room({ data, me: who, app }: { data: Data; me: { id: str
       </AnimatePresence>
       <Portal>
         <AnimatePresence>{locked && <Locked key="locked" />}</AnimatePresence>
-        <AnimatePresence>{showing && <RevealShow key="show" data={data} onDone={showDone} />}</AnimatePresence>
+        <AnimatePresence>{showing && results && <RevealShow key="show" results={results} teams={data.teams} meId={data.meId} onDone={showDone} />}</AnimatePresence>
       </Portal>
       {/* room under the commissioner's bar; sign out only for the email sign in (the app has its own) */}
-      <footer className={`mx-auto max-w-5xl px-4 pt-8 text-center text-xs text-white/30 ${data.isCommish || data.needsLeagueLogin ? "pb-28" : "pb-10"}`}>
+      <footer className={`mx-auto max-w-5xl px-4 pt-8 text-center text-xs text-white/30 ${bar || data.needsLeagueLogin ? "pb-28" : "pb-10"}`}>
         {!app && (
           <form action={A.signOut}>
             <button className="hover:text-white/70">Sign out</button>
           </form>
         )}
       </footer>
-      {data.isCommish && <CommishBar data={data} />}
+      {bar && <CommishBar data={data} />}
       {data.needsLeagueLogin && (
         <div className="glass fixed inset-x-0 bottom-0 z-40 border-t border-white/[0.06] pb-[env(safe-area-inset-bottom)]">
           <div className="mx-auto flex max-w-5xl items-center gap-3 px-4 py-3 text-sm">
@@ -243,12 +253,19 @@ function Header({ data, me, app }: { data: Data; me: RoomTeam; app: boolean }) {
   );
 }
 
-function Waiting({ data }: { data: Data }) {
+// Between rounds: when the next one opens (in my own time zone, with a countdown), its cards face down, the round
+// that just finished, and everyone's cap space.
+function Waiting({ data, me, skew, onReplay }: { data: Data; me: RoomTeam; skew: number; onReplay: () => void }) {
   const next = data.round;
   return (
     <section className="mx-auto max-w-5xl px-4 pt-8">
-      <Kicker>{next ? roundName(next) : "Free agency"}</Kicker>
-      <h1 className="font-display mt-1 text-6xl leading-[0.85]">{next ? "Starting soon" : "Coming soon"}</h1>
+      <Kicker>{next ? `${roundName(next)} opens` : "Auction"}</Kicker>
+      <h1 className="font-display mt-1 min-h-[0.85em] text-6xl leading-[0.85]">{next?.opensAt ? <When iso={next.opensAt} /> : "Soon"}</h1>
+      {next?.opensAt && (
+        <div className="font-display mt-2 text-2xl leading-none text-white/45">
+          <TimeLeft iso={next.opensAt} skew={skew} serverNow={data.now} />
+        </div>
+      )}
       {next && data.cardsWaiting > 0 && (
         <div className="mt-8 grid grid-cols-4 gap-2 sm:grid-cols-8">
           {Array.from({ length: data.cardsWaiting }, (_, i) => (
@@ -265,6 +282,7 @@ function Waiting({ data }: { data: Data }) {
           ))}
         </div>
       )}
+      {data.last && <Results past results={data.last} teams={data.teams} me={me} skew={skew} serverNow={data.now} canRenounce={false} onReplay={onReplay} />}
       <Label className="mt-10">GMs</Label>
       <div className="mt-3 divide-y divide-white/[0.06] border-y border-white/[0.06]">
         {data.teams.map((t) => (
@@ -285,10 +303,11 @@ function Waiting({ data }: { data: Data }) {
   );
 }
 
-function Bidding({ data, me, myBids, skew, onOpen }: {
-  data: Data; me: RoomTeam; myBids: Record<string, number>; skew: number; onOpen: (p: CardPlayer) => void;
+function Bidding({ data, me, myBids, skew, onOpen, onReplay }: {
+  data: Data; me: RoomTeam; myBids: Record<string, number>; skew: number; onOpen: (p: CardPlayer) => void; onReplay: () => void;
 }) {
   const closes = Date.parse(data.round?.closesAt ?? "");
+  const total = Math.max(1, (closes - Date.parse(data.round?.opensAt ?? "")) / 1000 || 1); // the round's length, in seconds
   // The cards flip once their photos and logos are decoded (1.2 s at most), never onto a blank face.
   const photos = data.players.flatMap((p) => Object.values(cardImages(p, "large"))).join("\n");
   const [go, setGo] = useState(false);
@@ -301,15 +320,18 @@ function Bidding({ data, me, myBids, skew, onOpen }: {
   }, [photos]);
 
   const bids = Object.values(myBids);
-  const total = bids.reduce((a, b) => a + b, 0);
-  const over = total > me.capSpace;
+  const sum = bids.reduce((a, b) => a + b, 0);
+  const over = sum > me.capSpace;
   return (
     <section className="mx-auto max-w-5xl px-4 pt-6">
       <div className="flex items-end justify-between gap-4">
         <h1 className="font-display text-6xl leading-[0.85]">{data.round?.kind === "leftovers" ? "Last chance" : `Round ${data.round?.number}`}</h1>
-        <Countdown closes={closes} skew={skew} serverNow={data.now} />
+        <div className="text-right">
+          <Label className="mb-1.5">Closes <When iso={data.round?.closesAt ?? null} style="time" /></Label>
+          <Countdown closes={closes} skew={skew} serverNow={data.now} />
+        </div>
       </div>
-      <TimeBar closes={closes} skew={skew} serverNow={data.now} total={data.roundSeconds} />
+      <TimeBar closes={closes} skew={skew} serverNow={data.now} total={total} />
 
       <div className="mt-5 flex flex-wrap items-end gap-x-7 gap-y-4">
         <div>
@@ -319,7 +341,7 @@ function Bidding({ data, me, myBids, skew, onOpen }: {
         <div>
           <Label>{bids.length === 1 ? "1 bid" : `${bids.length} bids`}</Label>
           <div className="mt-1 flex items-baseline gap-2">
-            <span className={`font-display text-2xl leading-none ${over ? "text-amber-300" : ""}`}>{money(total)}</span>
+            <span className={`font-display text-2xl leading-none ${over ? "text-amber-300" : ""}`}>{money(sum)}</span>
             {over && <span className="text-[10px] text-amber-300/70">over cap if all win</span>}
           </div>
         </div>
@@ -347,25 +369,23 @@ function Bidding({ data, me, myBids, skew, onOpen }: {
           <DealtCard key={p.id} p={p} i={i} bid={myBids[p.id]} go={go} onOpen={onOpen} />
         ))}
       </div>
+      {data.last && <Results past results={data.last} teams={data.teams} me={me} skew={skew} serverNow={data.now} canRenounce={false} onReplay={onReplay} />}
     </section>
   );
 }
 
-// Whole seconds left on the clock: what the countdown and the time bar draw, so they re-render once a second.
-const useSecondsLeft = (closes: number, skew: number, serverNow: number) =>
-  useClock((now) => Math.max(0, Math.ceil((closes - now - skew) / 1000)) || 0, serverNow);
-
+// The round's clock. With hours to go it's a plain "9:59:12"; in the last hour, big rolling minutes and seconds.
 function Countdown({ closes, skew, serverNow }: { closes: number; skew: number; serverNow: number }) {
   const secs = useSecondsLeft(closes, skew, serverNow);
+  if (secs >= 3600) return <div className="font-display text-4xl leading-[0.85] tabular-nums">{left(secs)}</div>;
   const mm = Math.floor(secs / 60), ss = secs % 60;
   return (
-    <div className="text-right">
-      <div className={`font-display flex justify-end text-6xl leading-[0.85] transition-colors duration-500 ${secs <= 10 ? "text-[var(--crimson)]" : ""}`}>
-        <Digit d={mm} />
-        <span className="px-0.5 text-white/30">:</span>
-        <Digit d={Math.floor(ss / 10)} />
-        <Digit d={ss % 10} />
-      </div>
+    <div className={`font-display flex justify-end text-6xl leading-[0.85] transition-colors duration-500 ${secs <= 10 ? "text-[var(--crimson)]" : ""}`}>
+      {mm >= 10 && <Digit d={Math.floor(mm / 10)} />}
+      <Digit d={mm % 10} />
+      <span className="px-0.5 text-white/30">:</span>
+      <Digit d={Math.floor(ss / 10)} />
+      <Digit d={ss % 10} />
     </div>
   );
 }
@@ -537,30 +557,12 @@ function CommishBar({ data }: { data: Data }) {
       if (r?.error) setErr(r.error);
     });
   };
-  const nextSetup = data.rounds.find((r) => r.status === "setup");
   const btn = "h-10 rounded-full px-4 text-sm font-semibold transition active:scale-95 disabled:opacity-40";
-  const primary = `${btn} btn-primary`;
-  const ghost = `${btn} text-white/70 hover:text-white`;
-  if (data.phase === "waiting" && !data.round) return null; // nothing to run yet (the Rounds page is in the header)
   return (
     <div className="glass fixed inset-x-0 bottom-0 z-40 border-t border-white/[0.06] pb-[env(safe-area-inset-bottom)]">
-      <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-1 px-4 py-2.5">
-        <div className="ml-auto flex items-center gap-1">
-          {data.phase === "waiting" && data.round && <button disabled={pending} onClick={act(A.startNext)} className={primary}>Start {roundName(data.round).toLowerCase()}</button>}
-          {data.phase === "bidding" && (
-            <>
-              <button disabled={pending} onClick={act(A.addMinute)} className={ghost}>+1 min</button>
-              <button disabled={pending} onClick={act(A.revealNow, "Close bidding now for everyone?")} className={primary}>Reveal now</button>
-            </>
-          )}
-          {data.phase === "reveal" && (
-            <button disabled={pending} onClick={act(A.nextRound, "Sign the winners and move on?")} className={primary}>
-              {nextSetup ? `Start round ${nextSetup.number}` : data.round?.kind === "regular" ? "Next round" : "Finish"}
-            </button>
-          )}
-          {data.phase === "contracts" && <button disabled={pending} onClick={act(() => A.lockContracts(true), "Lock everyone's contract lengths?")} className={primary}>Lock contracts</button>}
-          {data.phase === "done" && <button disabled={pending} onClick={act(() => A.lockContracts(false))} className={ghost}>Unlock contracts</button>}
-        </div>
+      <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-end gap-1 px-4 py-2.5">
+        {data.phase === "contracts" && <button disabled={pending} onClick={act(() => A.lockContracts(true), "Lock everyone's contract lengths?")} className={`${btn} btn-primary`}>Lock contracts</button>}
+        {data.phase === "done" && <button disabled={pending} onClick={act(() => A.lockContracts(false))} className={`${btn} text-white/70 hover:text-white`}>Unlock contracts</button>}
         {err && <p className="basis-full text-right text-xs text-[var(--bad)]">{err}</p>}
       </div>
     </div>
