@@ -73,12 +73,14 @@ export default async function TeamView({ team, editable, base, sp, back, tradeHr
     }
     return a;
   };
-  // Everything after the slot pill and photo, for one player (or an empty slot).
+  // Everything after the slot pill and photo, for one player (or an empty slot). Pts is always the day on screen
+  // (his game that day, once he has played); Avg and the stats follow the stats view.
   const cells = (p: RosterPlayer | null, g: ReturnType<typeof gameOf>) => {
     const a = p ? agg(p.id) : null;
+    const played = p ? lines.find((l) => l.playerId === p.id && l.day === day) : undefined;
     const val = (k: Key) => (!a || !a.gp ? "--" : period !== "day" ? (a[k] / a.gp).toFixed(1) : String(a[k]));
     return [
-      <td key="pts" className="num text-right font-semibold">{a?.gp ? round(a.fpts) : <span className="text-muted">--</span>}</td>,
+      <td key="pts" className="num text-right font-semibold">{played ? round(played.fpts) : <span className="text-muted">--</span>}</td>,
       <td key="avg" className="num text-right">{a?.gp ? (a.fpts / a.gp).toFixed(1) : <span className="text-muted">--</span>}</td>,
       <td key="opp">{g && p ? oppLabel(g, p.nba_team_id!, abbr) : <span className="text-muted">--</span>}</td>,
       <td key="status" className="text-xs">{g && p ? <GameStatus g={g} teamId={p.nba_team_id!} /> : <span className="text-muted">--</span>}</td>,
@@ -167,7 +169,7 @@ export default async function TeamView({ team, editable, base, sp, back, tradeHr
               </tr>
               <tr>
                 <th className="sticky left-0 z-10 [transform:translateZ(0)] shadow-[2px_0_3px_-2px_rgba(0,0,0,0.25)] bg-card">Starters</th><th />
-                <th className="text-right">{period === "day" ? "Score" : "Pts"}</th><th className="text-right">Avg</th>
+                <th className="text-right">Pts</th><th className="text-right">Avg</th>
                 <th>Opp</th><th>Status</th>
                 {STATS.map(([k, label]) => <th key={k} className="text-right">{label}</th>)}
               </tr>
