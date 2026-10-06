@@ -1,19 +1,26 @@
 "use client";
 import { useState, useTransition } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import type { CardPlayer, Room, RoomTeam } from "@/lib/bidding";
+import type { CardPlayer, Results as RoundResults, RoomTeam } from "@/lib/bidding";
 import { money } from "@/lib/rules";
 import * as A from "@/app/bidding/actions";
 import PlayerCard from "./PlayerCard";
 import Portal from "./Portal";
-import { ease, Gm, Kicker, reasonText, roundName } from "./ui";
+import { TimeLeft, When } from "./time";
+import { ease, Gm, Kicker, Label, reasonText, roundName } from "./ui";
 
-// After the reveal: who signed whom, every other bid, and Renounce on my signings until the next round starts.
-export default function Results({ data, me, onReplay }: { data: Room; me: RoomTeam; onReplay: () => void }) {
+// A round's results: who signed whom and every other bid. While the renounce window is open (`canRenounce`) my
+// signings have Renounce and the header counts down to the deadline. `past`: a finished round, shown smaller under
+// the next one.
+export default function Results({ results, teams, me, skew, serverNow, canRenounce, past = false, onReplay }: {
+  results: RoundResults; teams: RoomTeam[]; me: RoomTeam; skew: number; serverNow: number; canRenounce: boolean; past?: boolean; onReplay: () => void;
+}) {
+  const { round, items, players } = results;
   const [ask, setAsk] = useState<{ bidId: string; player: CardPlayer } | null>(null);
   const [err, setErr] = useState("");
   const [pending, start] = useTransition();
-  const name = (id: string) => data.teams.find((t) => t.id === id)?.name ?? "A team";
+  const name = (id: string) => teams.find((t) => t.id === id)?.name ?? "A team";
+  const leftovers = round.kind === "leftovers";
 
   const renounce = () =>
     ask &&
@@ -23,20 +30,35 @@ export default function Results({ data, me, onReplay }: { data: Room; me: RoomTe
       setAsk(null);
     });
 
+  const replay = <button onClick={onReplay} className="pb-1 text-sm font-medium text-white/55 transition hover:text-white">▶ Replay</button>;
   return (
-    <section className="mx-auto max-w-5xl px-4 pt-6">
-      <div className="flex items-end justify-between gap-4">
-        <div>
-          <Kicker>{roundName(data.round)}</Kicker>
-          <h1 className="font-display mt-1 text-6xl leading-[0.85]">Results</h1>
+    <section className={past ? "mt-10" : "mx-auto max-w-5xl px-4 pt-6"}>
+      {past ? (
+        <div className="flex items-end justify-between gap-4">
+          <Label>{roundName(round)} results</Label>
+          {replay}
         </div>
-        <button onClick={onReplay} className="pb-1 text-sm font-medium text-white/55 transition hover:text-white">▶ Replay</button>
-      </div>
+      ) : (
+        <>
+          <div className="flex items-end justify-between gap-4">
+            <div>
+              <Kicker>{roundName(round)}</Kicker>
+              <h1 className="font-display mt-1 text-6xl leading-[0.85]">Results</h1>
+            </div>
+            {replay}
+          </div>
+          {canRenounce && round.settlesAt && (
+            <Label className="mt-4">
+              Renounce until <When iso={round.settlesAt} style="time" /> · <TimeLeft iso={round.settlesAt} skew={skew} serverNow={serverNow} />
+            </Label>
+          )}
+        </>
+      )}
       {err && <p className="mt-3 text-sm text-[var(--bad)]">{err}</p>}
 
-      <div className="mt-6 grid gap-3 sm:grid-cols-2">
-        {(data.reveal ?? []).map((item, i) => {
-          const p = data.players.find((x) => x.id === item.playerId);
+      <div className={`${past ? "mt-3" : "mt-6"} grid gap-3 sm:grid-cols-2`}>
+        {items.map((item, i) => {
+          const p = players.find((x) => x.id === item.playerId);
           if (!p) return null;
           const w = item.winner;
           const mine = w?.teamId === me.id;
@@ -64,7 +86,7 @@ export default function Results({ data, me, onReplay }: { data: Room; me: RoomTe
                     {w.tie && <div className="text-[11px] text-white/45">{w.tie === "cap" ? "Tie · more cap space" : "Tie · computer pick"}</div>}
                   </>
                 ) : (
-                  <div className="mt-2 text-sm text-white/45">{data.round?.kind === "leftovers" ? "Unsigned" : "Unsigned · last chance round"}</div>
+                  <div className="mt-2 text-sm text-white/45">{leftovers ? "Unsigned" : "Unsigned · last chance round"}</div>
                 )}
                 {others.length > 0 && (
                   <ul className="mt-2 space-y-0.5 text-xs text-white/40">
@@ -79,7 +101,7 @@ export default function Results({ data, me, onReplay }: { data: Room; me: RoomTe
                     ))}
                   </ul>
                 )}
-                {mine && me.renouncesLeft > 0 && (
+                {canRenounce && mine && me.renouncesLeft > 0 && (
                   <button
                     onClick={() => setAsk({ bidId: w.bidId, player: p })}
                     className="mt-2 text-xs font-medium text-white/50 underline-offset-4 transition hover:text-white hover:underline"

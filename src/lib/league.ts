@@ -1,7 +1,7 @@
 import "server-only";
 import { cache } from "react";
 import { db } from "./supabase/server";
-import { ROUND_SECONDS, SCORING, teamState, type Scoring, type Settings, type TeamState } from "./rules";
+import { parseSchedule, SCORING, teamState, type Scoring, type Settings, type TeamState } from "./rules";
 import type { Row } from "./supabase/types";
 import type { SeasonLine } from "./espn-parse";
 import { onIR } from "./lineup-store";
@@ -29,7 +29,7 @@ export const getSettings = cache(async () => {
     leagueSize: s?.league_size ?? 8,
     waiverHours: s?.waiver_hours ?? 48, // how long a dropped player stays on waivers
     faLocked: s?.fa_locked ?? false, // free agency contract lengths locked by the commissioner
-    roundSeconds: s?.round_seconds ?? ROUND_SECONDS, // free agency: how long each round's sealed bidding lasts
+    faSchedule: parseSchedule(s?.fa_schedule ?? null), // free agency by the clock (rules.ts), null: nothing opens by itself
     scoring: { ...SCORING, ...(s?.scoring as Partial<Scoring> | null) } as Scoring,
     rules,
   };

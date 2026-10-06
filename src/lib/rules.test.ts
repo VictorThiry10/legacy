@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { resolveRound, revealRound, maxBid, yearsLeft, DEFAULT_SETTINGS as S, drawLottery, lotteryOdds, fantasyPoints, scoreRows, rosterProblems, teamState, rankWaiverBids, type TeamState, type Bid } from "./rules";
+import { resolveRound, revealRound, maxBid, yearsLeft, DEFAULT_SETTINGS as S, drawLottery, lotteryOdds, fantasyPoints, scoreRows, rosterProblems, teamState, rankWaiverBids, slot, parseSchedule, DAILY, type Schedule, type TeamState, type Bid } from "./rules";
 
 const M = 1_000_000;
 const team = (id: string, salary = 0, rosterCount = 0): TeamState => ({ id, salary, rosterCount, slotsUsed: {} });
@@ -196,4 +196,28 @@ test("scoreRows: one row per category that happened, adding up to the fantasy po
     ["Field Goals Made", 1, 1, 1], ["Field Goals Missed", -1, 4, -4],
   ]);
   assert.equal(rows.reduce((a, r) => a + r.score, 0), fantasyPoints(line, w));
+});
+
+test("free agency schedule: a round a day, 8:00 to 18:00, renounce until 20:00", () => {
+  const s: Schedule = { start: "2026-10-12T07:00:00.000Z", from: 0, ...DAILY };
+  const at = (opened: number) => {
+    const t = slot(s, opened);
+    return [t.opens, t.closes, t.settles].map((x) => new Date(x).toISOString());
+  };
+  assert.deepEqual(at(0), ["2026-10-12T07:00:00.000Z", "2026-10-12T17:00:00.000Z", "2026-10-12T19:00:00.000Z"]);
+  assert.deepEqual(at(6), ["2026-10-18T07:00:00.000Z", "2026-10-18T17:00:00.000Z", "2026-10-18T19:00:00.000Z"]); // round 7
+  assert.equal(at(7)[0], "2026-10-19T07:00:00.000Z"); // the last chance round, the day after
+});
+
+test("free agency schedule set again halfway: the start is the next round to open", () => {
+  const s: Schedule = { start: "2026-10-15T07:00:00.000Z", from: 3, ...DAILY }; // three rounds already opened
+  assert.equal(new Date(slot(s, 3).opens).toISOString(), "2026-10-15T07:00:00.000Z");
+  assert.equal(new Date(slot(s, 4).opens).toISOString(), "2026-10-16T07:00:00.000Z");
+});
+
+test("a stored schedule is checked: bidding and the renounce window must fit before the next round", () => {
+  assert.equal(parseSchedule(null), null);
+  assert.equal(parseSchedule({ start: "nope", from: 0, ...DAILY }), null);
+  assert.equal(parseSchedule({ start: "2026-10-12T07:00:00.000Z", from: 0, bidMinutes: 600, renounceMinutes: 120, everyMinutes: 600 }), null);
+  assert.ok(parseSchedule({ start: "2026-10-12T07:00:00.000Z", from: 0, ...DAILY }));
 });

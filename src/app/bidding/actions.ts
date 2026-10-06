@@ -42,20 +42,10 @@ export async function setLengths(rows: { contractId: string; years: number }[]) 
   return run(async () => B.setLengths(await me(), rows));
 }
 
-export async function startNext() {
-  return run(async () => B.startNext(await me()));
-}
-
-export async function revealNow() {
-  return run(async () => B.changeClock(await me(), "now"));
-}
-
-export async function addMinute() {
-  return run(async () => B.changeClock(await me(), 60));
-}
-
-export async function nextRound() {
-  return run(async () => B.nextRound(await me()));
+// The schedule (Rounds page): when the next round opens (ISO time, worked out in the commissioner's own time zone
+// by the form) and how long everything lasts, in minutes. null clears it: nothing opens until a new one is set.
+export async function setSchedule(plan: { start: string; bidMinutes: number; renounceMinutes: number; everyMinutes: number } | null) {
+  return run(async () => B.setSchedule(await me(), plan));
 }
 
 export async function lockContracts(locked: boolean) {
@@ -73,10 +63,6 @@ export async function addToRound(f: FormData) {
 
 export async function removeFromRound(f: FormData) {
   return run(async () => B.removeFromRound(await me(), Number(f.get("round")), String(f.get("player"))));
-}
-
-export async function setRoundSeconds(f: FormData) {
-  return run(async () => B.setRoundSeconds(await me(), Number(f.get("seconds"))));
 }
 
 export async function autoFill() {
