@@ -87,6 +87,13 @@ table.players th.stick, table.players td.stick {
   transform: translateZ(0); box-shadow: 2px 0 3px -2px rgba(0, 0, 0, 0.25);
 }
 table.players td.n { text-align: right; font-variant-numeric: tabular-nums; }
+/* The table scrolls in its own box (ScrollBox), and its two header rows stay at the top of it. Each cell carries
+   its own lines (separate), so they travel with the cells that stick. The second row sits 2rem down: the first
+   row's text and padding, over its bottom line, so no row shows through between them. */
+table.players { border-collapse: separate; border-spacing: 0; }
+table.players thead th { position: sticky; top: 0; z-index: 12; background: var(--card); }
+table.players thead tr + tr th { top: 2rem; z-index: 11; }
+table.players thead th.stick { z-index: 13; }
 table.players .bl { border-left: 1px solid var(--line); }
 
 /* ---------- page slides (React ViewTransition, see components/Slide.tsx) ---------- */

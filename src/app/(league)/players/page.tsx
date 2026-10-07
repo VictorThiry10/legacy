@@ -16,6 +16,7 @@ import { headshot, initials } from "@/lib/names";
 import { openWaivers } from "@/lib/waivers";
 import { watchlist } from "@/lib/watchlist";
 import FlagIcon from "@/components/FlagIcon";
+import ScrollBox from "@/components/ScrollBox";
 
 export const dynamic = "force-dynamic";
 
@@ -31,7 +32,9 @@ export default async function Players({ searchParams }: PageProps<"/players">) {
   const sp: Params = Object.fromEntries(Object.entries(raw).map(([k, v]) => [k, typeof v === "string" ? v : undefined]));
   return (
     <Slide>
-      <div className="space-y-4">
+      {/* Exactly as tall as the screen under the tab bar (2.75rem) and the page's top padding: the page stays put
+          and the table scrolls in its own box, under its header rows. -mb-6 takes the page's bottom padding. */}
+      <div className="-mb-6 flex h-[calc(100dvh-4.25rem-1px)] flex-col gap-4">
         <h1 className="text-2xl font-semibold">Players</h1>
         <StatsTable sp={sp} />
       </div>
@@ -110,7 +113,7 @@ async function StatsTable({ sp }: { sp: Params }) {
     <>
       <FilterBar sp={sp} show={show} play={play} perGame={perGame} period={period} periods={periods} teams={[...new Set(players.map((p) => p.nba_team).filter((t): t is string => !!t && t in NBA_TEAMS))].sort((a, b) => NBA_TEAMS[a].localeCompare(NBA_TEAMS[b]))} />
 
-      <div className="-mx-4 overflow-x-auto border-y border-line bg-card sm:mx-0 sm:rounded-xl sm:border">
+      <ScrollBox at={href(sp, {})} className="-mx-4 min-h-0 overflow-auto overscroll-contain border-y border-line bg-card sm:mx-0 sm:rounded-xl sm:border">
         <table className="t players whitespace-nowrap">
           <thead>
             <tr className="group">
@@ -170,11 +173,12 @@ async function StatsTable({ sp }: { sp: Params }) {
         </table>
         {!players.length && <p className="text-muted text-sm p-4">No players yet.</p>}
         {watch && !!players.length && !list.length && <p className="text-muted text-sm p-4">Nobody on your watch list here. Tap the flag on a player&apos;s page to add him.</p>}
-      </div>
-      <div className="flex flex-wrap justify-between gap-2 text-xs text-muted">
-        <span />
-        {list.length > shown.length && <Link href={href(sp, { n: String(count + 50) })} prefetch={false} scroll={false} className="py-2 text-accent hover:underline">Show 50 more</Link>}
-      </div>
+        {list.length > shown.length && (
+          <div className="sticky left-0 p-2 text-center text-xs">
+            <Link href={href(sp, { n: String(count + 50) })} prefetch={false} scroll={false} className="inline-block px-4 py-2 text-accent hover:underline">Show 50 more</Link>
+          </div>
+        )}
+      </ScrollBox>
     </>
   );
 }
@@ -217,7 +221,7 @@ function FilterBar({ sp, show, play, perGame, period, periods, teams }: {
   const days = Array.from({ length: 7 }, (_, i) => addDays(now, i)).map((d): [string, string] => [d, `${weekday(d).charAt(0)}${weekday(d).slice(1).toLowerCase()}, ${monthDay(d)}`]);
   const keep = Object.fromEntries(Object.entries({ pos: sp.pos, sort: sp.sort, dir: sp.dir, watch: sp.watch }).filter(([, v]) => v)) as Record<string, string>;
   return (
-    <div className="flex items-center gap-2 overflow-x-auto pb-1 -mx-4 px-4 sm:mx-0 sm:px-0">
+    <div className="flex shrink-0 items-center gap-2 overflow-x-auto pb-1 -mx-4 px-4 sm:mx-0 sm:px-0">
       <Link href={href(sp, { search: "1" })} prefetch={false} scroll={false} className={`${chip(false)} shrink-0`} aria-label="Search"><SearchIcon /></Link>
       <PlayerFilters
         className={`${chip(filtered)} shrink-0`}
