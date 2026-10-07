@@ -113,8 +113,8 @@ export type Database = {
       >;
       sync_log: Table<{ last_run: string; name: string }, { last_run: string; name: string }>;
       teams: Table<
-        { created_at: string; id: string; is_commish: boolean; manager_email: string; manager_name: string | null; name: string; user_id: string | null },
-        { created_at?: string; id?: string; is_commish?: boolean; manager_email: string; manager_name?: string | null; name: string; user_id?: string | null }
+        { color: string | null; created_at: string; id: string; is_commish: boolean; logo_url: string | null; manager_email: string; manager_name: string | null; name: string; user_id: string | null },
+        { color?: string | null; created_at?: string; id?: string; is_commish?: boolean; logo_url?: string | null; manager_email: string; manager_name?: string | null; name: string; user_id?: string | null }
       >;
       trade_offers: Table<
         {
