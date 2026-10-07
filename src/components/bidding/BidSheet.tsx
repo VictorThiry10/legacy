@@ -1,6 +1,8 @@
 "use client";
 import { useState } from "react";
+import Link from "next/link";
 import { motion } from "motion/react";
+import { FORWARD } from "../Slide";
 import type { CardPlayer } from "@/lib/bidding";
 import { headshot } from "@/lib/names";
 import { BID_STEP, money } from "@/lib/rules";
@@ -39,14 +41,17 @@ export default function BidSheet({ player, current, max, min, onClose, onBid }: 
         transition={{ type: "spring", stiffness: 320, damping: 34 }}
       >
         <div className="flex items-center gap-3">
-          {face && <img src={face} alt="" decoding="async" className="h-12 w-12 shrink-0 rounded-full bg-line object-cover object-top" />}
-          <div className="min-w-0 flex-1">
-            <div className="truncate text-lg font-semibold">{player.name}</div>
-            <div className="truncate text-xs text-muted">
-              {[player.position?.replace(/,\s*/g, "/"), player.nbaTeam, player.stats && `${player.stats.fppg.toFixed(1)} fpts`].filter(Boolean).join(" · ")}
+          {/* his page in Players */}
+          <Link href={`/players/${player.id}`} transitionTypes={FORWARD} className="flex min-w-0 flex-1 items-center gap-3 active:opacity-70">
+            {face && <img src={face} alt="" decoding="async" className="h-12 w-12 shrink-0 rounded-full bg-line object-cover object-top" />}
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-lg font-semibold">{player.name}</div>
+              <div className="truncate text-xs text-muted">
+                {[player.position?.replace(/,\s*/g, "/"), player.nbaTeam, player.stats && `${player.stats.fppg.toFixed(1)} fpts`].filter(Boolean).join(" · ")}
+              </div>
             </div>
-          </div>
-          <button type="button" onClick={onClose} aria-label="Close" className="btn-ghost h-9 w-9 rounded-full p-0 text-muted">✕</button>
+          </Link>
+          <button type="button" onClick={onClose} aria-label="Close" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-line text-muted">✕</button>
         </div>
 
         {canBid ? (

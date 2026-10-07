@@ -1,6 +1,6 @@
 "use client";
 import { Fragment, useEffect, useRef, useState } from "react";
-import { animate, AnimatePresence, motion, MotionConfig, useIsPresent, useMotionValue, useReducedMotion, useTransform } from "motion/react";
+import { animate, AnimatePresence, motion, MotionConfig, useIsPresent, useMotionValue, useTransform } from "motion/react";
 import type { CardPlayer, Results, RoomTeam } from "@/lib/bidding";
 import { BID_STEP, money, type RevealItem } from "@/lib/rules";
 import PlayerCard, { CardBack, cardImages } from "./PlayerCard";
@@ -20,7 +20,6 @@ const TREMBLE = 1, FLIPPED = 2, TEAM = 3, AMOUNT = 4, LANDED = 5, OTHERS = 6;
 // round (dozens of leftovers) can be tapped through or skipped.
 export default function RevealShow({ results, teams, meId, onDone }: { results: Results; teams: RoomTeam[]; meId: string; onDone: () => void }) {
   const { round, items, players } = results;
-  const reduce = useReducedMotion();
   const skippable = round.kind === "leftovers";
   const [i, setI] = useState(0);
   const [started, setStarted] = useState(-1); // the player whose clock is running (his photo is decoded)
@@ -40,7 +39,7 @@ export default function RevealShow({ results, teams, meId, onDone }: { results: 
       exit={{ opacity: 0, transition: { duration: 0.8 } }}
     >
       <div className="pointer-events-none absolute inset-0" style={{ background: "radial-gradient(42rem 30rem at 50% 34%, rgba(233,196,106,0.07), transparent 70%)" }} />
-      {!reduce && <Dust />}
+      <Dust />
       <div className="absolute inset-x-0 top-0 z-10 flex items-center gap-3 px-5 pt-[max(1rem,env(safe-area-inset-top))]">
         <div className="shrink-0 text-[11px] font-semibold uppercase tracking-[0.3em] text-white/55">{roundName(round)}</div>
         {/* Progress: done players are a plain full bar, only the current one fills (a transform, so it stays off the main thread).
@@ -92,7 +91,6 @@ function Stage({ item, player, teams, meId, leftovers, onStart, onFinish }: {
   const begin = useRef(onStart);
   const present = useIsPresent();
   const live = useRef(present);
-  const reduce = useReducedMotion();
   useEffect(() => {
     finish.current = onFinish;
     begin.current = onStart;
@@ -148,29 +146,27 @@ function Stage({ item, player, teams, meId, leftovers, onStart, onFinish }: {
           className="pointer-events-none absolute inset-0"
           style={{ background: "radial-gradient(circle at 50% 38%, rgba(255,247,220,0.9), rgba(233,196,106,0.35) 30%, transparent 65%)" }}
           initial={{ opacity: 0 }}
-          animate={{ opacity: [0, reduce ? 0.3 : 0.85, 0] }}
+          animate={{ opacity: [0, 0.85, 0] }}
           transition={{ duration: 1, times: [0, 0.3, 1], ease: "easeOut" }}
         />
       )}
       {/* Fireworks only when he's mine. */}
-      {!reduce && stage >= LANDED && mine && <Confetti />}
+      {stage >= LANDED && mine && <Confetti />}
 
       <motion.div
         className="relative w-[min(60vw,260px,34svh)] [perspective:1400px]"
         // a thud when "No bids" lands
-        animate={unsigned && !jumped && !reduce ? { x: [0, -9, 8, -5, 3, 0] } : { x: 0 }}
+        animate={unsigned && !jumped ? { x: [0, -9, 8, -5, 3, 0] } : { x: 0 }}
         transition={{ duration: 0.45, delay: unsigned ? 0.25 : 0 }}
       >
         {/* Light behind the card: it gathers before the flip, then turns (gold for a signing, grey for nobody). */}
-        {!reduce && (
-          <motion.div
-            className={`pointer-events-none absolute left-1/2 top-1/2 -z-10 h-[170vmin] w-[170vmin] -translate-x-1/2 -translate-y-1/2 ${s.rays}`}
-            style={{ "--ray": w ? "rgb(233 196 106 / 0.17)" : "rgb(255 255 255 / 0.06)" } as React.CSSProperties}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: flipped ? (unsigned ? 0.35 : 1) : 0 }}
-            transition={{ duration: 1.6, ease }}
-          />
-        )}
+        <motion.div
+          className={`pointer-events-none absolute left-1/2 top-1/2 -z-10 h-[170vmin] w-[170vmin] -translate-x-1/2 -translate-y-1/2 ${s.rays}`}
+          style={{ "--ray": w ? "rgb(233 196 106 / 0.17)" : "rgb(255 255 255 / 0.06)" } as React.CSSProperties}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: flipped ? (unsigned ? 0.35 : 1) : 0 }}
+          transition={{ duration: 1.6, ease }}
+        />
         <motion.div
           className="pointer-events-none absolute -inset-20 -z-10 rounded-full"
           style={{ background: `radial-gradient(closest-side, ${w || !flipped ? "rgba(233,196,106,0.32)" : "rgba(255,255,255,0.08)"}, transparent)` }}
@@ -181,9 +177,9 @@ function Stage({ item, player, teams, meId, leftovers, onStart, onFinish }: {
           }
           transition={stage >= LANDED && w ? { duration: 2.4, repeat: Infinity, ease: "easeInOut" } : { duration: flipped ? 0.8 : 1.5, ease }}
         />
-        {!reduce && !flipped && <Gather />}
-        {!reduce && flipped && !jumped && <Shockwave />}
-        {!reduce && stage >= LANDED && mine && !jumped && <Burst />}
+        {!flipped && <Gather />}
+        {flipped && !jumped && <Shockwave />}
+        {stage >= LANDED && mine && !jumped && <Burst />}
 
         {/* The card: breathes in, trembles, then lifts and turns over on a spring (smooth, a touch of overshoot). */}
         <motion.div
@@ -202,7 +198,7 @@ function Stage({ item, player, teams, meId, leftovers, onStart, onFinish }: {
               <div className="face @container relative">
                 <PlayerCard p={player} className={`transition-[filter] duration-[1400ms] ${unsigned ? "grayscale brightness-75" : ""}`} />
                 {/* one sweep of light over the foil as it lands face up */}
-                {flipped && !reduce && (
+                {flipped && (
                   <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-[7%/5%]">
                     <motion.div
                       className="absolute inset-y-0 w-[60%]"

@@ -3,9 +3,11 @@ import { useState, useTransition } from "react";
 import { DAILY, type Schedule as Plan } from "@/lib/rules";
 import * as A from "@/app/(league)/bidding/actions";
 import { useInBrowser, When } from "./time";
+import { BTN, GHOST } from "./ui";
 
-// A quick run to try everything: the next round opens in a minute, 2 minutes of bidding, 1 to renounce, a round every 4.
-const TEST = { bidMinutes: 2, renounceMinutes: 1, everyMinutes: 4 };
+// A quick run to try everything: the next round opens in a minute, 2 minutes of bidding, 3 with the results up to
+// renounce, a round every 6.
+const TEST = { bidMinutes: 2, renounceMinutes: 3, everyMinutes: 6 };
 
 type Row = { label: string; status: string; opens: string | null; closes: string | null; settles: string | null };
 
@@ -73,7 +75,7 @@ export default function Schedule({ schedule, stale, rows }: { schedule: Plan | n
             <span className="shrink-0 text-sm text-muted">{next.label} opens</span>
             <input name="start" type="datetime-local" required defaultValue={localInput(next.opens && !stale ? new Date(next.opens) : nextMondayAt8())} className="h-11 min-w-0 flex-1 bg-transparent text-sm outline-none" />
           </label>
-          <button disabled={pending} className="btn rounded-full px-5">Save</button>
+          <button disabled={pending} className={BTN}>Save</button>
         </form>
       )}
       <p className="text-xs text-muted">
@@ -84,13 +86,13 @@ export default function Schedule({ schedule, stale, rows }: { schedule: Plan | n
           <button
             disabled={pending}
             onClick={() => send({ start: new Date(Date.now() + 60_000).toISOString(), ...TEST }, `Test run? ${next.label} opens in 1 minute: ${TEST.bidMinutes} minutes of bidding, ${TEST.renounceMinutes} to renounce, a round every ${TEST.everyMinutes}.`)}
-            className="btn-ghost rounded-full px-4"
+            className={GHOST}
           >
             Test run
           </button>
         )}
         {schedule && (
-          <button disabled={pending} onClick={() => send(null, "Stop the schedule? Nothing opens until you set a new one. A round already open carries on.")} className="btn-ghost rounded-full px-4 text-muted">
+          <button disabled={pending} onClick={() => send(null, "Stop the schedule? Nothing opens until you set a new one. A round already open carries on.")} className={`${GHOST} text-muted`}>
             Stop
           </button>
         )}

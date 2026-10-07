@@ -1,5 +1,6 @@
 "use client";
 import { memo, useCallback, useContext, useEffect, useOptimistic, useRef, useState, useSyncExternalStore, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion, MotionConfig, PresenceContext, useSpring } from "motion/react";
 import type { CardPlayer, Results as RoundResults, Room as Data, RoomTeam } from "@/lib/bidding";
@@ -15,6 +16,7 @@ import { useClock } from "./clock";
 import { left, useSecondsLeft, When } from "./time";
 import { ready } from "./preload";
 import { ease, Gm, roundName } from "./ui";
+import { FORWARD } from "../Slide";
 
 // The auction room, under the page's back bar. One page that changes with the round: waiting (the rounds to come),
 // bidding (the cards, open all day), the results (renounce for an hour), then contract lengths. Polls a tiny
@@ -80,7 +82,8 @@ export default function Room({ data, me: who, app }: { data: Data; me: { id: str
   const next = data.upcoming[0]?.round ?? null;
 
   return (
-    <MotionConfig reducedMotion="user">
+    // The cards and the reveal always animate (a phone's "reduce motion" setting was turning them off).
+    <MotionConfig reducedMotion="never">
       <AnimatePresence mode="wait" initial={false} onExitComplete={() => window.scrollTo({ top: 0, behavior: "instant" })}>
         <motion.div
           key={`${data.phase}:${data.round?.id ?? ""}`}
@@ -223,7 +226,9 @@ function Waiting({ data, me, skew, onReplay }: { data: Data; me: RoomTeam; skew:
           <div className="grid grid-cols-4 gap-2 sm:grid-cols-8">
             {players.map((p, k) => (
               <motion.div key={p.id} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: Math.min(k, 8) * 0.03, duration: 0.3, ease }}>
-                <PlayerCard p={p} size="thumb" />
+                <Link href={`/players/${p.id}`} transitionTypes={FORWARD} className="block active:opacity-80">
+                  <PlayerCard p={p} size="thumb" />
+                </Link>
               </motion.div>
             ))}
           </div>

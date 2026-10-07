@@ -1,12 +1,13 @@
 import type { CardPlayer } from "@/lib/bidding";
 import { headshot, nbaLogo } from "@/lib/names";
+import { teamColors } from "@/lib/nba-colors";
 import { money } from "@/lib/rules";
 import s from "./gold.module.css";
 
 // The auction's player card, Ultimate Team style: a foil by his fantasy points per game (amethyst, black, gold, pale
-// gold, silver), his rating, position and NBA team top left, the photo cut out over the foil, his name across the
-// middle and six numbers below. `bid` shows my bid and gives the card a cream rim. Sizes itself from its width
-// (container query units), in a grid or full screen.
+// gold, silver), his rating, position and NBA team top left, the photo over a glow in his team's colour and a faint
+// team crest, his name across the middle and six numbers below. `bid` shows my bid and gives the card a cream rim.
+// Sizes itself from its width (container query units), in a grid or full screen.
 
 const INJURY: Record<string, string> = { OUT: "OUT", "DAY-TO-DAY": "DTD", QUESTIONABLE: "Q", DOUBTFUL: "D", SUSPENSION: "SUS" };
 
@@ -17,6 +18,7 @@ export type CardSize = "large" | "thumb";
 export const cardImages = (p: CardPlayer, size: CardSize) => ({
   face: headshot(p.headshot, size === "thumb" ? 160 : 0),
   logo: nbaLogo(p.nbaTeam, 96),
+  crest: nbaLogo(p.nbaTeam, size === "thumb" ? 160 : 320),
 });
 
 // The foil: fantasy points per game, like Ultimate Team's overall rating. Amethyst 40+, black 35+, gold 30+, pale gold 27+, silver below.
@@ -28,7 +30,8 @@ export default function PlayerCard({ p, bid, size = "large", className = "", chi
   const [first, ...rest] = p.name.split(" ");
   const last = rest.join(" ") || first;
   const pos = (p.position ?? "").split(",").map((x) => x.trim()).filter(Boolean).join("/");
-  const { face, logo } = cardImages(p, size);
+  const { face, logo, crest } = cardImages(p, size);
+  const [c1] = teamColors(p.nbaTeam);
   const loading = size === "thumb" ? "lazy" : undefined;
   const injury = p.injury ? (INJURY[p.injury.toUpperCase()] ?? p.injury.slice(0, 3).toUpperCase()) : null;
   const st = p.stats;
@@ -37,6 +40,9 @@ export default function PlayerCard({ p, bid, size = "large", className = "", chi
   return (
     <div className={`@container ${s.card} ${s[tier(st?.fppg)]} ${bid !== undefined ? s.bid : ""} ${className}`}>
       <div className={s.body}>
+        {/* behind the photo: a glow in the team's colour and the team's crest, faint */}
+        <div className="absolute inset-x-0 top-0 h-[60%]" style={{ background: `radial-gradient(60% 70% at 62% 42%, color-mix(in oklab, ${c1} 55%, transparent), transparent 70%)` }} />
+        {crest && <img src={crest} alt="" loading={loading} decoding="async" className="pointer-events-none absolute left-[32%] top-[4%] w-[62%] opacity-[0.14] grayscale" />}
         {face && <img src={face} alt="" loading={loading} decoding="async" className="pointer-events-none absolute left-[8%] top-[7cqw] w-full max-w-none" />}
         <div className={s.band} />
         <div className="card-sheen pointer-events-none absolute inset-0" />
@@ -57,9 +63,9 @@ export default function PlayerCard({ p, bid, size = "large", className = "", chi
           <div className={`font-display truncate ${thumb ? "text-[14cqw]" : "text-[10.5cqw]"} uppercase leading-[0.9] tracking-[0.04em]`}>{last}</div>
         </div>
         {!thumb && stats.length > 0 && (
-          <div className="absolute inset-x-[10cqw] top-[70%] grid grid-cols-2 gap-x-[4cqw] leading-none">
+          <div className="absolute inset-x-[9cqw] top-[70%] grid grid-cols-2 gap-x-[3cqw] leading-none">
             {stats.map(([label, v]) => (
-              <div key={label} className="flex items-baseline gap-[1.6cqw] py-[1.8cqw]">
+              <div key={label} className="flex items-baseline gap-[2.4cqw] py-[1.8cqw]">
                 <span className="font-display w-[12cqw] text-right text-[7.5cqw]">{label === "GP" ? v : v.toFixed(1)}</span>
                 <span className={`${s.dim} text-[3.4cqw] font-bold tracking-[0.12em]`}>{label}</span>
               </div>
@@ -72,14 +78,17 @@ export default function PlayerCard({ p, bid, size = "large", className = "", chi
   );
 }
 
-// Face down: the foil with the league's name engraved, before the card is revealed.
+// ESPN's NBA logo, turned black and gold (the image is grey-scaled and warmed up).
+const NBA_LOGO = "https://a.espncdn.com/i/teamlogos/leagues/500/nba.png";
+
+// Face down: a black foil with the NBA logo in gold, before the card is revealed.
 export function CardBack({ className = "" }: { className?: string }) {
   return (
-    <div className={`@container ${s.card} ${s.gold} ${className}`}>
+    <div className={`@container ${s.card} ${s.black} ${className}`}>
       <div className={s.body}>
-        <div className="absolute inset-0" style={{ background: "radial-gradient(90% 60% at 30% 10%, rgba(255,250,225,0.35), transparent 70%)" }} />
+        <div className="absolute inset-0" style={{ background: "radial-gradient(70% 55% at 50% 45%, rgba(233,196,106,0.22), transparent 70%)" }} />
         <div className="absolute inset-0 grid place-items-center">
-          <div className={`font-display ${s.engraved} text-[22cqw] leading-[0.85] tracking-[0.04em]`}>Legacy</div>
+          <img src={NBA_LOGO} alt="" decoding="async" className="w-[38%]" style={{ filter: "grayscale(1) sepia(1) saturate(2.4) brightness(1.05) contrast(1.1)" }} />
         </div>
         <div className="card-sheen pointer-events-none absolute inset-0" />
       </div>

@@ -1,6 +1,7 @@
 "use client";
 import { useActionState } from "react";
 import { signIn } from "@/app/(league)/bidding/actions";
+import { BTN } from "./ui";
 
 // Email only, for a GM who isn't signed in to the league app: the email linked to their team and they're in.
 export default function Login() {
@@ -14,7 +15,7 @@ export default function Login() {
         </div>
         <form action={run} className="space-y-3">
           <input name="email" type="email" required autoComplete="email" inputMode="email" placeholder="Your email" className="input" />
-          <button disabled={pending} className="btn w-full rounded-full py-3">{pending ? "Signing in…" : "Sign in"}</button>
+          <button disabled={pending} className={`${BTN} w-full py-3`}>{pending ? "Signing in…" : "Sign in"}</button>
           {state?.error && <p className="text-sm text-bad">{state.error}</p>}
         </form>
       </div>
