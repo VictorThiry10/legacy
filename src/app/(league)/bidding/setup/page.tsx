@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { bidTeam, commishVerified, PER_ROUND, REGULAR_ROUNDS, scheduleView, searchFreeAgents, setupRounds } from "@/lib/bidding";
 import { getSettings, teamSummaries } from "@/lib/league";
@@ -7,7 +8,8 @@ import BackBar from "@/components/BackBar";
 import Slide from "@/components/Slide";
 import PlayerCard from "@/components/bidding/PlayerCard";
 import Schedule from "@/components/bidding/Schedule";
-import { Gm } from "@/components/bidding/ui";
+import { BTN, GHOST, Gm } from "@/components/bidding/ui";
+import { FORWARD } from "@/components/Slide";
 import * as A from "../actions";
 
 export const dynamic = "force-dynamic";
@@ -31,10 +33,10 @@ export default async function Setup({ searchParams }: PageProps<"/bidding/setup"
           right={
             <div className="flex gap-2">
               <ActionForm action={A.autoFill} confirm="Fill every empty spot with the best free agents left (last season's fantasy points per game)?">
-                <button className="btn-ghost rounded-full">Auto fill</button>
+                <button className={GHOST}>Auto fill</button>
               </ActionForm>
               <ActionForm action={A.restart} confirm="Restart free agency? Every bid and free agency signing is deleted, and the schedule is cleared. The player lists stay.">
-                <button className="btn-ghost rounded-full text-bad">Restart</button>
+                <button className={`${GHOST} text-bad`}>Restart</button>
               </ActionForm>
             </div>
           }
@@ -46,7 +48,7 @@ export default async function Setup({ searchParams }: PageProps<"/bidding/setup"
           <h2 className="text-xl font-semibold">Players</h2>
           <form className="flex gap-2">
             <input name="q" defaultValue={q} placeholder="Find a free agent" className="input" />
-            <button className="btn rounded-full px-5">Search</button>
+            <button className={BTN}>Search</button>
           </form>
           {q && !results.length && <p className="text-sm text-muted">No free agent matches.</p>}
           {results.length > 0 && (
@@ -55,7 +57,7 @@ export default async function Setup({ searchParams }: PageProps<"/bidding/setup"
                 <div key={p.id} className="flex flex-wrap items-center gap-3 p-2.5">
                   <div className="w-10 shrink-0"><PlayerCard p={p} size="thumb" /></div>
                   <div className="min-w-0 flex-1">
-                    <div className="truncate font-semibold">{p.name}</div>
+                    <Link href={`/players/${p.id}`} transitionTypes={FORWARD} className="block truncate font-semibold">{p.name}</Link>
                     <div className="text-xs text-muted">{[p.position, p.nbaTeam, p.stats && `${p.stats.fppg} fpts`].filter(Boolean).join(" · ")}</div>
                   </div>
                   <div className="flex flex-wrap gap-1">
@@ -88,7 +90,7 @@ export default async function Setup({ searchParams }: PageProps<"/bidding/setup"
                     <li key={p.id} className="flex items-center gap-3">
                       <div className="w-7 shrink-0"><PlayerCard p={p} size="thumb" /></div>
                       <span className="min-w-0 flex-1 truncate text-sm">
-                        {p.name}
+                        <Link href={`/players/${p.id}`} transitionTypes={FORWARD}>{p.name}</Link>
                         {r.signed.includes(p.id) && <span className="ml-2 text-xs text-bad">On a team · skipped</span>}
                       </span>
                       <span className="text-xs tabular-nums text-muted">{p.stats ? `${p.stats.fppg}` : ""}</span>
@@ -126,7 +128,7 @@ export default async function Setup({ searchParams }: PageProps<"/bidding/setup"
               <input name="name" required maxLength={40} placeholder="Team name" className="input" />
               <input name="manager" placeholder="GM name" className="input" />
               <input name="email" type="email" required placeholder="Email" className="input" />
-              <button className="btn rounded-full px-5">Add GM</button>
+              <button className={BTN}>Add GM</button>
             </ActionForm>
           )}
         </section>

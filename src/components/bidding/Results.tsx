@@ -1,13 +1,15 @@
 "use client";
 import { useState, useTransition } from "react";
+import Link from "next/link";
 import { AnimatePresence, motion } from "motion/react";
+import { FORWARD } from "../Slide";
 import type { CardPlayer, Results as RoundResults, RoomTeam, RoundInfo } from "@/lib/bidding";
 import { money } from "@/lib/rules";
 import * as A from "@/app/(league)/bidding/actions";
 import PlayerCard from "./PlayerCard";
 import Portal from "./Portal";
 import { TimeLeft, When } from "./time";
-import { BidStatus, ease, Gm, Pill, reasonText, roundName } from "./ui";
+import { BidStatus, ease, GHOST, Gm, Pill, reasonText, roundName } from "./ui";
 
 // A round's results: who signed whom and every other bid. While the renounce window is open (`canRenounce`) my
 // signings have Renounce and the heading counts down to the deadline; `next` is the round after, so GMs know
@@ -61,11 +63,11 @@ export default function Results({ results, teams, me, skew, serverNow, canRenoun
               transition={{ delay: i * 0.04, duration: 0.3, ease }}
               className={`flex min-w-0 gap-3 rounded-xl border bg-card p-3 ${mine ? "border-crimson/40" : "border-line"}`}
             >
-              <div className="w-[4.5rem] shrink-0">
+              <Link href={`/players/${p.id}`} transitionTypes={FORWARD} className="w-[4.5rem] shrink-0 active:opacity-80">
                 <PlayerCard p={p} size="thumb" className={w ? "" : "grayscale opacity-60"} />
-              </div>
+              </Link>
               <div className="min-w-0 flex-1">
-                <div className="truncate font-semibold">{p.name}</div>
+                <Link href={`/players/${p.id}`} transitionTypes={FORWARD} className="block truncate font-semibold">{p.name}</Link>
                 {w ? (
                   <>
                     <div className="mt-1.5 flex items-center gap-2">
@@ -89,7 +91,7 @@ export default function Results({ results, teams, me, skew, serverNow, canRenoun
                   </ul>
                 )}
                 {canRenounce && mine && me.renouncesLeft > 0 && (
-                  <button onClick={() => setAsk({ bidId: w.bidId, player: p })} className="btn-ghost mt-2 h-8 px-3 text-xs">
+                  <button onClick={() => setAsk({ bidId: w.bidId, player: p })} className={`${GHOST} mt-2 h-8 px-3 text-xs`}>
                     Renounce
                   </button>
                 )}
@@ -116,7 +118,7 @@ export default function Results({ results, teams, me, skew, serverNow, canRenoun
                 <h3 className="mt-4 text-lg font-semibold">Renounce {ask.player.name.split(" ").slice(-1)[0]}?</h3>
                 <p className="mt-1 text-sm text-muted">He goes to the next highest bidder. {me.renouncesLeft - 1} left after this.</p>
                 <div className="mt-5 grid grid-cols-2 gap-2">
-                  <button onClick={() => setAsk(null)} className="btn-ghost rounded-full py-3 font-semibold">Keep him</button>
+                  <button onClick={() => setAsk(null)} className={`${GHOST} py-3 font-semibold`}>Keep him</button>
                   <button disabled={pending} onClick={renounce} className="rounded-full bg-bad-fill py-3 font-semibold text-white disabled:opacity-60">
                     {pending ? "…" : "Renounce"}
                   </button>

@@ -1,11 +1,13 @@
 "use client";
 import { useState, useTransition } from "react";
+import Link from "next/link";
 import { AnimatePresence, motion } from "motion/react";
+import { FORWARD } from "../Slide";
 import type { Room } from "@/lib/bidding";
 import { money } from "@/lib/rules";
 import * as A from "@/app/(league)/bidding/actions";
 import PlayerCard from "./PlayerCard";
-import { Gm } from "./ui";
+import { BTN, GHOST, Gm, PRIMARY } from "./ui";
 
 const MAX_YEARS = 4;
 const yrs = (n: number) => `${n} ${n === 1 ? "yr" : "yrs"}`;
@@ -64,7 +66,7 @@ export default function Contracts({ data }: { data: Room }) {
                 <div key={s.contractId} className={row}>
                   <div className="w-10 shrink-0"><PlayerCard p={s.player} size="thumb" /></div>
                   <div className="min-w-0 flex-1 leading-tight">
-                    <div className="truncate text-[15px] font-semibold">{s.player.name}</div>
+                    <Link href={`/players/${s.player.id}`} transitionTypes={FORWARD} className="block truncate text-[15px] font-semibold">{s.player.name}</Link>
                     <div className="truncate text-xs text-muted">{sub(s.player, s.salary)}</div>
                   </div>
                   <div className={`flex w-[7.5rem] items-center justify-between rounded-full p-1 ${bad ? "bg-bad/10 ring-1 ring-inset ring-bad/40" : "bg-fg/[0.06]"}`}>
@@ -79,7 +81,7 @@ export default function Contracts({ data }: { data: Room }) {
               <div key={h.contractId} className={`${row} opacity-50`}>
                 <div className="w-10 shrink-0"><PlayerCard p={h.player} size="thumb" /></div>
                 <div className="min-w-0 flex-1 leading-tight">
-                  <div className="truncate text-[15px] font-semibold">{h.player.name}</div>
+                  <Link href={`/players/${h.player.id}`} transitionTypes={FORWARD} className="block truncate text-[15px] font-semibold">{h.player.name}</Link>
                   <div className="truncate text-xs text-muted">{sub(h.player, h.salary)}</div>
                 </div>
                 <div className={`flex w-[7.5rem] items-center justify-center gap-1.5 text-sm font-semibold tabular-nums ${over.includes(h.years) ? "text-bad" : ""}`}>
@@ -100,7 +102,7 @@ export default function Contracts({ data }: { data: Room }) {
             <button
               disabled={pending || !dirty || over.length > 0}
               onClick={act(() => A.setLengths(mine.map((s) => ({ contractId: s.contractId, years: len(s.contractId, s.years) }))))}
-              className="btn rounded-full px-6 py-2.5"
+              className={`${BTN} px-6 py-2.5`}
             >
               {pending ? "Saving…" : "Save"}
             </button>
@@ -125,7 +127,7 @@ export default function Contracts({ data }: { data: Room }) {
               <ul className="mt-3 space-y-1 text-sm">
                 {list.map((s) => (
                   <li key={s.contractId} className="flex items-baseline justify-between gap-3">
-                    <span className="truncate">{s.player.name}</span>
+                    <Link href={`/players/${s.player.id}`} transitionTypes={FORWARD} className="truncate">{s.player.name}</Link>
                     <span className="shrink-0 tabular-nums text-muted">{money(s.salary)} · {yrs(s.years)}</span>
                   </li>
                 ))}
@@ -136,9 +138,9 @@ export default function Contracts({ data }: { data: Room }) {
         {data.isCommish && (
           <div className="flex items-center gap-3 pt-2">
             {locked ? (
-              <button disabled={pending} onClick={act(() => A.lockContracts(false), "Unlocked")} className="btn-ghost rounded-full px-5 py-2.5">Unlock contracts</button>
+              <button disabled={pending} onClick={act(() => A.lockContracts(false), "Unlocked")} className={`${GHOST} px-5 py-2.5`}>Unlock contracts</button>
             ) : (
-              <button disabled={pending} onClick={act(() => A.lockContracts(true), "Locked", "Lock everyone's contract lengths?")} className="rounded-full bg-crimson px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-40">
+              <button disabled={pending} onClick={act(() => A.lockContracts(true), "Locked", "Lock everyone's contract lengths?")} className={PRIMARY}>
                 Lock contracts
               </button>
             )}
