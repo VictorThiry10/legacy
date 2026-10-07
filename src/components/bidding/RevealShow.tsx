@@ -150,8 +150,8 @@ function Stage({ item, player, teams, meId, leftovers, onStart, onFinish }: {
           transition={{ duration: 1, times: [0, 0.3, 1], ease: "easeOut" }}
         />
       )}
-      {/* Fireworks only when he's mine. */}
-      {stage >= LANDED && mine && <Confetti />}
+      {/* Fireworks only when he's mine, the moment my name comes up. */}
+      {stage >= TEAM && mine && <Confetti />}
 
       <motion.div
         className="relative w-[min(60vw,260px,34svh)] [perspective:1400px]"
@@ -179,7 +179,7 @@ function Stage({ item, player, teams, meId, leftovers, onStart, onFinish }: {
         />
         {!flipped && <Gather />}
         {flipped && !jumped && <Shockwave />}
-        {stage >= LANDED && mine && !jumped && <Burst />}
+        {stage >= TEAM && mine && !jumped && <Burst />}
 
         {/* The card: breathes in, trembles, then lifts and turns over on a spring (smooth, a touch of overshoot). */}
         <motion.div
