@@ -161,7 +161,7 @@ export async function accept(offerId: string, teamId: string, site?: string) {
   await notifyTeams((league ?? []).map((t) => t.id).filter((id) => id !== o.from_team && id !== o.to_team), {
     title: `Trade: ${a} and ${b}`,
     body: `${a} get ${words(get, getPicks)}. ${b} get ${words(give, givePicks)}.`,
-    url: "/league?view=cap",
+    url: "/league/moves",
   });
   if (proposer?.manager_email && site) {
     await sendMail({

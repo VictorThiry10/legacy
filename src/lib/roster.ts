@@ -1,6 +1,7 @@
 import "server-only";
 import { db } from "./supabase/server";
-import { all, rpc } from "./db";
+import { all, fail, rpc } from "./db";
+import type { Move } from "./moves";
 import { getSettings, type Player } from "./league";
 import { money, rosterProblems, teamState } from "./rules";
 import { onIR } from "./lineup-store";
@@ -162,19 +163,35 @@ export async function trade(o: { teamA: string; teamB: string; fromA: string[]; 
   return "Trade done.";
 }
 
-export type Move = {
-  id: string; kind: "sign" | "release" | "trade" | "pick"; created_at: string; group_id: string | null; note: string | null;
-  salary: number | null; years: number | null; team: string; other_team: string | null;
-  player: string; player_id: string | null; // kind "pick": `player` is the pick's name ("2027 pick (Thiros)"), no player_id
-};
+export type { Move };
 
 // The transactions log, newest first.
 export async function recentMoves(limit = 50): Promise<Move[]> {
   const { data } = await db().from("transactions")
-    .select("id, kind, created_at, group_id, note, salary, years, player_id, team:teams!transactions_team_id_fkey(name), other:teams!transactions_other_team_id_fkey(name), player:players(name), pick:draft_picks(year, original:teams!draft_picks_original_team_fkey(name))")
+    .select("id, kind, created_at, group_id, note, salary, years, player_id, team_id, other_team_id, team:teams!transactions_team_id_fkey(name), other:teams!transactions_other_team_id_fkey(name), player:players(name), pick:draft_picks(year, original:teams!draft_picks_original_team_fkey(name)), contract:contracts(acquired_via)")
     .order("created_at", { ascending: false }).limit(limit);
-  return (data ?? []).map(({ team, other, player, pick, ...m }) => ({
-    ...m, kind: m.kind as Move["kind"], team: team?.name ?? "?", other_team: other?.name ?? null,
+  return (data ?? []).map(({ team, other, player, pick, contract, ...m }) => ({
+    ...m, kind: m.kind as Move["kind"], team: team?.name ?? "?", other_team: other?.name ?? null, via: contract?.acquired_via ?? null,
     player: pick ? `${pick.year} pick (${pick.original?.name ?? "?"})` : player?.name ?? "?",
   }));
+}
+
+// The Team page's Recent moves row: the latest move, and a red dot when another team has made a move since this GM
+// last opened the log (never opened: any move by another team). Null without a move yet.
+export type MovesRowInfo = { latest: Move; unseen: boolean };
+export async function movesRow(teamId: string): Promise<MovesRowInfo | null> {
+  const [[latest], { data: seen, error }] = await Promise.all([recentMoves(1), db().from("moves_seen").select("seen_at").eq("team_id", teamId).maybeSingle()]);
+  if (error) fail(error);
+  if (!latest) return null;
+  let q = db().from("transactions").select("id", { count: "exact", head: true }).neq("team_id", teamId).or(`other_team_id.is.null,other_team_id.neq.${teamId}`);
+  if (seen) q = q.gt("created_at", seen.seen_at);
+  const { count, error: e } = await q;
+  if (e) fail(e);
+  return { latest, unseen: (count ?? 0) > 0 };
+}
+
+// This GM has opened the log: the dot goes until the next move.
+export async function markMovesSeen(teamId: string) {
+  const { error } = await db().from("moves_seen").upsert({ team_id: teamId, seen_at: new Date().toISOString() }, { onConflict: "team_id" });
+  if (error) fail(error);
 }

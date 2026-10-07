@@ -66,6 +66,7 @@ export type Database = {
         { away_team_id?: string | null; ends: string; home_team_id?: string | null; id?: string; is_test?: boolean; round?: string; season: number; starts: string; week: number },
         [FK<"matchups_away_team_id_fkey", "away_team_id", "teams">, FK<"matchups_home_team_id_fkey", "home_team_id", "teams">]
       >;
+      moves_seen: Table<{ seen_at: string; team_id: string }, { seen_at?: string; team_id: string }, [FK<"moves_seen_team_id_fkey", "team_id", "teams">]>;
       player_games: Table<
         {
           ast: number; blk: number; ej: number; fga: number; fgm: number; fpts: number; game_id: string; min: number; nba_team_id: string;

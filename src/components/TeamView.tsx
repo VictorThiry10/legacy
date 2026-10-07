@@ -2,7 +2,7 @@ import Link from "next/link";
 import { getSettings, type TeamSummary } from "@/lib/league";
 import { boxLines, gamesBetween, teamAbbrs, type BoxLine } from "@/lib/nba";
 import { GameStatus, oppLabel } from "./GameInfo";
-import { rosters, type RosterPlayer } from "@/lib/roster";
+import { movesRow, rosters, type RosterPlayer } from "@/lib/roster";
 import { lineupFor } from "@/lib/lineup-store";
 import { addDays, isDay, longDate, monthDay, today, weekday } from "@/lib/dates";
 import { viewKey, views } from "@/lib/team-views";
@@ -51,6 +51,7 @@ export default async function TeamView({ team, editable, base, sp, back, tradeHr
   // (the card below is shown when all four are there)
   const freeAgency = editable ? (AUCTION_ON_HOLD && !team.is_commish ? Promise.resolve(null) : appStatus(team).catch(() => null)) : null;
   const rookieDraft = editable ? draftRow(team).catch(() => null) : null;
+  const moves = editable ? movesRow(team.id).catch(() => null) : null;
   const [{ rules, season }, roster, games, abbr] = await Promise.all([getSettings(), rosters([team.id]), gamesBetween(day, day), teamAbbrs()]);
   const [rows, lines] = await Promise.all([lineupFor(team.id, day, roster), boxLines(roster.map((p) => p.id))]);
   const players = new Map(roster.map((p) => [p.id, p]));
@@ -130,7 +131,7 @@ export default async function TeamView({ team, editable, base, sp, back, tradeHr
       )}
 
       {editable && <PushPrompt />}
-      {offers && extensions && freeAgency && rookieDraft && <Pending offers={offers} extensions={extensions} freeAgency={freeAgency} rookieDraft={rookieDraft} />}
+      {offers && extensions && freeAgency && rookieDraft && moves && <Pending offers={offers} extensions={extensions} freeAgency={freeAgency} rookieDraft={rookieDraft} moves={moves} />}
 
       <div className="flex items-center border-y border-line -mx-4 sm:mx-0 sm:rounded-xl sm:border sm:bg-card">
         <Link href={href({ d: addDays(day, -1) })} replace={!!back} prefetch={true} transitionTypes={BACK} className="px-4 py-2 text-xl text-muted hover:text-fg" aria-label="Previous day">‹</Link>

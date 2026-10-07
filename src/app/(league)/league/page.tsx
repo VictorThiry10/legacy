@@ -1,30 +1,27 @@
 import Link from "next/link";
 import { getMe } from "@/lib/auth";
-import { getSettings, teamSummaries, type TeamSummary } from "@/lib/league";
+import { teamSummaries, type TeamSummary } from "@/lib/league";
 import { currentOf, matchups, scores, standings, type Matchup, type Standing } from "@/lib/season";
-import { money } from "@/lib/rules";
-import { recentMoves } from "@/lib/roster";
-import { picksOf } from "@/lib/picks";
-import { draftRecord } from "@/lib/draft";
-import type { Team } from "@/lib/league";
-import { initials } from "@/lib/names";
+import { movesRow } from "@/lib/roster";
+import { headline } from "@/lib/moves";
 import { weekLabel } from "@/lib/dates";
 import { load } from "@/lib/guard";
-import Moves from "@/components/Moves";
 import TeamAvatar from "@/components/TeamAvatar";
 import PickMenu from "@/components/PickMenu";
-import Slide from "@/components/Slide";
+import Slide, { FORWARD } from "@/components/Slide";
 import PushToggle from "@/components/PushToggle";
-import LotteryButton from "@/components/lottery/LotteryButton";
+import { Dot } from "@/components/PendingRow";
+import { head, TeamCell } from "./ui";
 
 export const dynamic = "force-dynamic";
 
-const VIEWS = [["standings", "Standings"], ["scoreboard", "Scoreboard"], ["playoffs", "Playoffs"], ["cap", "Cap"]] as const;
+const VIEWS = [["standings", "Standings"], ["scoreboard", "Scoreboard"], ["playoffs", "Playoffs"], ["intel", "Intel"]] as const;
 type View = (typeof VIEWS)[number][0];
 
-// League, ESPN style: a segmented switch between standings, this week's scores, the playoff picture and the cap sheet.
+// League, ESPN style: a segmented switch between standings, this week's scores, the playoff picture and Intel (the
+// cap sheet, the moves log, the rookie draft and the draft picks, each its own page).
 export default async function League({ searchParams }: PageProps<"/league">) {
-  const [sp, me, { rules }, teams] = await Promise.all([searchParams, getMe(), getSettings(), teamSummaries()]);
+  const [sp, me, teams] = await Promise.all([searchParams, getMe(), teamSummaries()]);
   const view: View = VIEWS.some(([k]) => k === sp.view) ? (sp.view as View) : "standings";
   const myId = me?.team?.id;
   const team = (id: string | null) => (id ? teams.find((t) => t.id === id) : undefined);
@@ -46,7 +43,7 @@ export default async function League({ searchParams }: PageProps<"/league">) {
         {view === "standings" && <Standings teams={teams} myId={myId} />}
         {view === "scoreboard" && <Scoreboard team={team} pick={typeof sp.week === "string" ? sp.week : undefined} />}
         {view === "playoffs" && <Playoffs team={team} />}
-        {view === "cap" && <Cap teams={teams} me={me?.team ?? undefined} rosterMax={rules.rosterMax} />}
+        {view === "intel" && <Intel myId={myId} />}
 
         <div className="flex flex-wrap items-center gap-3 border-t border-line bg-card px-4 py-4 text-sm sm:rounded-b-2xl">
           {me?.team?.is_commish && <Link href="/settings" transitionTypes={["nav-forward"]} className="btn-ghost">Commissioner settings</Link>}
@@ -66,21 +63,6 @@ const pct = (r: Standing) => {
   const v = (r.w + r.t / 2) / games;
   return v >= 1 ? "1.000" : v.toFixed(3).replace(/^0/, "");
 };
-
-function TeamCell({ t }: { t?: TeamSummary }) {
-  if (!t) return <span className="text-muted">To be decided</span>;
-  return (
-    <Link href={`/teams/${t.id}`} prefetch={false} transitionTypes={["nav-forward"]} className="flex min-w-0 items-center gap-3">
-      <TeamAvatar name={t.name} />
-      <span className="min-w-0 leading-tight">
-        <span className="block truncate font-semibold text-blue">{t.name}</span>
-        <span className="block truncate text-xs text-muted">{t.manager_name ?? ""}</span>
-      </span>
-    </Link>
-  );
-}
-
-const head = "text-[11px] font-bold uppercase tracking-wide";
 
 async function Standings({ teams, myId }: { teams: TeamSummary[]; myId?: string }) {
   const table = await load(() => standings(teams.map((t) => t.id)));
@@ -185,84 +167,29 @@ async function Playoffs({ team }: { team: (id: string | null) => TeamSummary | u
   );
 }
 
-async function Cap({ teams, me, rosterMax }: { teams: TeamSummary[]; me?: Team; rosterMax: number }) {
-  const myId = me?.id;
-  const [moves, picks, draft] = await Promise.all([recentMoves(20), picksOf(), me ? draftRecord(me).catch(() => null) : null]);
+// Intel: four pages, each a row that slides in. Recent moves carries the latest one, and a red dot when another
+// team has moved since I last looked.
+async function Intel({ myId }: { myId?: string }) {
+  const mv = myId ? await movesRow(myId).catch(() => null) : null;
+  const rows: [string, string, string | null, boolean][] = [
+    ["/league/cap", "Cap sheet", null, false],
+    ["/league/moves", "Recent moves", mv ? headline(mv.latest) : null, !!mv?.unseen],
+    ["/league/draft", "Rookie draft", null, false],
+    ["/league/picks", "Draft picks", null, false],
+  ];
   return (
-    <div className="bg-card">
-      <div className={`grid grid-cols-[minmax(0,1fr)_3rem_4rem_4rem] items-center gap-2 border-y border-line px-4 py-2 ${head}`}>
-        <span>Cap sheet</span><span className="text-center">Roster</span><span className="text-right">Salary</span><span className="text-right">Space</span>
-      </div>
-      {teams.map((t) => (
-        <div key={t.id} className={`grid grid-cols-[minmax(0,1fr)_3rem_4rem_4rem] items-center gap-2 border-b border-line/60 px-4 py-3 ${t.id === myId ? "bg-blue/10" : ""}`}>
-          <TeamCell t={t} />
-          <span className="text-center num">{t.state.rosterCount}/{rosterMax}</span>
-          <span className="text-right num">{money(t.state.salary)}</span>
-          <span className={`text-right num font-semibold ${t.capSpace < 0 ? "text-bad" : ""}`}>{money(t.capSpace)}</span>
-        </div>
+    <ul className="divide-y divide-line border-t border-line bg-card">
+      {rows.map(([href, label, sub, dot]) => (
+        <li key={href}>
+          <Link href={href} transitionTypes={FORWARD} className="flex items-center gap-3 px-4 py-4 transition-colors hover:bg-fg/[0.03] active:bg-fg/[0.06]">
+            <span className="min-w-0 flex-1 leading-tight">
+              <span className="flex items-center gap-2 text-base font-medium">{label}{dot && <Dot />}</span>
+              {sub && <span className="mt-0.5 block truncate text-xs text-muted">{sub}</span>}
+            </span>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className="shrink-0 text-muted"><path d="m9 6 6 6-6 6" /></svg>
+          </Link>
+        </li>
       ))}
-      {/* this year's rookie draft: the lottery's order and who took whom, with the lottery to watch again.
-          A GM who hasn't watched it yet only gets the button: no spoiler. */}
-      {draft && (
-        <>
-          <div className={`flex items-center justify-between border-y border-line px-4 py-2 ${head}`}>
-            <span>Rookie draft</span>
-            {draft.watched && <LotteryButton field={draft.field} className="font-semibold normal-case tracking-normal text-accent">Replay the lottery</LotteryButton>}
-          </div>
-          {!draft.watched && (
-            <div className="border-b border-line/60 px-4 py-3">
-              <LotteryButton field={draft.field} className="btn w-full">Watch the lottery</LotteryButton>
-            </div>
-          )}
-          {draft.picks.map((p) => {
-            const t = teams.find((x) => x.id === p.team);
-            const from = p.original !== p.team ? teams.find((x) => x.id === p.original) : undefined;
-            return (
-              <div key={p.slot} className={`grid grid-cols-[1.25rem_minmax(0,1fr)_auto] items-center gap-3 border-b border-line/60 px-4 py-2.5 ${p.team === myId ? "bg-blue/10" : ""}`}>
-                <span className="num text-sm font-bold text-muted">{p.slot}</span>
-                <span className="flex min-w-0 items-center gap-2.5">
-                  <TeamAvatar name={t?.name} size="sm" />
-                  <span className="min-w-0 leading-tight">
-                    <span className="block truncate text-sm font-semibold">{t?.name ?? "?"}</span>
-                    {from && <span className="block truncate text-xs text-muted">from {from.name}</span>}
-                  </span>
-                </span>
-                {p.rookie ? (
-                  <span className="text-right leading-tight">
-                    <Link href={`/players/${p.rookie.id}`} prefetch={false} transitionTypes={["nav-forward"]} className="block text-sm font-medium text-blue">{p.rookie.name}</Link>
-                    <span className="num block text-xs text-muted">{money(p.rookie.salary)} · {p.rookie.years} yr</span>
-                  </span>
-                ) : (
-                  <span className={`text-xs ${p.slot === draft.onClock ? "font-semibold text-accent" : "text-muted"}`}>{p.slot === draft.onClock ? "On the clock" : "—"}</span>
-                )}
-              </div>
-            );
-          })}
-        </>
-      )}
-      {/* rookie draft picks: who holds what. A traded pick carries the initials of the team it came from. */}
-      <div className={`border-y border-line px-4 py-2 ${head}`}>Draft picks</div>
-      {teams.map((t) => {
-        const held = picks.filter((x) => x.team_id === t.id);
-        return (
-          <div key={t.id} className={`flex items-center gap-3 border-b border-line/60 px-4 py-2.5 ${t.id === myId ? "bg-blue/10" : ""}`}>
-            <TeamAvatar name={t.name} size="sm" />
-            <div className="flex min-w-0 flex-1 flex-wrap gap-1.5">
-              {held.map((x) => {
-                const own = x.original.id === t.id;
-                return (
-                  <span key={x.id} title={own ? `${x.year} pick` : `${x.year} pick, from ${x.original.name}`} className={`num rounded-full px-2 py-0.5 text-xs font-medium ${own ? "bg-line/70" : "border border-accent text-accent"}`}>
-                    {x.year}{!own && ` · ${initials(x.original.name)}`}
-                  </span>
-                );
-              })}
-              {!held.length && <span className="text-xs text-muted">None</span>}
-            </div>
-          </div>
-        );
-      })}
-      <div className={`border-y border-line px-4 py-2 ${head}`}>Recent moves</div>
-      <div className="px-4 pb-2"><Moves moves={moves} /></div>
-    </div>
+    </ul>
   );
 }
