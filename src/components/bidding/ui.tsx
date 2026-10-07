@@ -7,7 +7,7 @@ import TeamAvatar from "../TeamAvatar";
 export const ease = [0.22, 1, 0.36, 1] as const;
 export const GOLD = "#e9c46a";
 
-// Every button in the auction is a pill (the app's .btn classes are rounded boxes, and they win over utilities).
+// Every button in the auction is a pill, like the app's .btn classes (which win over utilities, so these are spelled out).
 export const BTN = "inline-flex items-center justify-center rounded-full bg-fg px-4 py-2 text-sm font-medium text-bg disabled:opacity-40";
 export const GHOST = "inline-flex items-center justify-center rounded-full border border-line bg-card px-4 py-2 text-sm font-medium disabled:opacity-40";
 export const PRIMARY = "inline-flex items-center justify-center rounded-full bg-crimson px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-40";

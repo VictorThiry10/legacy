@@ -23,7 +23,7 @@ export default async function Pending({ offers, extensions, freeAgency, rookieDr
   const picks = (ps: { year: number }[]) => ps.map((p) => ({ name: `${p.year} pick` }));
   const deal = (o: Offer) => `${few([...o.get, ...picks(o.getPicks)])} for ${few([...o.give, ...picks(o.givePicks)])}`;
   return (
-    <div className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-card">
+    <div className="divide-y divide-line overflow-hidden rounded-2xl border border-line bg-card">
       {draft && <DraftRow info={draft} />}
       {fa && <FreeAgencyRow s={fa} />}
       {ext && <ExtensionsRow offer={ext} />}

@@ -41,7 +41,7 @@ export default function Schedule({ schedule, stale, rows }: { schedule: Plan | n
       <h2 className="text-xl font-semibold">Schedule</h2>
       {stale && <p className="text-sm text-bad">The schedule&apos;s time has passed, so nothing will open. Set a new one.</p>}
       {schedule && (
-        <div className="divide-y divide-line rounded-xl border border-line bg-card px-4 text-sm">
+        <div className="divide-y divide-line rounded-2xl border border-line bg-card px-4 text-sm">
           {rows.map((r) => (
             <div key={r.label} className={`py-2.5 ${r.status === "final" ? "opacity-50" : ""}`}>
               <div className="flex items-baseline justify-between gap-3">

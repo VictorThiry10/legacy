@@ -41,7 +41,7 @@ export default async function AddPlayer({ params, searchParams }: PageProps<"/pl
     <div className="card space-y-2">
       <p className="text-sm font-medium">{label}</p>
       {playing.map((r) => (
-        <label key={r.contract_id} className="flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-line/50">
+        <label key={r.contract_id} className="flex items-center gap-3 rounded-xl px-2 py-2 hover:bg-line/50">
           <input type="radio" name="drop" value={r.contract_id} defaultChecked={r.contract_id === checked} required />
           <span className="flex-1">{r.name} <span className="text-xs text-muted">{r.nba_team} · {r.position}</span></span>
           <span className="num text-sm text-muted">{money(r.salary)}</span>

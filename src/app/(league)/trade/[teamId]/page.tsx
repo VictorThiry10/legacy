@@ -101,7 +101,7 @@ function PlayerPick({ p, season, name, checked }: { p: RosterPlayer; season: num
     <li className="border-b border-line/60 last:border-b-0">
       <label className="flex cursor-pointer items-center gap-3 px-4 py-2.5">
         <input type="checkbox" name={name} value={p.contract_id} defaultChecked={checked} className="peer sr-only" />
-        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border-2 border-blue text-lg font-bold leading-none text-blue transition-colors peer-checked:bg-blue-fill peer-checked:text-white peer-checked:[&>.plus]:hidden peer-checked:[&>.tick]:inline peer-focus-visible:ring-2 peer-focus-visible:ring-blue/40">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 border-blue text-lg font-bold leading-none text-blue transition-colors peer-checked:bg-blue-fill peer-checked:text-white peer-checked:[&>.plus]:hidden peer-checked:[&>.tick]:inline peer-focus-visible:ring-2 peer-focus-visible:ring-blue/40">
           <span className="plus">+</span>
           <span className="tick hidden text-base">✓</span>
         </span>
@@ -127,7 +127,7 @@ function PickPick({ pick, name, checked }: { pick: Pick; name: string; checked: 
     <li className="border-b border-line/60 last:border-b-0">
       <label className="flex cursor-pointer items-center gap-3 px-4 py-2.5">
         <input type="checkbox" name={name} value={pick.id} defaultChecked={checked} className="peer sr-only" />
-        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border-2 border-blue text-lg font-bold leading-none text-blue transition-colors peer-checked:bg-blue-fill peer-checked:text-white peer-checked:[&>.plus]:hidden peer-checked:[&>.tick]:inline peer-focus-visible:ring-2 peer-focus-visible:ring-blue/40">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 border-blue text-lg font-bold leading-none text-blue transition-colors peer-checked:bg-blue-fill peer-checked:text-white peer-checked:[&>.plus]:hidden peer-checked:[&>.tick]:inline peer-focus-visible:ring-2 peer-focus-visible:ring-blue/40">
           <span className="plus">+</span>
           <span className="tick hidden text-base">✓</span>
         </span>
@@ -160,7 +160,7 @@ function Summary({ review, them, me, fields, closeHref }: {
     <Modal closeHref={closeHref}>
       <TradeSheet me={me} them={them} get={inn} give={out} getPicks={getPicks} givePicks={givePicks} />
       <div className="space-y-3 border-t border-line p-4">
-        {!!problems.length && <p className="rounded-xl bg-bad/10 px-3 py-2 text-sm text-bad">{problems.join("; ")}</p>}
+        {!!problems.length && <p className="rounded-2xl bg-bad/10 px-3 py-2 text-sm text-bad">{problems.join("; ")}</p>}
         <form action={sendOffer} className="flex gap-2">
           <input type="hidden" name="team" value={them.id} />
           {fields.flatMap(([k, ids]) => ids.map((v) => <input key={k + v} type="hidden" name={k} value={v} />))}

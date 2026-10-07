@@ -196,7 +196,7 @@ export default function RookiePick({ onClose }: { onClose: () => void }) {
                   onChange={(e) => setFind(e.target.value)}
                   placeholder="Search"
                   aria-label="Search rookies"
-                  className="w-full rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-2.5 text-base outline-none placeholder:text-white/30 focus:border-white/40"
+                  className="w-full rounded-full border border-white/10 bg-white/[0.03] px-4 py-2.5 text-base outline-none placeholder:text-white/30 focus:border-white/40"
                 />
               </li>
             )}
