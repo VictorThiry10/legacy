@@ -1,24 +1,28 @@
-import type { Move } from "@/lib/roster";
-import { money } from "@/lib/rules";
+import Link from "next/link";
+import { describe, type Move } from "@/lib/moves";
 import LocalTime from "./LocalTime";
+import { FORWARD } from "./Slide";
 
-// The transactions log. Trades show as one line per player or draft pick, grouped.
+// The transactions log, newest first. Trades show as one line per player or draft pick, grouped.
 export default function Moves({ moves }: { moves: Move[] }) {
-  if (!moves.length) return <p className="text-sm text-muted">No roster moves yet.</p>;
+  if (!moves.length) return <p className="px-4 py-6 text-center text-sm text-muted">No moves yet.</p>;
   return (
-    <ul className="text-sm divide-y divide-line">
-      {moves.map((m) => (
-        <li key={m.id} className="py-2 flex flex-wrap gap-x-2">
-          <span className="text-xs text-muted w-24 shrink-0"><LocalTime iso={m.created_at} mode="date" /></span>
-          <span className="flex-1 min-w-0">
-            {m.kind === "sign" && <><b>{m.team}</b> signed {m.player} · {money(m.salary ?? 0)}, {m.years}yr</>}
-            {m.kind === "release" && <><b>{m.team}</b> released {m.player}</>}
-            {m.kind === "trade" && <><b>{m.team}</b> got {m.player} from {m.other_team} · {money(m.salary ?? 0)}</>}
-            {m.kind === "pick" && <><b>{m.team}</b> got the {m.player} from {m.other_team}</>}
-            {m.note && <span className="block text-xs text-muted">{m.note}</span>}
-          </span>
-        </li>
-      ))}
+    <ul className="divide-y divide-line/60 text-sm">
+      {moves.map((m) => {
+        const d = describe(m);
+        return (
+          <li key={m.id} className="flex gap-x-3 px-4 py-2.5">
+            <span className="w-16 shrink-0 pt-px text-xs text-muted"><LocalTime iso={m.created_at} mode="day" /></span>
+            <span className="min-w-0 flex-1 leading-snug">
+              <b>{m.team}</b> {d.verb}{" "}
+              {m.player_id ? <Link href={`/players/${m.player_id}`} prefetch={false} transitionTypes={FORWARD} className="text-blue">{m.player}</Link> : m.player}
+              {d.tail}
+              {d.detail && <span className="num text-muted"> · {d.detail}</span>}
+              {m.note && <span className="block text-xs text-muted">{m.note}</span>}
+            </span>
+          </li>
+        );
+      })}
     </ul>
   );
 }

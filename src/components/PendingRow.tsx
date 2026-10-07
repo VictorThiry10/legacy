@@ -3,13 +3,15 @@ import type { ReactNode } from "react";
 
 // One line of the Team page's to-do card (Pending.tsx). With an `action` it's waiting on me (a crimson button that
 // says what to do), without one it's waiting on someone else (grey, a chevron). Opens a page (`href`) or a pop-up (`onClick`).
-export default function PendingRow({ href, onClick, icon, title, sub, action }: {
-  href?: string; onClick?: () => void; icon: ReactNode; title: ReactNode; sub: ReactNode; action?: string;
+// `dot`: a red dot on the icon, something new here.
+export default function PendingRow({ href, onClick, icon, title, sub, action, dot }: {
+  href?: string; onClick?: () => void; icon: ReactNode; title: ReactNode; sub: ReactNode; action?: string; dot?: boolean;
 }) {
   const inner = (
     <>
-      <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${action ? "bg-crimson/10 text-crimson" : "bg-fg/[0.06] text-muted"}`}>
+      <span className={`relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${action ? "bg-crimson/10 text-crimson" : "bg-fg/[0.06] text-muted"}`}>
         {icon}
+        {dot && <Dot className="absolute -right-0.5 -top-0.5 ring-2 ring-card" />}
       </span>
       <span className="min-w-0 flex-1 leading-tight">
         <span className="block text-sm font-semibold">{title}</span>
@@ -26,8 +28,12 @@ export default function PendingRow({ href, onClick, icon, title, sub, action }: 
   return href ? <Link href={href} transitionTypes={["nav-forward"]} className={cls}>{inner}</Link> : <button type="button" onClick={onClick} className={cls}>{inner}</button>;
 }
 
+// The little red dot: something new.
+export const Dot = ({ className = "" }: { className?: string }) => <span aria-label="New" className={`inline-block h-2.5 w-2.5 shrink-0 rounded-full bg-crimson ${className}`} />;
+
 const icon = (d: ReactNode) => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{d}</svg>
 );
 export const TradeIcon = () => icon(<path d="M7 4 3 8l4 4M3 8h14M17 20l4-4-4-4M21 16H7" />);
 export const ContractIcon = () => icon(<><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" /><path d="M14 3v5h5M9 13h6M9 17h4" /></>);
+export const HistoryIcon = () => icon(<><path d="M3 12a9 9 0 1 0 2.6-6.4L3 8" /><path d="M3 3v5h5M12 7v5l3 2" /></>);
