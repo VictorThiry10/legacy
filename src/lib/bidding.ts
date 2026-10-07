@@ -262,7 +262,7 @@ export async function room(team: Team): Promise<Room> {
     rounds: rounds.map((r) => roundInfo(r)),
     round: current ? roundInfo(current, current === next ? first : null) : null,
     // the rounds to come and their players, each with its times from the schedule (none once the schedule is stale)
-    upcoming: phase === "waiting" ? rounds.filter((r) => r.status === "setup").map((r, i) => ({
+    upcoming: phase === "waiting" || phase === "reveal" ? rounds.filter((r) => r.status === "setup").map((r, i) => ({
       round: roundInfo(r, first && faSchedule ? slot(faSchedule, opened + i) : null),
       players: freeCards((up.data ?? []).filter((x) => x.round_id === r.id)),
     })) : [],

@@ -146,8 +146,8 @@ export const BID_STEP = 1_000_000;
 // schedule can be set again halfway through); the next ones follow every `everyMinutes`.
 export type Schedule = { start: string; from: number; bidMinutes: number; renounceMinutes: number; everyMinutes: number };
 
-// The league's plan: 8:00 to 18:00 bidding, renounce until 20:00, every day.
-export const DAILY = { bidMinutes: 600, renounceMinutes: 120, everyMinutes: 1440 } as const;
+// The league's plan: 8:00 to 18:00 bidding, an hour to renounce, every day.
+export const DAILY = { bidMinutes: 600, renounceMinutes: 60, everyMinutes: 1440 } as const;
 
 // When the round that opens after `opened` others opens, closes (results) and settles (winners sign), in ms.
 export function slot(s: Schedule, opened: number) {

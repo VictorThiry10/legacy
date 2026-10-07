@@ -3,10 +3,10 @@ import { headshot, nbaLogo } from "@/lib/names";
 import { money } from "@/lib/rules";
 import s from "./gold.module.css";
 
-// The bidding site's player card, Ultimate Team style: a foil (gold, silver or bronze by his fantasy points per
-// game), his rating, position and NBA team top left, the photo cut out over the foil, his name across the middle
-// and six numbers below. `bid` shows my bid and gives the card a cream rim. Sizes itself from its width (container
-// query units), in a grid or full screen.
+// The auction's player card, Ultimate Team style: a foil by his fantasy points per game (amethyst, black, gold, pale
+// gold, silver), his rating, position and NBA team top left, the photo cut out over the foil, his name across the
+// middle and six numbers below. `bid` shows my bid and gives the card a cream rim. Sizes itself from its width
+// (container query units), in a grid or full screen.
 
 const INJURY: Record<string, string> = { OUT: "OUT", "DAY-TO-DAY": "DTD", QUESTIONABLE: "Q", DOUBTFUL: "D", SUSPENSION: "SUS" };
 
@@ -19,8 +19,8 @@ export const cardImages = (p: CardPlayer, size: CardSize) => ({
   logo: nbaLogo(p.nbaTeam, 96),
 });
 
-// The foil: fantasy points per game, like Ultimate Team's overall rating.
-export const tier = (fppg: number | undefined) => (fppg === undefined ? "gold" : fppg >= 25 ? "gold" : fppg >= 15 ? "silver" : "bronze");
+// The foil: fantasy points per game, like Ultimate Team's overall rating. Amethyst 40+, black 35+, gold 30+, pale gold 27+, silver below.
+export const tier = (fppg: number | undefined) => (fppg === undefined ? "silver" : fppg >= 40 ? "amethyst" : fppg >= 35 ? "black" : fppg >= 30 ? "gold" : fppg >= 27 ? "pale" : "silver");
 
 export default function PlayerCard({ p, bid, size = "large", className = "", children }: {
   p: CardPlayer; bid?: number; size?: CardSize; className?: string; children?: React.ReactNode;
@@ -49,7 +49,7 @@ export default function PlayerCard({ p, bid, size = "large", className = "", chi
           {injury && <div className="mt-[2cqw] rounded-[1cqw] bg-[#b4122d] px-[1.5cqw] py-[0.6cqw] text-[3.4cqw] font-bold tracking-[0.1em] text-white">{injury}</div>}
         </div>
         {bid !== undefined && (
-          <div className="font-display absolute right-[7cqw] top-[7cqw] rounded-[1.5cqw] bg-[#0a0a0c] px-[2.5cqw] py-[1cqw] text-[7.5cqw] leading-none text-[var(--gold)]">{money(bid)}</div>
+          <div className="font-display absolute right-[7cqw] top-[7cqw] rounded-[1.5cqw] bg-[#0a0a0c] px-[2.5cqw] py-[1cqw] text-[7.5cqw] leading-none text-[#e9c46a]">{money(bid)}</div>
         )}
 
         {/* name across the middle, then the numbers: two columns, the values lined up on their right */}
