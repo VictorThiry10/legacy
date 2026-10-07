@@ -223,12 +223,12 @@ function Waiting({ data, me, skew, onReplay }: { data: Data; me: RoomTeam; skew:
             title={i === 0 ? <>{roundName(round)}</> : roundName(round)}
             right={round.opensAt ? <>Opens <When iso={round.opensAt} />{i === 0 && <> · <TimeLeft iso={round.opensAt} skew={skew} serverNow={data.now} /></>}</> : "Not scheduled yet"}
           />
-          {/* full cards, with the numbers: the rounds are what GMs study all week */}
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {/* small cards, four a row, with the numbers: the rounds are what GMs study all week */}
+          <div className="grid grid-cols-4 gap-2 sm:grid-cols-8">
             {players.map((p, k) => (
               <motion.div key={p.id} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: Math.min(k, 8) * 0.03, duration: 0.3, ease }}>
                 <Link href={`/players/${p.id}`} transitionTypes={FORWARD} className="block active:opacity-80">
-                  <PlayerCard p={p} lazy={i > 0} />
+                  <PlayerCard p={p} size="small" />
                 </Link>
               </motion.div>
             ))}
