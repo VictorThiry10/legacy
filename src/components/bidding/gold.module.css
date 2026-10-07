@@ -1,11 +1,11 @@
 /* The auction's cards (Ultimate Team style: a foil by the player's rating, lettering on it) and the reveal's
    light. Sizes are in cqw: 1% of the card's width. */
 
-/* A rounded rectangle: the rim's colour shows around the foil inside. */
+/* A rounded rectangle, a touch narrower than a playing card (like FC's): the rim's colour shows around the foil inside. */
 .card {
   --rimw: 2cqw;
   position: relative;
-  aspect-ratio: 5 / 7;
+  aspect-ratio: 20 / 29;
   border-radius: 7% / 5%;
   overflow: hidden;
   background: var(--rim);
@@ -70,8 +70,8 @@
   position: absolute;
   inset: 0;
   background: var(--foil);
-  -webkit-mask: linear-gradient(#0000 0 56%, #000 56%);
-  mask: linear-gradient(#0000 0 56%, #000 56%);
+  -webkit-mask: linear-gradient(#0000 0 54%, #000 54%);
+  mask: linear-gradient(#0000 0 54%, #000 54%);
 }
 .dim { color: var(--dim); }
 

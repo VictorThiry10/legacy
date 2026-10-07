@@ -63,11 +63,11 @@ export default function PlayerCard({ p, bid, size = "large", className = "", chi
           <div className={`font-display truncate ${thumb ? "text-[14cqw]" : "text-[10.5cqw]"} uppercase leading-[0.9] tracking-[0.04em]`}>{last}</div>
         </div>
         {!thumb && stats.length > 0 && (
-          <div className="absolute inset-x-[9cqw] top-[70%] grid grid-cols-2 gap-x-[3cqw] leading-none">
+          <div className="absolute inset-x-[8cqw] top-[69%] grid grid-cols-2 gap-x-[2cqw] leading-none">
             {stats.map(([label, v]) => (
-              <div key={label} className="flex items-baseline gap-[2.4cqw] py-[1.8cqw]">
-                <span className="font-display w-[12cqw] text-right text-[7.5cqw]">{label === "GP" ? v : v.toFixed(1)}</span>
-                <span className={`${s.dim} text-[3.4cqw] font-bold tracking-[0.12em]`}>{label}</span>
+              <div key={label} className="flex items-baseline gap-[2.2cqw] py-[1.5cqw]">
+                <span className="font-display w-[15cqw] text-right text-[9.5cqw]">{label === "GP" ? v : v.toFixed(1)}</span>
+                <span className={`${s.dim} text-[4.2cqw] font-bold tracking-[0.1em]`}>{label}</span>
               </div>
             ))}
           </div>
