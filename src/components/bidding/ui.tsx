@@ -1,5 +1,6 @@
 import type { RoundInfo } from "@/lib/bidding";
-import { initials } from "@/lib/names";
+import type { Look } from "@/lib/team-look";
+import TeamAvatar from "../TeamAvatar";
 
 // Small shared bits of the bidding site.
 
@@ -18,12 +19,7 @@ export function Label({ children, className = "" }: { children: React.ReactNode;
   return <div className={`text-[10px] font-semibold uppercase tracking-[0.2em] text-white/40 ${className}`}>{children}</div>;
 }
 
-// A GM's badge: initials, no colour.
-export function Gm({ name, size = "md" }: { name?: string | null; size?: "sm" | "md" | "lg" }) {
-  const box = { sm: "h-7 w-7 text-[9px]", md: "h-9 w-9 text-[10px]", lg: "h-11 w-11 text-xs" }[size];
-  return (
-    <span className={`${box} inline-flex shrink-0 items-center justify-center rounded-full bg-white/[0.07] font-semibold tracking-wider text-white/75 ring-1 ring-inset ring-white/10`}>
-      {name ? initials(name) : "?"}
-    </span>
-  );
+// A GM's badge, the same as in the league app (Matchup, League): the team's photo, or its initials on its colour.
+export function Gm({ team, size = "md" }: { team?: Look | null; size?: "sm" | "md" | "lg" }) {
+  return <TeamAvatar team={team} size={size} />;
 }

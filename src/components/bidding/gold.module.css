@@ -1,12 +1,13 @@
-/* The bidding site's cards (Ultimate Team style: a foil shield in gold, silver or bronze, dark lettering on it),
-   gold lettering, and the reveal's light. Sizes are in cqw: 1% of the card's width. */
+/* The bidding site's cards (Ultimate Team style: a foil in gold, silver or bronze, dark lettering on it), gold
+   lettering, and the reveal's light. Sizes are in cqw: 1% of the card's width. */
 
-/* The shield: flat top with cut corners, straight sides, a narrower flat bottom. Same points in Outline (PlayerCard.tsx). */
+/* A rounded rectangle: the rim's colour shows around the foil inside. */
 .card {
   --rimw: 2cqw;
   position: relative;
   aspect-ratio: 5 / 7;
-  clip-path: polygon(6% 0, 94% 0, 100% 4.3%, 100% 84%, 90% 100%, 10% 100%, 0 84%, 0 4.3%);
+  border-radius: 7% / 5%;
+  overflow: hidden;
   background: var(--rim);
   color: var(--ink);
 }
@@ -20,7 +21,6 @@
     linear-gradient(135deg, #6b4a12 0%, #c4933a 18%, #f7df92 33%, #b8892f 50%, #7a5617 64%, #e4bf64 82%, #6f5017 100%);
   --ink: #3b2a0a;
   --dim: rgb(59 42 10 / 0.6);
-  --line: rgb(255 248 220 / 0.5);
   --rim: #7d5a1a;
 }
 .silver {
@@ -29,7 +29,6 @@
     linear-gradient(135deg, #5f626a 0%, #aeb1b9 18%, #f1f2f5 33%, #b1b4bc 50%, #71747c 64%, #d6d8dd 82%, #62656c 100%);
   --ink: #23252b;
   --dim: rgb(35 37 43 / 0.6);
-  --line: rgb(255 255 255 / 0.55);
   --rim: #4e5158;
 }
 .bronze {
@@ -38,15 +37,14 @@
     linear-gradient(135deg, #4e2b10 0%, #a3683a 18%, #e5b88e 33%, #9f6334 50%, #553013 64%, #d3a176 82%, #4e2b10 100%);
   --ink: #2a1506;
   --dim: rgb(42 21 6 / 0.6);
-  --line: rgb(255 240 220 / 0.45);
   --rim: #3f210c;
 }
 
-/* Inside the rim: the foil, with the same shape. */
+/* Inside the rim: the foil. */
 .body {
   position: absolute;
   inset: var(--rimw);
-  clip-path: polygon(6% 0, 94% 0, 100% 4.3%, 100% 84%, 90% 100%, 10% 100%, 0 84%, 0 4.3%);
+  border-radius: 6% / 4.3%;
   background: var(--foil);
   overflow: hidden;
 }
@@ -59,7 +57,6 @@
   mask: linear-gradient(#0000 0 56%, #000 56%);
 }
 .dim { color: var(--dim); }
-.line { background: var(--line); }
 
 /* Engraved lettering on the foil: dark with a light edge underneath (the card backs). */
 .engraved {

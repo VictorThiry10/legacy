@@ -74,7 +74,7 @@ export default function RevealShow({ results, teams, meId, onDone }: { results: 
       </div>
       <AnimatePresence>
         {intro ? (
-          <Intro key="intro" title={roundName(round)} count={items.length} onTap={skippable ? () => setIntro(false) : undefined} />
+          <Intro key="intro" title={roundName(round)} onTap={skippable ? () => setIntro(false) : undefined} />
         ) : (
           item && player && (
             <Stage
@@ -94,8 +94,8 @@ export default function RevealShow({ results, teams, meId, onDone }: { results: 
   );
 }
 
-// The round's title card: "The reveal", the round in gold, a line of light.
-function Intro({ title, count, onTap }: { title: string; count: number; onTap?: () => void }) {
+// The round's title card: "The reveal", the round in gold.
+function Intro({ title, onTap }: { title: string; onTap?: () => void }) {
   return (
     <motion.div
       className="absolute inset-0 grid place-items-center px-6"
@@ -120,15 +120,6 @@ function Intro({ title, count, onTap }: { title: string; count: number; onTap?: 
           className={`font-display ${s.goldText} mt-4 text-balance text-[clamp(3.5rem,18vw,7rem)] leading-[0.85]`}
         >
           {title}
-        </motion.div>
-        <motion.div
-          initial={{ scaleX: 0, opacity: 0 }}
-          animate={{ scaleX: 1, opacity: 1 }}
-          transition={{ delay: 0.8, duration: 1.4, ease }}
-          className="mx-auto mt-5 h-px w-56 bg-gradient-to-r from-transparent via-[var(--gold)] to-transparent"
-        />
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1.3, duration: 0.8 }} className="mt-5 text-xs uppercase tracking-[0.35em] text-white/45">
-          {count} {count === 1 ? "player" : "players"}
         </motion.div>
       </div>
     </motion.div>
@@ -299,7 +290,7 @@ function Stage({ item, player, teams, meId, leftovers, onStart, onFinish }: {
               </motion.div>
               <div className="mt-3 flex items-center justify-center gap-3">
                 <motion.span initial={{ opacity: 0, scale: 0.6 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: jumped ? 0 : 0.2, duration: 0.6, ease }}>
-                  <Gm name={team?.name} />
+                  <Gm team={team?.look} />
                 </motion.span>
                 <span className="font-display text-balance text-left text-[clamp(2rem,9vw,2.75rem)] leading-[0.9]">
                   <Letters text={team?.name ?? "A team"} delay={jumped ? 0 : 0.3} fast={jumped} />

@@ -24,10 +24,11 @@ export function preload(srcs: (string | null | undefined)[]) {
   srcs.forEach((s) => s && decode(s));
 }
 
-// Resolves once every image is decoded, or after capMs at most: a slow photo never holds the room up.
+// Resolves once every image is decoded and the site's fonts are in (so a card never flips onto a blank face or
+// the fallback font), or after capMs at most: a slow photo never holds the room up.
 export function ready(srcs: (string | null | undefined)[], capMs: number): Promise<void> {
   if (typeof window === "undefined") return Promise.resolve();
-  const all = Promise.all(srcs.flatMap((s) => (s ? [decode(s)] : [])));
+  const all = Promise.all([...srcs.flatMap((s) => (s ? [decode(s)] : [])), document.fonts?.ready]);
   return new Promise((done) => {
     const t = setTimeout(done, capMs);
     all.then(() => {
