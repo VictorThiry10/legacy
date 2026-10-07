@@ -13,6 +13,8 @@ import { waiverFor } from "@/lib/waivers";
 import LocalTime from "@/components/LocalTime";
 import Slide, { FORWARD } from "@/components/Slide";
 import BackLink from "@/components/BackLink";
+import WatchButton from "@/components/WatchButton";
+import { isWatched } from "@/lib/watchlist";
 
 // Dynamic anyway (it reads who is signed in). Not "force-dynamic": that would switch off the ESPN cache below.
 
@@ -25,7 +27,7 @@ export default async function PlayerPage({ params, searchParams }: PageProps<"/p
   const tab = TABS.some(([k]) => k === sp.tab) ? (sp.tab as string) : "overview";
   const d = db();
   const overview = playerOverviewCached(id).catch(() => null); // ESPN: streamed in below, the page doesn't wait for it
-  const [{ data: player }, { data: contract }, { data: logs }, { data: moves }, me, { season }, onWaivers, regular] = await Promise.all([
+  const [{ data: player }, { data: contract }, { data: logs }, { data: moves }, me, { season }, onWaivers, regular, watched] = await Promise.all([
     d.from("players").select("*").eq("id", id).maybeSingle(),
     d.from("contracts").select("id, salary, years, season_signed, team:teams(id, name)").eq("player_id", id).eq("active", true).maybeSingle(),
     d.from("player_games").select("*, game:games(start, home_team_id, away_team_id, home_score, away_score, season_type)").eq("player_id", id).eq("played", true),
@@ -34,6 +36,7 @@ export default async function PlayerPage({ params, searchParams }: PageProps<"/p
     getSettings(),
     getMe().then((m) => waiverFor(id, m?.team?.id)),
     regularSeasonStarted(),
+    getMe().then((m) => (m?.team ? isWatched(m.team.id, id).catch(() => false) : false)),
   ]);
   if (!player) notFound();
   const p = player as unknown as Player & { injury_note: string | null };
@@ -102,6 +105,7 @@ export default async function PlayerPage({ params, searchParams }: PageProps<"/p
               {c && me?.team && me.team.id !== c.team.id && (
                 <Link href={`/trade/${c.team.id}?get=${c.id}`} transitionTypes={FORWARD} className="rounded-full bg-blue-fill px-5 py-1.5 text-sm font-semibold text-white">Trade</Link>
               )}
+              {me?.team && <WatchButton playerId={p.id} name={p.name} watched={watched} />}
               <span className={`rounded-full px-3 py-1.5 text-xs font-semibold ${p.injury_status ? "bg-bad/15 text-bad" : "bg-good/15 text-good"}`} title={p.injury_note ?? ""}>
                 {p.injury_status ?? "Healthy"}
               </span>
