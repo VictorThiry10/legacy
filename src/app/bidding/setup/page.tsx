@@ -26,10 +26,6 @@ export default async function Setup({ searchParams }: PageProps<"/bidding/setup"
     <div className="mx-auto max-w-5xl px-4 pb-16 pt-[max(1.25rem,env(safe-area-inset-top))]">
       <Link href="/bidding" className="text-sm text-white/55 hover:text-white">← Room</Link>
       <h1 className="font-display mt-2 text-6xl leading-[0.85]">Rounds</h1>
-      <p className="mt-3 max-w-md text-sm text-white/55">
-        The free agents up for auction: {REGULAR_ROUNDS} rounds of {PER_ROUND}, a round a day. Search a free agent and tap a round number to
-        add him, ✕ to take him out. Auto fill tops every round up with the best free agents left.
-      </p>
 
       <div className="mt-5 flex flex-wrap gap-2">
         <ActionForm action={A.autoFill} confirm="Fill every empty spot with the best free agents left (last season's fantasy points per game)?">

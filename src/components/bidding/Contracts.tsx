@@ -11,10 +11,10 @@ const MAX_YEARS = 4;
 const yrs = (n: number) => `${n} ${n === 1 ? "yr" : "yrs"}`;
 const LONG = [4, 3, 2]; // the lengths with a limit per season
 
-// After the last round: every signing starts as a 1 year deal, and each GM gives some of theirs longer contracts
-// with + and −, within the limits (1 × 4 years, 2 × 3, 3 × 2). The contracts already on the team count by the
-// seasons they have left (shown locked under the signings). Going over a limit says so and blocks Save.
-// Then the board of every signing, by team.
+// After the last round: each GM sets the length of this season's new contracts (the auction's signings start at
+// 1 year; rookies and pickups keep what they were given) with + and −, within the limits (1 × 4 years, 2 × 3,
+// 3 × 2). Last season's players keep their length and count by the seasons they have left (shown locked under
+// the new ones). Going over a limit says so and blocks Save. Then the board of every new contract, by team.
 export default function Contracts({ data }: { data: Room }) {
   const locked = data.phase === "done";
   const mine = data.signings.filter((s) => s.teamId === data.meId).sort((a, b) => b.salary - a.salary);
