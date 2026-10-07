@@ -229,7 +229,7 @@ async function Cap({ teams, me, rosterMax }: { teams: TeamSummary[]; me?: Team; 
                 </span>
                 {p.rookie ? (
                   <span className="text-right leading-tight">
-                    <span className="block text-sm font-medium">{p.rookie.name}</span>
+                    <Link href={`/players/${p.rookie.id}`} prefetch={false} transitionTypes={["nav-forward"]} className="block text-sm font-medium text-blue">{p.rookie.name}</Link>
                     <span className="num block text-xs text-muted">{money(p.rookie.salary)} · {p.rookie.years} yr</span>
                   </span>
                 ) : (

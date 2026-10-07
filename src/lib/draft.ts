@@ -63,6 +63,16 @@ export async function lotteryWatched(team: Team) {
   if (error) fail(error);
 }
 
+// While the draft is running (the lottery is drawn and a pick is still to be made), a rookie can only be drafted:
+// picking him up as a free agent would jump the order, and for the priced ones undercut their price.
+export async function reservedForDraft(playerId: string): Promise<boolean> {
+  const { season } = await getSettings();
+  const picks = await picksInOrder(season);
+  if (!picks.some((p) => !p.player_id)) return false;
+  if (ROOKIES.some((r) => r.id === playerId)) return true;
+  return (await rookieClass().catch(() => [])).some((r) => r.id === playerId);
+}
+
 // Where the draft stands for one team.
 export type DraftBoard = {
   picks: { slot: number; team: string; player: string | null }[]; // team: who holds the pick; player: the rookie taken
@@ -99,7 +109,7 @@ export type DraftRecord = {
   field: LotteryTeam[];
   watched: boolean;
   onClock: number | null;
-  picks: { slot: number; team: string; original: string; rookie: { name: string; salary: number; years: number } | null }[];
+  picks: { slot: number; team: string; original: string; rookie: { id: string; name: string; salary: number; years: number } | null }[];
 };
 export async function draftRecord(team: Team): Promise<DraftRecord> {
   const field = lotteryField();
@@ -117,7 +127,7 @@ export async function draftRecord(team: Team): Promise<DraftRecord> {
       const deal = deals?.find((c) => c.player_id === p.player_id);
       return {
         slot: p.slot!, team: p.team_id, original: p.original_team,
-        rookie: p.player_id ? { name: p.player?.name ?? "?", salary: Number(deal?.salary ?? 0), years: deal?.years ?? 0 } : null,
+        rookie: p.player_id ? { id: p.player_id, name: p.player?.name ?? "?", salary: Number(deal?.salary ?? 0), years: deal?.years ?? 0 } : null,
       };
     }),
   };
