@@ -5,26 +5,23 @@ import type { CardPlayer, Results, RoomTeam } from "@/lib/bidding";
 import { BID_STEP, money, type RevealItem } from "@/lib/rules";
 import PlayerCard, { CardBack, cardImages } from "./PlayerCard";
 import { preload, ready } from "./preload";
-import { ease, Gm, reasonText, roundName } from "./ui";
+import { BidStatus, ease, Gm, GOLD, reasonText, roundName } from "./ui";
 import s from "./gold.module.css";
 
-// Each player's moments, in ms from when his photo is ready: the gold card gathers light and trembles, flips in a
-// flash, the team he signs with spells itself out, the amount counts up and lands in a burst of gold, then every
-// other bid. Tap to jump to the end of a player, tap again (or wait) for the next one.
-const AT = { tremble: 1500, flip: 2400, team: 3800, amount: 4600, landed: 6500, others: 7500 } as const;
-const HOLD = 12000; // ms each player stays on screen unless tapped on
-const INTRO = 2800; // the round's title card
+// Each player's moments, in ms from when his photo is ready: the card gathers light and trembles, turns over,
+// the team he signs with spells itself out, the amount counts up and lands, then every other bid.
+const AT = { tremble: 1200, flip: 2000, team: 3600, amount: 4400, landed: 6300, others: 7200 } as const;
+const HOLD = 11500; // ms each player stays on screen
 
 // Stages a player goes through (the AT moments in order).
 const TREMBLE = 1, FLIPPED = 2, TEAM = 3, AMOUNT = 4, LANDED = 5, OTHERS = 6;
 
-// Full screen, one player at a time, after a title card for the round. Everyone watches every signing to the end;
-// only the last chance round (dozens of leftovers) can be tapped through or skipped.
+// Full screen and dark, one player at a time. Everyone watches every signing to the end; only the last chance
+// round (dozens of leftovers) can be tapped through or skipped.
 export default function RevealShow({ results, teams, meId, onDone }: { results: Results; teams: RoomTeam[]; meId: string; onDone: () => void }) {
   const { round, items, players } = results;
   const reduce = useReducedMotion();
   const skippable = round.kind === "leftovers";
-  const [intro, setIntro] = useState(true);
   const [i, setI] = useState(0);
   const [started, setStarted] = useState(-1); // the player whose clock is running (his photo is decoded)
   const next = () => (i + 1 < items.length ? setI(i + 1) : onDone());
@@ -33,15 +30,11 @@ export default function RevealShow({ results, teams, meId, onDone }: { results: 
   // Start decoding every photo of the round now, so each player is ready by the time he's up.
   const photos = players.flatMap((p) => Object.values(cardImages(p, "large"))).join("\n");
   useEffect(() => preload(photos.split("\n")), [photos]);
-  useEffect(() => {
-    if (!intro) return;
-    const t = setTimeout(() => setIntro(false), INTRO);
-    return () => clearTimeout(t);
-  }, [intro]);
   return (
     <motion.div
       data-overlay
       className="fixed inset-0 z-[60] touch-none overflow-hidden bg-[#050507] text-white"
+      style={{ "--gold": GOLD } as React.CSSProperties}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0, transition: { duration: 0.8 } }}
@@ -73,55 +66,19 @@ export default function RevealShow({ results, teams, meId, onDone }: { results: 
         {skippable && <button onClick={onDone} className="shrink-0 text-xs font-semibold uppercase tracking-widest text-white/60 hover:text-white">Skip</button>}
       </div>
       <AnimatePresence>
-        {intro ? (
-          <Intro key="intro" title={roundName(round)} onTap={skippable ? () => setIntro(false) : undefined} />
-        ) : (
-          item && player && (
-            <Stage
-              key={item.playerId}
-              item={item}
-              player={player}
-              teams={teams}
-              meId={meId}
-              leftovers={skippable}
-              onStart={() => setStarted(i)}
-              onFinish={next}
-            />
-          )
+        {item && player && (
+          <Stage
+            key={item.playerId}
+            item={item}
+            player={player}
+            teams={teams}
+            meId={meId}
+            leftovers={skippable}
+            onStart={() => setStarted(i)}
+            onFinish={next}
+          />
         )}
       </AnimatePresence>
-    </motion.div>
-  );
-}
-
-// The round's title card: "The reveal", the round in gold.
-function Intro({ title, onTap }: { title: string; onTap?: () => void }) {
-  return (
-    <motion.div
-      className="absolute inset-0 grid place-items-center px-6"
-      onClick={onTap}
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0, scale: 1.08, filter: "blur(10px)", transition: { duration: 0.7, ease } }}
-    >
-      <div className="text-center">
-        <motion.div
-          initial={{ opacity: 0, letterSpacing: "1.2em" }}
-          animate={{ opacity: 1, letterSpacing: "0.5em" }}
-          transition={{ duration: 1.6, ease }}
-          className="text-[11px] font-semibold uppercase text-[var(--gold)]/80"
-        >
-          The reveal
-        </motion.div>
-        <motion.div
-          initial={{ opacity: 0, scale: 0.82, filter: "blur(14px)" }}
-          animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
-          transition={{ delay: 0.25, duration: 1.3, ease }}
-          className={`font-display ${s.goldText} mt-4 text-balance text-[clamp(3.5rem,18vw,7rem)] leading-[0.85]`}
-        >
-          {title}
-        </motion.div>
-      </div>
     </motion.div>
   );
 }
@@ -192,10 +149,11 @@ function Stage({ item, player, teams, meId, leftovers, onStart, onFinish }: {
           style={{ background: "radial-gradient(circle at 50% 38%, rgba(255,247,220,0.9), rgba(233,196,106,0.35) 30%, transparent 65%)" }}
           initial={{ opacity: 0 }}
           animate={{ opacity: [0, reduce ? 0.3 : 0.85, 0] }}
-          transition={{ duration: 0.8, times: [0, 0.18, 1], ease: "easeOut" }}
+          transition={{ duration: 1, times: [0, 0.3, 1], ease: "easeOut" }}
         />
       )}
-      {!reduce && stage >= LANDED && w && <Confetti lots={mine} />}
+      {/* Fireworks only when he's mine. */}
+      {!reduce && stage >= LANDED && mine && <Confetti />}
 
       <motion.div
         className="relative w-[min(60vw,260px,34svh)] [perspective:1400px]"
@@ -210,7 +168,7 @@ function Stage({ item, player, teams, meId, leftovers, onStart, onFinish }: {
             style={{ "--ray": w ? "rgb(233 196 106 / 0.17)" : "rgb(255 255 255 / 0.06)" } as React.CSSProperties}
             initial={{ opacity: 0 }}
             animate={{ opacity: flipped ? (unsigned ? 0.35 : 1) : 0 }}
-            transition={{ duration: 1.4, ease }}
+            transition={{ duration: 1.6, ease }}
           />
         )}
         <motion.div
@@ -225,13 +183,13 @@ function Stage({ item, player, teams, meId, leftovers, onStart, onFinish }: {
         />
         {!reduce && !flipped && <Gather />}
         {!reduce && flipped && !jumped && <Shockwave />}
-        {!reduce && stage >= LANDED && w && !jumped && <Burst />}
+        {!reduce && stage >= LANDED && mine && !jumped && <Burst />}
 
-        {/* The card: breathes in, trembles, then turns over with a little jump. */}
+        {/* The card: breathes in, trembles, then lifts and turns over on a spring (smooth, a touch of overshoot). */}
         <motion.div
           initial={{ scale: 0.88, y: 10 }}
-          animate={flipped ? { scale: [0.96, 1.07, 1], y: 0 } : { scale: 0.96, y: 0 }}
-          transition={flipped ? { duration: 1, times: [0, 0.45, 1], ease } : { duration: AT.flip / 1000, ease: "easeIn" }}
+          animate={flipped ? { scale: 1, y: [0, -18, 0] } : { scale: 0.96, y: 0 }}
+          transition={flipped ? { scale: { duration: 1.2, ease }, y: { duration: 1.4, times: [0, 0.4, 1], ease: "easeInOut" } } : { duration: AT.flip / 1000, ease: "easeIn" }}
         >
           <div className={stage === TREMBLE ? s.tremble : undefined}>
             <motion.div
@@ -239,7 +197,7 @@ function Stage({ item, player, teams, meId, leftovers, onStart, onFinish }: {
               style={{ transformStyle: "preserve-3d" }}
               initial={{ rotateY: 180 }}
               animate={{ rotateY: flipped ? 0 : 180 }}
-              transition={{ duration: jumped ? 0.5 : 1.15, ease: [0.25, 0.9, 0.15, 1] }}
+              transition={jumped ? { duration: 0.5, ease } : { type: "spring", stiffness: 58, damping: 13, mass: 1.1 }}
             >
               <div className="face @container relative">
                 <PlayerCard p={player} className={`transition-[filter] duration-[1400ms] ${unsigned ? "grayscale brightness-75" : ""}`} />
@@ -251,7 +209,7 @@ function Stage({ item, player, teams, meId, leftovers, onStart, onFinish }: {
                       style={{ background: "linear-gradient(105deg, transparent, rgba(255,244,200,0.55), transparent)" }}
                       initial={{ x: "-120%" }}
                       animate={{ x: "220%" }}
-                      transition={{ delay: 0.55, duration: 1.1, ease: "easeInOut" }}
+                      transition={{ delay: 0.7, duration: 1.2, ease: "easeInOut" }}
                     />
                   </div>
                 )}
@@ -276,88 +234,54 @@ function Stage({ item, player, teams, meId, leftovers, onStart, onFinish }: {
         </motion.div>
       </motion.div>
 
-      <div className="mt-8 min-h-48 w-full max-w-sm text-center">
-        {stage >= TEAM &&
-          (w ? (
-            <>
+      <div className="mt-8 min-h-44 w-full max-w-sm text-center">
+        {stage >= TEAM && w && (
+          <>
+            <div className="flex items-center justify-center gap-3">
+              <motion.span initial={{ opacity: 0, scale: 0.6 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: jumped ? 0 : 0.2, duration: 0.6, ease }}>
+                <Gm team={team?.look} />
+              </motion.span>
+              <span className="font-display text-balance text-left text-[clamp(2rem,9vw,2.75rem)] leading-[0.9]">
+                <Letters text={team?.name ?? "A team"} delay={jumped ? 0 : 0.3} fast={jumped} />
+              </span>
+            </div>
+            {stage >= AMOUNT && (
               <motion.div
-                initial={{ opacity: 0, letterSpacing: "1em" }}
-                animate={{ opacity: 1, letterSpacing: "0.4em" }}
-                transition={{ duration: jumped ? 0.3 : 1.2, ease }}
-                className="text-[11px] font-semibold uppercase text-white/60"
+                initial={{ opacity: 0, scale: 0.7 }}
+                animate={stage >= LANDED ? { opacity: 1, scale: jumped ? 1 : [1, 1.14, 1] } : { opacity: 1, scale: 1 }}
+                transition={stage >= LANDED ? { duration: 0.5, ease } : { type: "spring", stiffness: 200, damping: 16 }}
+                className={`font-display ${s.goldText} mt-2 text-7xl leading-none`}
+                style={stage >= LANDED ? { filter: "drop-shadow(0 0 18px rgba(233,196,106,0.45))" } : undefined}
               >
-                {player.name.split(" ").slice(-1)[0]} signs with
+                <CountUp to={w.amount} instant={jumped} />
               </motion.div>
-              <div className="mt-3 flex items-center justify-center gap-3">
-                <motion.span initial={{ opacity: 0, scale: 0.6 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: jumped ? 0 : 0.2, duration: 0.6, ease }}>
-                  <Gm team={team?.look} />
-                </motion.span>
-                <span className="font-display text-balance text-left text-[clamp(2rem,9vw,2.75rem)] leading-[0.9]">
-                  <Letters text={team?.name ?? "A team"} delay={jumped ? 0 : 0.3} fast={jumped} />
-                </span>
-              </div>
-              {mine && (
-                <motion.div
-                  initial={{ opacity: 0, y: 6 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: jumped ? 0 : 0.9, duration: 0.6, ease }}
-                  className="mt-2 text-[10px] font-semibold tracking-[0.35em] text-[var(--gold)]"
-                >
-                  YOU
-                </motion.div>
-              )}
-              {stage >= AMOUNT && (
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.7 }}
-                  animate={stage >= LANDED ? { opacity: 1, scale: jumped ? 1 : [1, 1.14, 1] } : { opacity: 1, scale: 1 }}
-                  transition={stage >= LANDED ? { duration: 0.5, ease } : { type: "spring", stiffness: 200, damping: 16 }}
-                  className={`font-display ${s.goldText} mt-2 text-7xl leading-none`}
-                  style={stage >= LANDED ? { filter: "drop-shadow(0 0 18px rgba(233,196,106,0.45))" } : undefined}
-                >
-                  <CountUp to={w.amount} instant={jumped} />
-                </motion.div>
-              )}
-              {stage >= LANDED && w.tie && (
-                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: jumped ? 0 : 0.4 }} className="mt-1 text-xs text-white/55">
-                  {w.tie === "cap" ? "Tied bid · more cap space wins" : "Tied bid and cap space · the computer picked"}
-                </motion.div>
-              )}
-            </>
-          ) : (
-            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: jumped ? 0 : 0.6, duration: 0.8, ease }}>
-              <div className="font-display text-5xl leading-none text-white/80">Unsigned</div>
-              <div className="mt-2 text-xs uppercase tracking-[0.3em] text-white/45">{leftovers ? "Stays a free agent" : "Goes to the last chance round"}</div>
-            </motion.div>
-          ))}
+            )}
+            {stage >= LANDED && w.tie && (
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: jumped ? 0 : 0.4 }} className="mt-1 text-xs text-white/55">
+                {w.tie === "cap" ? "Tie · more cap space" : "Tie · computer pick"}
+              </motion.div>
+            )}
+          </>
+        )}
         {stage >= OTHERS && others.length > 0 && (
-          <ul className="mt-5 space-y-1.5">
+          <ul className="mt-5 space-y-2">
             {others.map((b, k) => (
               <motion.li
                 key={b.bidId}
                 initial={{ opacity: 0, x: -14 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: jumped ? k * 0.06 : k * 0.3, duration: 0.5, ease }}
-                className="flex items-center justify-center gap-2 text-sm text-white/50"
+                className="flex items-center justify-center gap-2 text-sm text-white/60"
               >
-                <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/30">{b.status === "lost" ? "Rejected" : b.status === "voided" ? "Voided" : "Renounced"}</span>
-                <span className="truncate text-white/70">{name(b.teamId)}</span>
-                <span className="font-display text-lg leading-none text-white/70">{money(b.amount)}</span>
-                {b.status === "voided" && <span className="text-xs text-white/35">{reasonText(b.reason)}</span>}
+                <BidStatus status={b.status as "lost" | "voided" | "renounced"} dark />
+                <span className="truncate text-white/80">{name(b.teamId)}</span>
+                <span className="font-display text-lg leading-none text-white/80">{money(b.amount)}</span>
+                {b.status === "voided" && <span className="text-xs text-white/40">{reasonText(b.reason)}</span>}
               </motion.li>
             ))}
           </ul>
         )}
       </div>
-      {leftovers && stage >= OTHERS && (
-        <motion.div
-          className="absolute bottom-[max(1.25rem,env(safe-area-inset-bottom))] text-[10px] uppercase tracking-[0.35em] text-white/30"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 1.6 }}
-        >
-          Tap to continue
-        </motion.div>
-      )}
     </motion.div>
   );
 }
@@ -444,7 +368,7 @@ function Shockwave() {
   );
 }
 
-// Gold sparks flying out from behind the card when the amount lands.
+// Gold sparks flying out from behind the card when my amount lands.
 function Burst() {
   return (
     <div className="pointer-events-none absolute left-1/2 top-1/2 -z-10">
@@ -467,11 +391,11 @@ function Burst() {
   );
 }
 
-// Gold flakes falling over the screen for a signing (more of them when it's mine).
-function Confetti({ lots }: { lots: boolean }) {
+// Gold flakes falling over the screen: my signing.
+function Confetti() {
   return (
     <div className="pointer-events-none absolute inset-0 overflow-hidden">
-      {Array.from({ length: lots ? 44 : 24 }, (_, k) => {
+      {Array.from({ length: 44 }, (_, k) => {
         const left = rand(k, 5) * 100;
         const drift = (rand(k, 6) - 0.5) * 120;
         const w = 4 + rand(k, 7) * 5;

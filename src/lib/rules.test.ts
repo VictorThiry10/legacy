@@ -198,14 +198,14 @@ test("scoreRows: one row per category that happened, adding up to the fantasy po
   assert.equal(rows.reduce((a, r) => a + r.score, 0), fantasyPoints(line, w));
 });
 
-test("free agency schedule: a round a day, 8:00 to 18:00, renounce until 20:00", () => {
+test("free agency schedule: a round a day, 8:00 to 18:00, renounce until 19:00", () => {
   const s: Schedule = { start: "2026-10-12T07:00:00.000Z", from: 0, ...DAILY };
   const at = (opened: number) => {
     const t = slot(s, opened);
     return [t.opens, t.closes, t.settles].map((x) => new Date(x).toISOString());
   };
-  assert.deepEqual(at(0), ["2026-10-12T07:00:00.000Z", "2026-10-12T17:00:00.000Z", "2026-10-12T19:00:00.000Z"]);
-  assert.deepEqual(at(6), ["2026-10-18T07:00:00.000Z", "2026-10-18T17:00:00.000Z", "2026-10-18T19:00:00.000Z"]); // round 7
+  assert.deepEqual(at(0), ["2026-10-12T07:00:00.000Z", "2026-10-12T17:00:00.000Z", "2026-10-12T18:00:00.000Z"]);
+  assert.deepEqual(at(6), ["2026-10-18T07:00:00.000Z", "2026-10-18T17:00:00.000Z", "2026-10-18T18:00:00.000Z"]); // round 7
   assert.equal(at(7)[0], "2026-10-19T07:00:00.000Z"); // the last chance round, the day after
 });
 
