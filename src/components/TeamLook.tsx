@@ -4,10 +4,12 @@ import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { saveLook } from "@/app/(league)/look/actions";
 import { LOGO_PX, TEAM_COLORS, type Look } from "@/lib/team-look";
+import PhotoCrop, { openPhoto, type Source } from "./PhotoCrop";
 import TeamAvatar from "./TeamAvatar";
 import { useScrollLock } from "./ScrollLock";
 
-// My team's badge on the Matchup page: tap it to give the team a photo and a colour. Nothing changes until Save.
+// My team's badge on the Matchup page: tap it to give the team a photo and a colour. A new photo is placed first
+// (PhotoCrop: move and zoom it under a circle). Nothing changes until Save.
 export default function TeamLook({ team }: { team: Look }) {
   const [open, setOpen] = useState(false);
   return (
@@ -29,26 +31,28 @@ function Sheet({ team, onClose }: { team: Look; onClose: () => void }) {
   const [color, setColor] = useState(team.color ?? "");
   const [photo, setPhoto] = useState<Blob | null>(null); // a new photo, cut and ready to send
   const [preview, setPreview] = useState<string | null>(team.logo_url ?? null);
+  const [placing, setPlacing] = useState<Source | null>(null); // the photo just picked, being moved and zoomed
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
 
   useEffect(() => {
-    const esc = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && (placing ? setPlacing(null) : onClose());
     window.addEventListener("keydown", esc);
     return () => window.removeEventListener("keydown", esc);
-  }, [onClose]);
-  // the preview of a new photo is a temporary address: let go of it when it changes or the sheet closes
+  }, [onClose, placing]);
+  // the preview of a new photo, and the photo being placed, are temporary addresses: let go of them once unused
   useEffect(() => () => {
     if (preview?.startsWith("blob:")) URL.revokeObjectURL(preview);
   }, [preview]);
+  useEffect(() => () => {
+    if (placing) URL.revokeObjectURL(placing.url);
+  }, [placing]);
 
   const pick = async (file?: File) => {
     if (!file) return;
     setError(null);
     try {
-      const cut = await square(file);
-      setPhoto(cut);
-      setPreview(URL.createObjectURL(cut));
+      setPlacing(await openPhoto(file));
     } catch {
       setError("That file isn't a photo this phone can read. Try another one.");
     }
@@ -72,6 +76,17 @@ function Sheet({ team, onClose }: { team: Look; onClose: () => void }) {
     <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4" role="dialog" aria-modal="true" aria-label="Team badge">
       <button type="button" aria-label="Close" onClick={onClose} className="menu-dim absolute inset-0 cursor-default bg-black/50" />
       <div className="sheet-up relative w-full max-w-md rounded-t-2xl bg-card p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-2xl sm:rounded-2xl">
+        {placing ? (
+          <PhotoCrop
+            src={placing} px={LOGO_PX} onCancel={() => setPlacing(null)}
+            onDone={(cut) => {
+              setPhoto(cut);
+              setPreview(URL.createObjectURL(cut));
+              setPlacing(null);
+            }}
+          />
+        ) : (
+        <>
         <div className="flex flex-col items-center gap-3">
           <TeamAvatar team={{ name: team.name, color: color || null, logo_url: preview }} size="xl" />
           <div className="text-lg font-semibold">{team.name}</div>
@@ -105,30 +120,11 @@ function Sheet({ team, onClose }: { team: Look; onClose: () => void }) {
           <button type="button" onClick={onClose} disabled={pending} className="btn-ghost">Cancel</button>
           <button type="button" onClick={save} disabled={pending || !changed} className="btn flex-1">{pending ? "Saving…" : "Save"}</button>
         </div>
+        </>
+        )}
       </div>
     </div>
   );
-}
-
-// The middle square of a photo, shrunk to LOGO_PX and saved as a JPEG (white behind a see-through logo).
-async function square(file: File): Promise<Blob> {
-  const url = URL.createObjectURL(file);
-  try {
-    const img = new Image();
-    img.src = url;
-    await img.decode();
-    const side = Math.min(img.naturalWidth, img.naturalHeight);
-    const canvas = document.createElement("canvas");
-    canvas.width = canvas.height = LOGO_PX;
-    const g = canvas.getContext("2d")!;
-    g.fillStyle = "#fff";
-    g.fillRect(0, 0, LOGO_PX, LOGO_PX);
-    g.imageSmoothingQuality = "high";
-    g.drawImage(img, (img.naturalWidth - side) / 2, (img.naturalHeight - side) / 2, side, side, 0, 0, LOGO_PX, LOGO_PX);
-    return await new Promise((done, no) => canvas.toBlob((b) => (b ? done(b) : no(new Error("no image"))), "image/jpeg", 0.86));
-  } finally {
-    URL.revokeObjectURL(url);
-  }
 }
 
 const CameraIcon = ({ size }: { size: number }) => (
