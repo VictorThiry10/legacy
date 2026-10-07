@@ -14,6 +14,8 @@ import { addDays, isDay, monthDay, today, weekday } from "@/lib/dates";
 import Slide from "@/components/Slide";
 import { headshot, initials } from "@/lib/names";
 import { openWaivers } from "@/lib/waivers";
+import { watchlist } from "@/lib/watchlist";
+import FlagIcon from "@/components/FlagIcon";
 
 export const dynamic = "force-dynamic";
 
@@ -49,20 +51,23 @@ async function StatsTable({ sp }: { sp: Params }) {
   const sort = (sp.sort ?? "avg") as StatKey;
   const asc = sp.dir === "asc";
   const q = (sp.q ?? "").trim().toLowerCase();
-  // Who's listed: the players nobody has, unless the filter says otherwise. A search by name looks at everyone.
-  const show = sp.show ?? (q ? "all" : "av");
+  const watch = sp.watch === "1"; // only my watch list (the flag chip)
+  // Who's listed: the players nobody has, unless the filter says otherwise. A search by name and my watch list look
+  // at everyone.
+  const show = sp.show ?? (q || watch ? "all" : "av");
   const play = isDay(sp.play) ? sp.play : ""; // only players whose NBA team plays that day
   const period: Period = PERIODS.includes(sp.stats as Period) ? (sp.stats as Period) : "last";
   const d = db();
   const { season } = await getSettings();
 
   const ours = period === "season" || period === "7" || period === "14" || period === "30";
-  const [{ data: rows }, { data: owned }, { data: games }, waivers, me, playing, totals] = await Promise.all([
+  const [{ data: rows }, { data: owned }, { data: games }, waivers, me, watched, playing, totals] = await Promise.all([
     d.from("players").select("id, name, position, nba_team, nba_team_id, headshot, injury_status, injury_note, last_season, projection").limit(2000),
     d.from("contracts").select("player_id, team:teams(id, name)").eq("active", true),
     d.from("games").select("id, start, home_team_id, away_team_id").gte("start", threeHoursAgo()).neq("state", "post").order("start").limit(200),
     openWaivers(),
     getMe(),
+    watch ? getMe().then((m) => (m?.team ? watchlist(m.team.id) : new Set<string>())) : null,
     play ? gamesBetween(play, play).then((gs) => new Set(gs.flatMap((g) => [g.home_team_id, g.away_team_id]))) : null,
     ours
       ? regularSeasonStarted().then((regular) => rpc("player_totals", { p_from: period === "season" ? `${season}-09-01` : addDays(today(), 1 - Number(period)), p_regular: regular }))
@@ -86,6 +91,7 @@ async function StatsTable({ sp }: { sp: Params }) {
     .filter((p) => !q || p.name.toLowerCase().includes(q))
     .filter((p) => !sp.pos || fits(p.position, sp.pos))
     .filter((p) => (show === "av" ? !owner.has(p.id) : show === "fa" ? !owner.has(p.id) && !waivers.has(p.id) : show === "wa" ? waivers.has(p.id) : show === "owned" ? owner.has(p.id) : true))
+    .filter((p) => !watched || watched.has(p.id))
     .filter((p) => sp.mine !== "0" || owner.get(p.id)?.id !== me?.team?.id)
     .filter((p) => !playing || (!!p.nba_team_id && playing.has(p.nba_team_id)))
     .filter((p) => !sp.team || p.nba_team === sp.team)
@@ -163,6 +169,7 @@ async function StatsTable({ sp }: { sp: Params }) {
           </tbody>
         </table>
         {!players.length && <p className="text-muted text-sm p-4">No players yet.</p>}
+        {watch && !!players.length && !list.length && <p className="text-muted text-sm p-4">Nobody on your watch list here. Tap the flag on a player&apos;s page to add him.</p>}
       </div>
       <div className="flex flex-wrap justify-between gap-2 text-xs text-muted">
         <span />
@@ -195,11 +202,11 @@ function SortTh({ sp, sort, asc, k, label, title, className = "" }: { sp: Params
 const pill = "h-10 min-w-12 px-4 inline-flex items-center justify-center rounded-full text-sm font-semibold whitespace-nowrap";
 const chip = (on: boolean) => `${pill} transition-colors active:opacity-70 ${on ? "border-2 border-fg text-fg bg-card" : "bg-line/70 text-muted hover:text-fg"}`;
 
-// ESPN style filter row: search and filter buttons, then position chips. Search opens a full width box instead.
+// ESPN style filter row: search and filter buttons, then my watch list (the flag) and the position chips. Search opens a full width box instead.
 function FilterBar({ sp, show, play, perGame, period, periods, teams }: {
   sp: Params; show: string; play: string; perGame: boolean; period: Period; periods: [string, string][]; teams: string[];
 }) {
-  const filtered = show !== "av" || !perGame || sp.mine === "0" || !!play || !!sp.team || period !== "last";
+  const filtered = (!!sp.show && sp.show !== "av") || !perGame || sp.mine === "0" || !!play || !!sp.team || period !== "last";
   if (sp.search || sp.q) {
     const keep = Object.fromEntries(Object.entries(sp).filter(([k, v]) => v && k !== "q" && k !== "search")) as Record<string, string>;
     return <SearchBar path="/players" params={keep} initial={sp.q ?? ""} cancelHref={href(sp, { q: undefined, search: undefined })} />;
@@ -208,7 +215,7 @@ function FilterBar({ sp, show, play, perGame, period, periods, teams }: {
   // which stats.
   const now = today();
   const days = Array.from({ length: 7 }, (_, i) => addDays(now, i)).map((d): [string, string] => [d, `${weekday(d).charAt(0)}${weekday(d).slice(1).toLowerCase()}, ${monthDay(d)}`]);
-  const keep = Object.fromEntries(Object.entries({ pos: sp.pos, sort: sp.sort, dir: sp.dir }).filter(([, v]) => v)) as Record<string, string>;
+  const keep = Object.fromEntries(Object.entries({ pos: sp.pos, sort: sp.sort, dir: sp.dir, watch: sp.watch }).filter(([, v]) => v)) as Record<string, string>;
   return (
     <div className="flex items-center gap-2 overflow-x-auto pb-1 -mx-4 px-4 sm:mx-0 sm:px-0">
       <Link href={href(sp, { search: "1" })} prefetch={false} scroll={false} className={`${chip(false)} shrink-0`} aria-label="Search"><SearchIcon /></Link>
@@ -221,6 +228,9 @@ function FilterBar({ sp, show, play, perGame, period, periods, teams }: {
         keep={keep}
       />
       <span className="h-8 w-px bg-line shrink-0 mx-1" />
+      <Link href={href(sp, { watch: sp.watch === "1" ? undefined : "1", n: undefined })} prefetch={false} scroll={false} className={`${chip(sp.watch === "1")} shrink-0`} aria-label="Watch list" aria-pressed={sp.watch === "1"}>
+        <FlagIcon on={sp.watch === "1"} />
+      </Link>
       {[["", "All"], ...POSITIONS.map((p) => [p, p])].map(([v, label]) => (
         <Link key={label} href={href(sp, { pos: v || undefined, n: undefined })} prefetch={false} scroll={false} className={`${chip((sp.pos ?? "") === v)} shrink-0`}>{label}</Link>
       ))}

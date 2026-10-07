@@ -97,6 +97,9 @@ export type Database = {
         { auth: string; created_at?: string; endpoint: string; p256dh: string; team_id: string },
         [FK<"push_subscriptions_team_id_fkey", "team_id", "teams">]
       >;
+      watchlist: Table<{ created_at: string; player_id: string; team_id: string }, { created_at?: string; player_id: string; team_id: string },
+        [FK<"watchlist_player_id_fkey", "player_id", "players">, FK<"watchlist_team_id_fkey", "team_id", "teams">]
+      >;
       round_players: Table<{ player_id: string; pos: number; round_id: string }, { player_id: string; pos?: number; round_id: string },
         [FK<"round_players_player_id_fkey", "player_id", "players">, FK<"round_players_round_id_fkey", "round_id", "rounds">]
       >;
