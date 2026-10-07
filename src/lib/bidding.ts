@@ -166,6 +166,9 @@ function due<R extends RoundTimes>(rounds: R[], schedule: Schedule | null, now: 
 // on time with nobody on the site. Safe to call from several places at once: the database lets one of them act.
 export async function advance(): Promise<void> {
   const { season, faSchedule } = await getSettings();
+  // A player in a round to come who joined a team some other way first (an extension, a pickup) makes way for the
+  // best free agent left, so every round still has its eight.
+  await rpc("bidding_replace_taken", { p_season: season }).catch(() => {});
   for (let i = 0; i < 3; i++) {
     const { data: rounds, error } = await db().from("rounds").select("id, status, closes_at, settles_at").eq("season", season).order("number");
     if (error) fail(error);

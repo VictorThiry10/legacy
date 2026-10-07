@@ -165,6 +165,7 @@ export type Database = {
       bidding_renounce: { Args: { p_bid: string; p_team: string; p_max: number }; Returns: undefined };
       bidding_restart: { Args: { p_season: number }; Returns: undefined };
       bidding_settle: { Args: { p_round: string; p_awards: Json; p_result: Json; p_renounces: number }; Returns: boolean };
+      bidding_replace_taken: { Args: { p_season: number }; Returns: number };
       bidding_set_lengths: { Args: { p_team: string; p_season: number; p_rows: Json; p_limits: Json }; Returns: undefined };
       current_lineups: {
         Args: { p_teams: string[] | null; p_day: string };
