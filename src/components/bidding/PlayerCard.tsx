@@ -24,15 +24,16 @@ export const cardImages = (p: CardPlayer, size: CardSize) => ({
 // The foil: fantasy points per game, like Ultimate Team's overall rating. Amethyst 40+, black 35+, gold 30+, pale gold 27+, silver below.
 export const tier = (fppg: number | undefined) => (fppg === undefined ? "silver" : fppg >= 40 ? "amethyst" : fppg >= 35 ? "black" : fppg >= 30 ? "gold" : fppg >= 27 ? "pale" : "silver");
 
-export default function PlayerCard({ p, bid, size = "large", className = "", children }: {
-  p: CardPlayer; bid?: number; size?: CardSize; className?: string; children?: React.ReactNode;
+// `lazy`: a full card further down a long page; its photo loads when it comes into view.
+export default function PlayerCard({ p, bid, size = "large", lazy = false, className = "", children }: {
+  p: CardPlayer; bid?: number; size?: CardSize; lazy?: boolean; className?: string; children?: React.ReactNode;
 }) {
   const [first, ...rest] = p.name.split(" ");
   const last = rest.join(" ") || first;
   const pos = (p.position ?? "").split(",").map((x) => x.trim()).filter(Boolean).join("/");
   const { face, logo, crest } = cardImages(p, size);
   const [c1] = teamColors(p.nbaTeam);
-  const loading = size === "thumb" ? "lazy" : undefined;
+  const loading = size === "thumb" || lazy ? "lazy" : undefined;
   const injury = p.injury ? (INJURY[p.injury.toUpperCase()] ?? p.injury.slice(0, 3).toUpperCase()) : null;
   const st = p.stats;
   const thumb = size === "thumb";
