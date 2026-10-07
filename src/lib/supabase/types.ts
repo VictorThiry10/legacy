@@ -114,8 +114,8 @@ export type Database = {
       >;
       sync_log: Table<{ last_run: string; name: string }, { last_run: string; name: string }>;
       teams: Table<
-        { created_at: string; id: string; is_commish: boolean; manager_email: string; manager_name: string | null; name: string; user_id: string | null },
-        { created_at?: string; id?: string; is_commish?: boolean; manager_email: string; manager_name?: string | null; name: string; user_id?: string | null }
+        { color: string | null; created_at: string; id: string; is_commish: boolean; logo_url: string | null; manager_email: string; manager_name: string | null; name: string; user_id: string | null },
+        { color?: string | null; created_at?: string; id?: string; is_commish?: boolean; logo_url?: string | null; manager_email: string; manager_name?: string | null; name: string; user_id?: string | null }
       >;
       trade_offers: Table<
         {
@@ -166,6 +166,7 @@ export type Database = {
       bidding_renounce: { Args: { p_bid: string; p_team: string; p_max: number }; Returns: undefined };
       bidding_restart: { Args: { p_season: number }; Returns: undefined };
       bidding_settle: { Args: { p_round: string; p_awards: Json; p_result: Json; p_renounces: number }; Returns: boolean };
+      bidding_replace_taken: { Args: { p_season: number }; Returns: number };
       bidding_set_lengths: { Args: { p_team: string; p_season: number; p_rows: Json; p_limits: Json }; Returns: undefined };
       current_lineups: {
         Args: { p_teams: string[] | null; p_day: string };

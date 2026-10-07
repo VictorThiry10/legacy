@@ -14,6 +14,7 @@ import SubmitButton from "@/components/SubmitButton";
 import BackBar from "@/components/BackBar";
 import StepForm from "@/components/StepForm";
 import TradeSheet, { PickIcon } from "@/components/TradeSheet";
+import type { Look } from "@/lib/team-look";
 import ScrollLock from "@/components/ScrollLock";
 
 export const dynamic = "force-dynamic";
@@ -78,8 +79,8 @@ export default async function Trade({ params, searchParams }: PageProps<"/trade/
         {step === "review" && review && (
           <Summary
             review={review}
-            them={{ id: them.id, name: them.name, space: them.capSpace }}
-            me={{ name: mine.name, space: mine.capSpace }}
+            them={{ id: them.id, name: them.name, logo_url: them.logo_url, color: them.color, space: them.capSpace }}
+            me={{ name: mine.name, logo_url: mine.logo_url, color: mine.color, space: mine.capSpace }}
             fields={all}
             closeHref={url("give")}
           />
@@ -144,7 +145,7 @@ type Review = { ok: Awaited<ReturnType<typeof preview>> } | { err: string };
 
 function Summary({ review, them, me, fields, closeHref }: {
   review: Review;
-  them: { id: string; name: string; space: number }; me: { name: string; space: number };
+  them: Look & { id: string; space: number }; me: Look & { space: number };
   fields: [string, string[]][]; closeHref: string;
 }) {
   if ("err" in review) {

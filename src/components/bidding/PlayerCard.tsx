@@ -1,12 +1,13 @@
 import type { CardPlayer } from "@/lib/bidding";
-import { teamColors } from "@/lib/nba-colors";
 import { headshot, nbaLogo } from "@/lib/names";
+import { teamColors } from "@/lib/nba-colors";
 import { money } from "@/lib/rules";
 import s from "./gold.module.css";
 
-// The bidding site's player card: dark inside a gold rim, a soft glow in the NBA team's colour, headshot, fantasy
-// points per game. `bid` shows my bid in gold and lights the card up. Sizes itself from its width (container query
-// units), in a grid or full screen.
+// The auction's player card, Ultimate Team style: a foil by his fantasy points per game (amethyst, black, gold, pale
+// gold, silver), his rating, position and NBA team top left, the photo over a glow in his team's colour and a faint
+// team crest, his name across the middle and six numbers below. `bid` shows my bid and gives the card a cream rim.
+// Sizes itself from its width (container query units), in a grid or full screen.
 
 const INJURY: Record<string, string> = { OUT: "OUT", "DAY-TO-DAY": "DTD", QUESTIONABLE: "Q", DOUBTFUL: "D", SUSPENSION: "SUS" };
 
@@ -17,67 +18,81 @@ export type CardSize = "large" | "thumb";
 export const cardImages = (p: CardPlayer, size: CardSize) => ({
   face: headshot(p.headshot, size === "thumb" ? 160 : 0),
   logo: nbaLogo(p.nbaTeam, 96),
+  crest: nbaLogo(p.nbaTeam, size === "thumb" ? 160 : 320),
 });
 
-export default function PlayerCard({ p, bid, size = "large", className = "", children }: {
-  p: CardPlayer; bid?: number; size?: CardSize; className?: string; children?: React.ReactNode;
+// The foil: fantasy points per game, like Ultimate Team's overall rating. Amethyst 40+, black 35+, gold 30+, pale gold 27+, silver below.
+export const tier = (fppg: number | undefined) => (fppg === undefined ? "silver" : fppg >= 40 ? "amethyst" : fppg >= 35 ? "black" : fppg >= 30 ? "gold" : fppg >= 27 ? "pale" : "silver");
+
+// `lazy`: a full card further down a long page; its photo loads when it comes into view.
+export default function PlayerCard({ p, bid, size = "large", lazy = false, className = "", children }: {
+  p: CardPlayer; bid?: number; size?: CardSize; lazy?: boolean; className?: string; children?: React.ReactNode;
 }) {
-  const [c1] = teamColors(p.nbaTeam);
   const [first, ...rest] = p.name.split(" ");
   const last = rest.join(" ") || first;
-  const pos = (p.position ?? "").split(",").map((s) => s.trim()).filter(Boolean).join(" / ");
-  const { face, logo } = cardImages(p, size);
-  const loading = size === "thumb" ? "lazy" : undefined;
+  const pos = (p.position ?? "").split(",").map((x) => x.trim()).filter(Boolean).join("/");
+  const { face, logo, crest } = cardImages(p, size);
+  const [c1] = teamColors(p.nbaTeam);
+  const loading = size === "thumb" || lazy ? "lazy" : undefined;
   const injury = p.injury ? (INJURY[p.injury.toUpperCase()] ?? p.injury.slice(0, 3).toUpperCase()) : null;
+  const st = p.stats;
+  const thumb = size === "thumb";
+  const stats = st ? [["PTS", st.ppg], ["REB", st.rpg], ["AST", st.apg], ["STL", st.spg], ["BLK", st.bpg], ["GP", st.gp]] as const : [];
   return (
-    <div className={`@container relative aspect-[5/7] overflow-hidden rounded-[7%/5%] bg-[#121215] ${bid !== undefined ? "shadow-[0_0_0_2px_#fff4c8,0_0_26px_rgba(233,196,106,0.55)]" : ""} ${className}`}>
-      <div className="absolute inset-0" style={{ background: `radial-gradient(120% 70% at 50% 0%, color-mix(in oklab, ${c1} 42%, transparent) 0%, transparent 72%)` }} />
-      {face && (
-        <img src={face} alt="" loading={loading} decoding="async" className="pointer-events-none absolute left-1/2 top-[10%] w-[126%] max-w-none -translate-x-1/2" />
-      )}
-      <div className="absolute inset-x-0 bottom-0 h-[60%]" style={{ background: "linear-gradient(to top, #121215 46%, rgba(18,18,21,0.85) 62%, transparent)" }} />
-      <div className="card-sheen pointer-events-none absolute inset-0" />
+    <div className={`@container ${s.card} ${s[tier(st?.fppg)]} ${bid !== undefined ? s.bid : ""} ${className}`}>
+      <div className={s.body}>
+        {/* behind the photo: a glow in the team's colour and the team's crest, faint */}
+        <div className="absolute inset-x-0 top-0 h-[60%]" style={{ background: `radial-gradient(60% 70% at 62% 42%, color-mix(in oklab, ${c1} 55%, transparent), transparent 70%)` }} />
+        {crest && <img src={crest} alt="" loading={loading} decoding="async" className="pointer-events-none absolute left-[32%] top-[4%] w-[62%] opacity-[0.14] grayscale" />}
+        {face && <img src={face} alt="" loading={loading} decoding="async" className="pointer-events-none absolute left-[8%] top-[7cqw] w-full max-w-none" />}
+        <div className={s.band} />
+        <div className="card-sheen pointer-events-none absolute inset-0" />
 
-      <div className="absolute left-[7%] top-[6%] text-[5cqw] font-semibold tracking-[0.18em] text-white/70">
-        {pos}
-        {injury && <span className="ml-[2cqw] text-red-400">{injury}</span>}
-      </div>
-      {logo && <img src={logo} alt="" loading={loading} decoding="async" className="absolute right-[6%] top-[4.5%] w-[13%] opacity-90" />}
-
-      <div className="absolute inset-x-[7%] bottom-[6%]">
-        <div className="truncate text-[5cqw] font-medium uppercase tracking-[0.22em] text-white/45">{rest.length ? first : ""}</div>
-        <div className="font-display truncate text-[14cqw] uppercase leading-[0.92]">{last}</div>
-        <div className="mt-[3cqw] flex items-baseline justify-between gap-[2cqw] border-t border-[#e9c46a]/30 pt-[3cqw] leading-none">
-          <span className="whitespace-nowrap">
-            <span className="font-display text-[9cqw]">{p.stats ? p.stats.fppg.toFixed(1) : "–"}</span>
-            <span className="ml-[1.5cqw] text-[4cqw] font-semibold tracking-[0.18em] text-white/40">FPTS</span>
-          </span>
-          {bid !== undefined && <span className="font-display text-[9cqw] text-[var(--gold)]">{money(bid)}</span>}
+        {/* rating, position, team: the top left column */}
+        <div className="absolute left-[9cqw] top-[7cqw] flex flex-col items-start leading-none">
+          <div className="font-display text-[23cqw] leading-[0.85]">{st ? Math.round(st.fppg) : "–"}</div>
+          <div className="mt-[1cqw] text-[5cqw] font-bold tracking-[0.08em]">{pos}</div>
+          {logo && <img src={logo} alt="" loading={loading} decoding="async" className="mt-[2.5cqw] w-[13cqw]" />}
+          {injury && <div className="mt-[2cqw] rounded-[1cqw] bg-[#b4122d] px-[1.5cqw] py-[0.6cqw] text-[3.4cqw] font-bold tracking-[0.1em] text-white">{injury}</div>}
         </div>
+        {bid !== undefined && (
+          <div className="font-display absolute right-[7cqw] top-[7cqw] rounded-[1.5cqw] bg-[#0a0a0c] px-[2.5cqw] py-[1cqw] text-[7.5cqw] leading-none text-[#e9c46a]">{money(bid)}</div>
+        )}
+
+        {/* name across the middle, then the numbers: two columns, the values lined up on their right */}
+        <div className={`absolute inset-x-[8cqw] ${thumb ? "top-[66%]" : "top-[59%]"} text-center`}>
+          <div className={`font-display truncate ${thumb ? "text-[14cqw]" : "text-[10.5cqw]"} uppercase leading-[0.9] tracking-[0.04em]`}>{last}</div>
+        </div>
+        {!thumb && stats.length > 0 && (
+          <div className="absolute inset-x-[8cqw] top-[69%] grid grid-cols-2 gap-x-[2cqw] leading-none">
+            {stats.map(([label, v]) => (
+              <div key={label} className="flex items-baseline gap-[2.2cqw] py-[1.5cqw]">
+                <span className="font-display w-[15cqw] text-right text-[9.5cqw]">{label === "GP" ? v : v.toFixed(1)}</span>
+                <span className={`${s.dim} text-[4.2cqw] font-bold tracking-[0.1em]`}>{label}</span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
-      <div className={s.frame} />
-      <div className="pointer-events-none absolute inset-[2.2cqw] rounded-[6%/4.3%] ring-1 ring-black/50" />
       {children}
     </div>
   );
 }
 
-// Face down: gold foil with the league's name engraved, before the card is revealed.
+// ESPN's NBA logo, turned black and gold (the image is grey-scaled and warmed up).
+const NBA_LOGO = "https://a.espncdn.com/i/teamlogos/leagues/500/nba.png";
+
+// Face down: a black foil with the NBA logo in gold, before the card is revealed.
 export function CardBack({ className = "" }: { className?: string }) {
   return (
-    <div className={`@container relative aspect-[5/7] overflow-hidden rounded-[7%/5%] ${s.foil} shadow-[0_6px_24px_rgba(0,0,0,0.45)] ${className}`}>
-      <div className="absolute inset-0" style={{ background: "radial-gradient(90% 60% at 30% 10%, rgba(255,250,225,0.35), transparent 70%)" }} />
-      <div className="absolute inset-[4.5cqw] rounded-[4.5cqw] border-[0.7cqw] border-[#4f360b]/45" />
-      <div className="absolute inset-[7cqw] rounded-[3cqw] border-[0.35cqw] border-[#fff1c4]/40" />
-      <div className="absolute left-1/2 top-1/2 h-[46cqw] w-[46cqw] -translate-x-1/2 -translate-y-1/2 rotate-45 border-[0.6cqw] border-[#4f360b]/35" />
-      <div className="absolute inset-0 grid place-items-center">
-        <div className="text-center">
-          <div className={`${s.engraved} text-[7cqw] leading-none`}>✦</div>
-          <div className={`font-display ${s.engraved} mt-[1.5cqw] text-[21cqw] leading-[0.85] tracking-[0.04em]`}>Legacy</div>
-          <div className={`${s.engraved} mt-[2cqw] text-[3.6cqw] font-bold uppercase tracking-[0.45em]`}>Free agency</div>
+    <div className={`@container ${s.card} ${s.black} ${className}`}>
+      <div className={s.body}>
+        <div className="absolute inset-0" style={{ background: "radial-gradient(70% 55% at 50% 45%, rgba(233,196,106,0.22), transparent 70%)" }} />
+        <div className="absolute inset-0 grid place-items-center">
+          <img src={NBA_LOGO} alt="" decoding="async" className="w-[38%]" style={{ filter: "grayscale(1) sepia(1) saturate(2.4) brightness(1.05) contrast(1.1)" }} />
         </div>
+        <div className="card-sheen pointer-events-none absolute inset-0" />
       </div>
-      <div className="card-sheen pointer-events-none absolute inset-0" />
     </div>
   );
 }

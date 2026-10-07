@@ -19,7 +19,7 @@ export default async function DraftPicks() {
         const held = picks.ok.filter((x) => x.team_id === t.id);
         return (
           <div key={t.id} className={`flex items-center gap-3 border-b border-line/60 px-4 py-2.5 ${t.id === myId ? "bg-blue/10" : ""}`}>
-            <TeamAvatar name={t.name} size="sm" />
+            <TeamAvatar team={t} size="sm" />
             <div className="flex min-w-0 flex-1 flex-wrap gap-1.5">
               {held.map((x) => {
                 const own = x.original.id === t.id;

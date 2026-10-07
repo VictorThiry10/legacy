@@ -127,7 +127,7 @@ function Game({ m, team, home, away }: { m: Matchup; team: (id: string | null) =
     <Link href={`/matchup?m=${m.id}`} className="block border-b border-line/60 px-4 py-2">
       {rows.map(([id, pts], i) => (
         <div key={i} className="flex items-center justify-between gap-3 py-1">
-          <span className="flex min-w-0 items-center gap-3"><TeamAvatar name={team(id)?.name} size="sm" /><span className="truncate font-medium">{team(id)?.name ?? "To be decided"}</span></span>
+          <span className="flex min-w-0 items-center gap-3"><TeamAvatar team={team(id)} size="sm" /><span className="truncate font-medium">{team(id)?.name ?? "To be decided"}</span></span>
           <span className="num text-lg font-bold">{pts.toFixed(1)}</span>
         </div>
       ))}

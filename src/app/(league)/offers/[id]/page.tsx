@@ -37,8 +37,8 @@ export default async function OfferPage({ params }: PageProps<"/offers/[id]">) {
         </div>
         <div className="overflow-hidden rounded-2xl border border-line bg-card shadow-sm">
           <TradeSheet
-            me={{ name: mine.name, space: mine.capSpace }}
-            them={{ name: o.other.name, space: theirs?.capSpace ?? 0 }}
+            me={{ name: mine.name, logo_url: mine.logo_url, color: mine.color, space: mine.capSpace }}
+            them={{ name: o.other.name, logo_url: theirs?.logo_url, color: theirs?.color, space: theirs?.capSpace ?? 0 }}
             get={o.get}
             give={o.give}
             getPicks={o.getPicks}

@@ -3,9 +3,10 @@ import { headshot } from "@/lib/names";
 import type { RosterPlayer } from "@/lib/roster";
 import type { Pick } from "@/lib/picks";
 import TeamAvatar from "./TeamAvatar";
+import type { Look } from "@/lib/team-look";
 import { TradeIcon } from "./PendingRow";
 
-type Side = { name: string; space: number }; // a team and its cap space today
+type Side = Look & { space: number }; // a team (its name and badge) and its cap space today
 
 const total = (ps: RosterPlayer[]) => ps.reduce((a, p) => a + p.salary, 0);
 const cap = (n: number) => (n < 0 ? `−${money(-n)}` : money(n));
@@ -22,15 +23,15 @@ export default function TradeSheet({ me, them, get, give, getPicks = [], givePic
   return (
     <div>
       <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 bg-gradient-to-r from-blue/15 to-orange/15 px-4 py-4">
-        <TeamHead name={me.name} note="You" tone="text-blue" />
+        <TeamHead team={me} note="You" tone="text-blue" />
         <span className="flex h-9 w-9 items-center justify-center rounded-full bg-card text-fg shadow-sm">
           <TradeIcon />
         </span>
-        <TeamHead name={them.name} note="Them" tone="text-orange" />
+        <TeamHead team={them} note="Them" tone="text-orange" />
       </div>
 
-      <Half team={me.name} edge="bg-blue" label="You get" players={get} picks={getPicks} />
-      <Half team={them.name} edge="bg-orange" label={`${them.name} get`} players={give} picks={givePicks} />
+      <Half team={me} edge="bg-blue" label="You get" players={get} picks={getPicks} />
+      <Half team={them} edge="bg-orange" label={`${them.name} get`} players={give} picks={givePicks} />
 
       {showCap && (
         <div className="grid grid-cols-2 divide-x divide-line border-t border-line">
@@ -42,12 +43,12 @@ export default function TradeSheet({ me, them, get, give, getPicks = [], givePic
   );
 }
 
-function TeamHead({ name, note, tone }: { name: string; note: string; tone: string }) {
+function TeamHead({ team, note, tone }: { team: Look; note: string; tone: string }) {
   return (
     <div className="flex min-w-0 flex-col items-center gap-1.5 text-center">
-      <TeamAvatar name={name} size="lg" />
+      <TeamAvatar team={team} size="lg" />
       <div className="w-full min-w-0 leading-tight">
-        <div className="truncate text-sm font-semibold">{name}</div>
+        <div className="truncate text-sm font-semibold">{team.name}</div>
         <div className={`text-[11px] font-semibold uppercase tracking-wide ${tone}`}>{note}</div>
       </div>
     </div>
@@ -55,13 +56,13 @@ function TeamHead({ name, note, tone }: { name: string; note: string; tone: stri
 }
 
 // What one team gets, with its side's colour down the left edge.
-function Half({ team, edge, label, players, picks }: { team: string; edge: string; label: string; players: RosterPlayer[]; picks: Pick[] }) {
+function Half({ team, edge, label, players, picks }: { team: Look; edge: string; label: string; players: RosterPlayer[]; picks: Pick[] }) {
   return (
     <section className="relative border-t border-line pb-1.5">
       <span aria-hidden className={`absolute inset-y-0 left-0 w-1 ${edge}`} />
       <div className="flex items-center justify-between gap-3 py-2.5 pl-5 pr-4">
         <span className="flex min-w-0 items-center gap-2">
-          <TeamAvatar name={team} size="sm" />
+          <TeamAvatar team={team} size="sm" />
           <span className="truncate text-[11px] font-semibold uppercase tracking-wide">{label}</span>
         </span>
         {!!players.length && <span className="num shrink-0 text-xs text-muted">{money(total(players))}</span>}

@@ -8,6 +8,7 @@ import { fail, rpc } from "./db";
 import { getSettings, teamSummaries, type Team } from "./league";
 import { BID_STEP, maxBid, money, parseSchedule, revealRound, RENOUNCE_RIGHTS, slot, yearsLeft, type Bid, type RevealItem, type Schedule } from "./rules";
 import type { Json, Row } from "./supabase/types";
+import type { Look } from "./team-look";
 import type { SeasonLine } from "./espn-parse";
 
 // Free agency bidding (/bidding), by the clock: a round of players a day. Sealed bids while the round is open (8:00
@@ -66,20 +67,27 @@ export async function signOut() {
 
 export type CardPlayer = {
   id: string; name: string; position: string | null; nbaTeam: string | null; headshot: string | null; injury: string | null;
-  stats: { gp: number; fppg: number; ppg: number; rpg: number; apg: number } | null; // last season, per game
+  stats: { gp: number; fppg: number; ppg: number; rpg: number; apg: number; spg: number; bpg: number } | null; // per game
 };
 
 export function cardOf(p: Row<"players">): CardPlayer {
-  const s = p.last_season as SeasonLine | null;
-  const per = (x: number) => (s?.gp ? Math.round((x / s.gp) * 10) / 10 : 0);
+  const last = p.last_season as SeasonLine | null;
+  const proj = p.projection as SeasonLine | null;
+  // Last season's numbers; ESPN's projection for a player who barely played it (a rookie, a long injury).
+  const s = last?.gp && last.gp >= 10 ? last : proj?.gp ? proj : last?.gp ? last : null;
+  const per = (x: number) => Math.round((x / s!.gp) * 10) / 10;
   return {
     id: p.id, name: p.name, position: p.position, nbaTeam: p.nba_team, headshot: p.headshot, injury: p.injury_status,
-    stats: s?.gp ? { gp: s.gp, fppg: per(s.fpts), ppg: per(s.pts), rpg: per(s.reb), apg: per(s.ast) } : null,
+    stats: s ? { gp: s.gp, fppg: per(s.fpts), ppg: per(s.pts), rpg: per(s.reb), apg: per(s.ast), spg: per(s.stl), bpg: per(s.blk) } : null,
   };
 }
 
+// The contracts a GM picks lengths for after the last round: this season's new players, however they came (the
+// auction, the rookie draft, a pickup). Last season's players keep the length they have.
+export const NEW_DEALS = ["draft", "rookie", "free_agent"];
+
 export type RoomTeam = {
-  id: string; name: string; manager: string | null; capSpace: number; maxBid: number; roster: number; spots: number; renouncesLeft: number; hasBid: boolean;
+  id: string; name: string; manager: string | null; look: Look; capSpace: number; maxBid: number; roster: number; spots: number; renouncesLeft: number; hasBid: boolean;
 };
 // A round and its three moments: bidding opens, closes (the results), settles (the renounce window ends, winners sign).
 // A round still waiting gets them from the schedule (null with no schedule).
@@ -101,7 +109,7 @@ export type Room = {
   teams: RoomTeam[];
   rounds: RoundInfo[];
   round: RoundInfo | null; // live round, or the next one while waiting
-  cardsWaiting: number; // players in the next round (still face down)
+  upcoming: { round: RoundInfo; players: CardPlayer[] }[]; // the rounds still to come, with their players (while waiting)
   players: CardPlayer[];
   myBids: Record<string, number>;
   reveal: RevealItem[] | null;
@@ -158,6 +166,9 @@ function due<R extends RoundTimes>(rounds: R[], schedule: Schedule | null, now: 
 // on time with nobody on the site. Safe to call from several places at once: the database lets one of them act.
 export async function advance(): Promise<void> {
   const { season, faSchedule } = await getSettings();
+  // A player in a round to come who joined a team some other way first (an extension, a pickup) makes way for the
+  // best free agent left, so every round still has its eight.
+  await rpc("bidding_replace_taken", { p_season: season }).catch(() => {});
   for (let i = 0; i < 3; i++) {
     const { data: rounds, error } = await db().from("rounds").select("id, status, closes_at, settles_at").eq("season", season).order("number");
     if (error) fail(error);
@@ -201,13 +212,14 @@ export async function room(team: Team): Promise<Room> {
   const d = db();
   // Everything in one wave of reads: the open round's players and bids come through an inner join on the
   // round (status and season), so they don't wait for the rounds list.
-  const [summaries, rs, ren, rp, bidRows, lens] = await Promise.all([
+  const [summaries, rs, ren, rp, bidRows, lens, up] = await Promise.all([
     teamSummaries(),
-    d.from("rounds").select("*, round_players(count)").eq("season", season).order("number"),
+    d.from("rounds").select("*").eq("season", season).order("number"),
     d.from("renounces").select("team_id, bid_id").eq("season", season),
     d.from("round_players").select("round_id, pos, player:players(*, contracts(active)), round:rounds!inner(status, season)").eq("round.status", "open").eq("round.season", season).order("pos"),
     d.from("bids").select("*, round:rounds!inner(status, season)").eq("round.status", "open").eq("round.season", season),
-    d.from("contracts").select("years").eq("season_signed", season).eq("acquired_via", "draft"),
+    d.from("contracts").select("years").eq("season_signed", season).in("acquired_via", NEW_DEALS),
+    d.from("round_players").select("round_id, pos, player:players(*, contracts(active)), round:rounds!inner(status, season)").eq("round.status", "setup").eq("round.season", season).order("pos"),
   ]);
   if (rs.error) fail(rs.error);
   const rounds = rs.data ?? [];
@@ -222,7 +234,7 @@ export async function room(team: Team): Promise<Room> {
   // screens the signings, and my other contracts, since the ones with 2+ seasons left count against the length limits.
   const contracts = phase === "contracts" || phase === "done";
   const [signed, myContracts, donePlayers] = await Promise.all([
-    contracts ? d.from("contracts").select("id, team_id, salary, years, player:players(*)").eq("season_signed", season).eq("acquired_via", "draft").eq("active", true) : null,
+    contracts ? d.from("contracts").select("id, team_id, salary, years, player:players(*)").eq("season_signed", season).in("acquired_via", NEW_DEALS).eq("active", true) : null,
     contracts ? d.from("contracts").select("id, team_id, salary, years, season_signed, acquired_via, player:players(*)").eq("team_id", team.id).eq("active", true) : null,
     doneItems.length ? d.from("players").select("*").in("id", doneItems.map((i) => i.playerId)) : null,
   ]);
@@ -233,7 +245,8 @@ export async function room(team: Team): Promise<Room> {
   const bidders = new Set(bids.map((b) => b.teamId));
 
   const teams: RoomTeam[] = summaries.map((t) => ({
-    id: t.id, name: t.name, manager: t.manager_name, capSpace: t.capSpace, maxBid: Math.floor(maxBid(t.state, rules) / BID_STEP) * BID_STEP, roster: t.state.rosterCount,
+    id: t.id, name: t.name, manager: t.manager_name, look: { name: t.name, logo_url: t.logo_url, color: t.color },
+    capSpace: t.capSpace, maxBid: Math.floor(maxBid(t.state, rules) / BID_STEP) * BID_STEP, roster: t.state.rosterCount,
     spots: Math.max(0, rules.rosterMax - t.state.rosterCount), renouncesLeft: RENOUNCE_RIGHTS - (used.get(t.id) ?? 0), hasBid: phase === "bidding" && bidders.has(t.id),
   }));
   const players = phase === "waiting" || !live ? [] : freeCards((rp.data ?? []).filter((x) => x.round_id === live.id));
@@ -244,12 +257,18 @@ export async function room(team: Team): Promise<Room> {
     reveal = revealRound(players.map((p) => p.id), bids, summaries.map((t) => t.state), rules, renounced, live.id).items;
   }
   const cards = new Map((donePlayers?.data ?? []).map((p) => [p.id, cardOf(p)]));
+  const opened = rounds.filter((r) => r.status !== "setup").length;
+  const first = nextTimes(rounds, faSchedule, now);
 
   return {
     now, phase, meId: team.id, isCommish: await verified, needsLeagueLogin: team.is_commish && !(await verified), teams,
     rounds: rounds.map((r) => roundInfo(r)),
-    round: current ? roundInfo(current, current === next ? nextTimes(rounds, faSchedule, now) : null) : null,
-    cardsWaiting: phase === "waiting" ? (current?.round_players[0]?.count ?? 0) : 0,
+    round: current ? roundInfo(current, current === next ? first : null) : null,
+    // the rounds to come and their players, each with its times from the schedule (none once the schedule is stale)
+    upcoming: phase === "waiting" || phase === "reveal" ? rounds.filter((r) => r.status === "setup").map((r, i) => ({
+      round: roundInfo(r, first && faSchedule ? slot(faSchedule, opened + i) : null),
+      players: freeCards((up.data ?? []).filter((x) => x.round_id === r.id)),
+    })) : [],
     players,
     myBids: Object.fromEntries(bids.filter((b) => b.teamId === team.id).map((b) => [b.playerId, b.amount])),
     reveal,
@@ -262,7 +281,7 @@ export async function room(team: Team): Promise<Room> {
     held: (myContracts?.data ?? []).flatMap((c) => {
       const p = one(c.player);
       const left = yearsLeft(c, season);
-      const signing = c.acquired_via === "draft" && c.season_signed === season;
+      const signing = NEW_DEALS.includes(c.acquired_via) && c.season_signed === season;
       return p && !signing && left >= 2 ? [{ contractId: c.id, teamId: c.team_id, salary: Number(c.salary), years: left, player: cardOf(p) }] : [];
     }).sort((a, b) => b.years - a.years || b.salary - a.salary),
     limits: rules.slotLimits,
@@ -292,7 +311,7 @@ export async function pulse(): Promise<string> {
   const read = () => Promise.all([
     d.from("rounds").select("id, status, closes_at, settles_at").eq("season", season).order("number"),
     d.from("renounces").select("id", { count: "exact", head: true }).eq("season", season),
-    d.from("contracts").select("years").eq("season_signed", season).eq("acquired_via", "draft"),
+    d.from("contracts").select("years").eq("season_signed", season).in("acquired_via", NEW_DEALS),
     d.from("teams").select("id", { count: "exact", head: true }),
     d.from("bids").select("team_id, round:rounds!inner(status, season)").eq("round.status", "open").eq("round.season", season),
   ]);
@@ -319,7 +338,7 @@ export async function appStatus(team: Team): Promise<AppStatus | null> {
   const { phase, live, next } = phaseOf(rounds, faLocked, now);
   if (phase === "done") return null;
   const { count } = phase === "contracts"
-    ? await db().from("contracts").select("id", { count: "exact", head: true }).eq("team_id", team.id).eq("season_signed", season).eq("acquired_via", "draft").eq("active", true)
+    ? await db().from("contracts").select("id", { count: "exact", head: true }).eq("team_id", team.id).eq("season_signed", season).in("acquired_via", NEW_DEALS).eq("active", true)
     : { count: 0 };
   const round = live ? roundInfo(live) : next ? roundInfo(next, nextTimes(rounds, faSchedule, now)) : null;
   return { phase, round, isCommish: team.is_commish, signings: count ?? 0 };

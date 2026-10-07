@@ -114,7 +114,7 @@ export default async function TeamView({ team, editable, base, sp, back, tradeHr
       {back ? (
         <BackBar
           href={back}
-          title={<span className="flex items-center gap-2"><TeamAvatar name={team.name} size="sm" />{team.name}</span>}
+          title={<span className="flex items-center gap-2"><TeamAvatar team={team} size="sm" />{team.name}</span>}
           sub={<>{team.manager_name ?? team.manager_email} · {team.state.rosterCount}/{rules.rosterMax} players · <span className={team.capSpace < 0 ? "text-bad" : ""}>{money(team.capSpace)} cap space</span></>}
           right={tradeHref && <Link href={tradeHref} transitionTypes={FORWARD} className="shrink-0 rounded-full bg-blue-fill px-4 py-1.5 text-sm font-semibold text-white">Trade</Link>}
         />

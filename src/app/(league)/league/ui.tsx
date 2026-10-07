@@ -13,7 +13,7 @@ export function TeamCell({ t }: { t?: TeamSummary }) {
   if (!t) return <span className="text-muted">To be decided</span>;
   return (
     <Link href={`/teams/${t.id}`} prefetch={false} transitionTypes={FORWARD} className="flex min-w-0 items-center gap-3">
-      <TeamAvatar name={t.name} />
+      <TeamAvatar team={t} />
       <span className="min-w-0 leading-tight">
         <span className="block truncate font-semibold text-blue">{t.name}</span>
         <span className="block truncate text-xs text-muted">{t.manager_name ?? ""}</span>
