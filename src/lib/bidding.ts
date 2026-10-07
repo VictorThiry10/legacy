@@ -66,17 +66,24 @@ export async function signOut() {
 
 export type CardPlayer = {
   id: string; name: string; position: string | null; nbaTeam: string | null; headshot: string | null; injury: string | null;
-  stats: { gp: number; fppg: number; ppg: number; rpg: number; apg: number } | null; // last season, per game
+  stats: { gp: number; fppg: number; ppg: number; rpg: number; apg: number; spg: number; bpg: number } | null; // per game
 };
 
 export function cardOf(p: Row<"players">): CardPlayer {
-  const s = p.last_season as SeasonLine | null;
-  const per = (x: number) => (s?.gp ? Math.round((x / s.gp) * 10) / 10 : 0);
+  const last = p.last_season as SeasonLine | null;
+  const proj = p.projection as SeasonLine | null;
+  // Last season's numbers; ESPN's projection for a player who barely played it (a rookie, a long injury).
+  const s = last?.gp && last.gp >= 10 ? last : proj?.gp ? proj : last?.gp ? last : null;
+  const per = (x: number) => Math.round((x / s!.gp) * 10) / 10;
   return {
     id: p.id, name: p.name, position: p.position, nbaTeam: p.nba_team, headshot: p.headshot, injury: p.injury_status,
-    stats: s?.gp ? { gp: s.gp, fppg: per(s.fpts), ppg: per(s.pts), rpg: per(s.reb), apg: per(s.ast) } : null,
+    stats: s ? { gp: s.gp, fppg: per(s.fpts), ppg: per(s.pts), rpg: per(s.reb), apg: per(s.ast), spg: per(s.stl), bpg: per(s.blk) } : null,
   };
 }
+
+// The contracts a GM picks lengths for after the last round: this season's new players, however they came (the
+// auction, the rookie draft, a pickup). Last season's players keep the length they have.
+export const NEW_DEALS = ["draft", "rookie", "free_agent"];
 
 export type RoomTeam = {
   id: string; name: string; manager: string | null; capSpace: number; maxBid: number; roster: number; spots: number; renouncesLeft: number; hasBid: boolean;
@@ -207,7 +214,7 @@ export async function room(team: Team): Promise<Room> {
     d.from("renounces").select("team_id, bid_id").eq("season", season),
     d.from("round_players").select("round_id, pos, player:players(*, contracts(active)), round:rounds!inner(status, season)").eq("round.status", "open").eq("round.season", season).order("pos"),
     d.from("bids").select("*, round:rounds!inner(status, season)").eq("round.status", "open").eq("round.season", season),
-    d.from("contracts").select("years").eq("season_signed", season).eq("acquired_via", "draft"),
+    d.from("contracts").select("years").eq("season_signed", season).in("acquired_via", NEW_DEALS),
   ]);
   if (rs.error) fail(rs.error);
   const rounds = rs.data ?? [];
@@ -222,7 +229,7 @@ export async function room(team: Team): Promise<Room> {
   // screens the signings, and my other contracts, since the ones with 2+ seasons left count against the length limits.
   const contracts = phase === "contracts" || phase === "done";
   const [signed, myContracts, donePlayers] = await Promise.all([
-    contracts ? d.from("contracts").select("id, team_id, salary, years, player:players(*)").eq("season_signed", season).eq("acquired_via", "draft").eq("active", true) : null,
+    contracts ? d.from("contracts").select("id, team_id, salary, years, player:players(*)").eq("season_signed", season).in("acquired_via", NEW_DEALS).eq("active", true) : null,
     contracts ? d.from("contracts").select("id, team_id, salary, years, season_signed, acquired_via, player:players(*)").eq("team_id", team.id).eq("active", true) : null,
     doneItems.length ? d.from("players").select("*").in("id", doneItems.map((i) => i.playerId)) : null,
   ]);
@@ -262,7 +269,7 @@ export async function room(team: Team): Promise<Room> {
     held: (myContracts?.data ?? []).flatMap((c) => {
       const p = one(c.player);
       const left = yearsLeft(c, season);
-      const signing = c.acquired_via === "draft" && c.season_signed === season;
+      const signing = NEW_DEALS.includes(c.acquired_via) && c.season_signed === season;
       return p && !signing && left >= 2 ? [{ contractId: c.id, teamId: c.team_id, salary: Number(c.salary), years: left, player: cardOf(p) }] : [];
     }).sort((a, b) => b.years - a.years || b.salary - a.salary),
     limits: rules.slotLimits,
@@ -292,7 +299,7 @@ export async function pulse(): Promise<string> {
   const read = () => Promise.all([
     d.from("rounds").select("id, status, closes_at, settles_at").eq("season", season).order("number"),
     d.from("renounces").select("id", { count: "exact", head: true }).eq("season", season),
-    d.from("contracts").select("years").eq("season_signed", season).eq("acquired_via", "draft"),
+    d.from("contracts").select("years").eq("season_signed", season).in("acquired_via", NEW_DEALS),
     d.from("teams").select("id", { count: "exact", head: true }),
     d.from("bids").select("team_id, round:rounds!inner(status, season)").eq("round.status", "open").eq("round.season", season),
   ]);
@@ -319,7 +326,7 @@ export async function appStatus(team: Team): Promise<AppStatus | null> {
   const { phase, live, next } = phaseOf(rounds, faLocked, now);
   if (phase === "done") return null;
   const { count } = phase === "contracts"
-    ? await db().from("contracts").select("id", { count: "exact", head: true }).eq("team_id", team.id).eq("season_signed", season).eq("acquired_via", "draft").eq("active", true)
+    ? await db().from("contracts").select("id", { count: "exact", head: true }).eq("team_id", team.id).eq("season_signed", season).in("acquired_via", NEW_DEALS).eq("active", true)
     : { count: 0 };
   const round = live ? roundInfo(live) : next ? roundInfo(next, nextTimes(rounds, faSchedule, now)) : null;
   return { phase, round, isCommish: team.is_commish, signings: count ?? 0 };
