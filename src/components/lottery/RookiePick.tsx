@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState, useTransition } from "react";
+import Link from "next/link";
 import { useScrollLock } from "@/components/ScrollLock";
 import { draftRookie, rookieDraft } from "@/app/(league)/draft/actions";
 import type { DraftBoard, DraftOptions } from "@/lib/draft";
@@ -63,35 +64,45 @@ export default function RookiePick({ onClose }: { onClose: () => void }) {
     });
   };
 
+  // A rookie's line. On my turn, one who is still there opens his own screen, to draft him. Any other time it
+  // goes to his player page (closing this screen on the way).
   const row = (r: Rookie) => {
     const by = taken.get(r.id);
+    const cls = `flex w-full items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-2 text-left transition active:scale-[0.99] ${by ? "opacity-35" : ""}`;
+    const inner = (
+      <>
+        <img src={photo(r, 130)} alt="" loading="lazy" decoding="async" className="h-11 w-11 shrink-0 rounded-full bg-white/10 object-cover object-top" />
+        <span className="min-w-0 flex-1">
+          <span className="block truncate font-medium">{r.name}</span>
+          <span className="block truncate text-xs text-white/45">{[r.position, r.nba].filter(Boolean).join(" · ")}</span>
+        </span>
+        {by ? (
+          <span className="flex items-center gap-1.5 text-sm text-white/70">
+            <span aria-hidden className="h-2.5 w-2.5 rounded-full" style={{ background: by.color }} />
+            {by.name}
+          </span>
+        ) : (
+          <span className="font-display num text-2xl leading-none">{money(r.salary)}</span>
+        )}
+      </>
+    );
     return (
       <li key={r.id}>
-        <button
-          type="button"
-          disabled={!!by || !data}
-          onClick={() => {
-            if (!data?.myTurn) return;
-            setChoice(r);
-            setYears(null);
-            setError(null);
-          }}
-          className="flex w-full items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-2 text-left transition active:scale-[0.99] disabled:opacity-35"
-        >
-          <img src={photo(r, 130)} alt="" loading="lazy" decoding="async" className="h-11 w-11 shrink-0 rounded-full bg-white/10 object-cover object-top" />
-          <span className="min-w-0 flex-1">
-            <span className="block truncate font-medium">{r.name}</span>
-            <span className="block truncate text-xs text-white/45">{[r.position, r.nba].filter(Boolean).join(" · ")}</span>
-          </span>
-          {by ? (
-            <span className="flex items-center gap-1.5 text-sm text-white/70">
-              <span aria-hidden className="h-2.5 w-2.5 rounded-full" style={{ background: by.color }} />
-              {by.name}
-            </span>
-          ) : (
-            <span className="font-display num text-2xl leading-none">{money(r.salary)}</span>
-          )}
-        </button>
+        {data?.myTurn && !by ? (
+          <button
+            type="button"
+            onClick={() => {
+              setChoice(r);
+              setYears(null);
+              setError(null);
+            }}
+            className={cls}
+          >
+            {inner}
+          </button>
+        ) : (
+          <Link href={`/players/${r.id}`} prefetch={false} transitionTypes={["nav-forward"]} onClick={onClose} className={cls}>{inner}</Link>
+        )}
       </li>
     );
   };
@@ -122,8 +133,14 @@ export default function RookiePick({ onClose }: { onClose: () => void }) {
 
       {player ? (
         <div key={player.id} data-scrolls className="mx-auto flex min-h-0 w-full max-w-md flex-1 animate-[fade_250ms_ease-out] flex-col items-center justify-center overflow-y-auto px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] text-center">
-          <img src={photo(player, 400)} alt="" className="h-44 w-60 shrink-0 object-cover object-top" />
-          <div className="font-display mt-4 text-5xl leading-none">{player.name}</div>
+          {/* his photo and name go to his player page */}
+          <Link href={`/players/${player.id}`} prefetch={false} transitionTypes={["nav-forward"]} onClick={onClose} className="flex shrink-0 flex-col items-center">
+            <img src={photo(player, 400)} alt="" className="h-44 w-60 object-cover object-top" />
+            <span className="font-display mt-4 flex items-center gap-2 text-5xl leading-none">
+              {player.name}
+              <svg aria-hidden width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className="shrink-0 text-white/40"><path d="m9 6 6 6-6 6" /></svg>
+            </span>
+          </Link>
           <div className="num mt-2 text-sm text-white/50">
             {[player.position, player.nba, money(player.salary), drafted && `${drafted.years} year${drafted.years > 1 ? "s" : ""}`].filter(Boolean).join(" · ")}
           </div>

@@ -3,6 +3,7 @@ import { revalidatePath } from "next/cache";
 import { redirect, RedirectType } from "next/navigation";
 import { requireTeam } from "@/lib/auth";
 import { pickUp } from "@/lib/roster";
+import { reservedForDraft } from "@/lib/draft";
 import { placeBid, settleWaivers, withdrawBid } from "@/lib/waivers";
 import { BID_STEP } from "@/lib/rules";
 
@@ -14,6 +15,7 @@ export async function addPlayer(f: FormData) {
   try {
     const team = await requireTeam();
     await settleWaivers(); // a player whose waiver just ran out unclaimed is a free agent now
+    if (await reservedForDraft(playerId).catch(() => false)) throw new Error("He's in the rookie draft: until it's over, he can only be drafted.");
     await pickUp({ teamId: team.id, playerId, dropContractId: drop });
   } catch (e) {
     err = e instanceof Error ? e.message : "Something went wrong.";
