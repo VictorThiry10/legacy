@@ -14,6 +14,7 @@ import { STALE_MINUTES } from "@/lib/health";
 import { headshot, shortName } from "@/lib/names";
 import TeamLogo from "@/components/TeamLogo";
 import TeamAvatar from "@/components/TeamAvatar";
+import TeamLook from "@/components/TeamLook";
 import { load } from "@/lib/guard";
 import AutoRefresh from "@/components/AutoRefresh";
 import Slide, { BACK, FORWARD } from "@/components/Slide";
@@ -75,6 +76,11 @@ export default async function MatchupPage({ searchParams }: PageProps<"/matchup"
   }
   const { m, L, R, day, summary, s, table, roster, games, abbr, pts, lines, lineups, weekMs, weeks } = r.ok;
   const team = (id: string | null) => (id ? teams.find((t) => t.id === id) : undefined);
+  // The big badge by the score. Mine opens the sheet to change my team's photo and colour.
+  const badge = (id: string | null) => {
+    const t = team(id);
+    return t && t.id === me.id ? <TeamLook team={{ name: t.name, logo_url: t.logo_url, color: t.color }} /> : <TeamAvatar team={t} size="lg" />;
+  };
   const scoreOf = (x: Matchup, id: string | null) => (id === x.home_team_id ? s.get(x.id)?.home : s.get(x.id)?.away) ?? 0;
   const live = m.starts <= now && now <= m.ends;
   const wi = weeks.indexOf(m.week);
@@ -154,11 +160,11 @@ export default async function MatchupPage({ searchParams }: PageProps<"/matchup"
                 className={`flex shrink-0 snap-start items-center gap-2 rounded-full px-3 py-1.5 text-sm ${x.id === m.id ? "border-2 border-fg" : "border-2 border-transparent bg-line/70"}`}
                 aria-current={x.id === m.id ? "true" : undefined}
               >
-                <TeamAvatar name={team(a)?.name} size="sm" />
+                <TeamAvatar team={team(a)} size="sm" />
                 <span className="num font-semibold">{Math.round(scoreOf(x, a))}</span>
                 <span className="text-xs text-muted">vs</span>
                 <span className="num font-semibold">{Math.round(scoreOf(x, b))}</span>
-                <TeamAvatar name={team(b)?.name} size="sm" />
+                <TeamAvatar team={team(b)} size="sm" />
               </Link>
             );
           })}
@@ -167,8 +173,8 @@ export default async function MatchupPage({ searchParams }: PageProps<"/matchup"
         <MatchupSwipe prev={prevHref} next={nextHref}>
         {/* score, pinned under the tabs while scrolling */}
         <div className="sticky top-11 z-20 grid grid-cols-2 items-center bg-card px-4 py-3">
-          <div className="flex items-center gap-3"><TeamAvatar name={team(L)?.name} size="lg" /><span className="num text-4xl font-black leading-none">{scoreOf(m, L).toFixed(1)}</span></div>
-          <div className="flex items-center justify-end gap-3"><span className="num text-4xl font-black leading-none">{scoreOf(m, R).toFixed(1)}</span><TeamAvatar name={team(R)?.name} size="lg" /></div>
+          <div className="flex items-center gap-3">{badge(L)}<span className="num text-4xl font-black leading-none">{scoreOf(m, L).toFixed(1)}</span></div>
+          <div className="flex items-center justify-end gap-3"><span className="num text-4xl font-black leading-none">{scoreOf(m, R).toFixed(1)}</span>{badge(R)}</div>
         </div>
         <div className="grid grid-cols-2 gap-4 bg-card px-4 pb-4">
           <TeamName t={team(L)} rec={table.find((x) => x.teamId === L)} />

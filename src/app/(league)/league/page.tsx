@@ -71,7 +71,7 @@ function TeamCell({ t }: { t?: TeamSummary }) {
   if (!t) return <span className="text-muted">To be decided</span>;
   return (
     <Link href={`/teams/${t.id}`} prefetch={false} transitionTypes={["nav-forward"]} className="flex min-w-0 items-center gap-3">
-      <TeamAvatar name={t.name} />
+      <TeamAvatar team={t} />
       <span className="min-w-0 leading-tight">
         <span className="block truncate font-semibold text-blue">{t.name}</span>
         <span className="block truncate text-xs text-muted">{t.manager_name ?? ""}</span>
@@ -145,7 +145,7 @@ function Game({ m, team, home, away }: { m: Matchup; team: (id: string | null) =
     <Link href={`/matchup?m=${m.id}`} className="block border-b border-line/60 px-4 py-2">
       {rows.map(([id, pts], i) => (
         <div key={i} className="flex items-center justify-between gap-3 py-1">
-          <span className="flex min-w-0 items-center gap-3"><TeamAvatar name={team(id)?.name} size="sm" /><span className="truncate font-medium">{team(id)?.name ?? "To be decided"}</span></span>
+          <span className="flex min-w-0 items-center gap-3"><TeamAvatar team={team(id)} size="sm" /><span className="truncate font-medium">{team(id)?.name ?? "To be decided"}</span></span>
           <span className="num text-lg font-bold">{pts.toFixed(1)}</span>
         </div>
       ))}
@@ -221,7 +221,7 @@ async function Cap({ teams, me, rosterMax }: { teams: TeamSummary[]; me?: Team; 
               <div key={p.slot} className={`grid grid-cols-[1.25rem_minmax(0,1fr)_auto] items-center gap-3 border-b border-line/60 px-4 py-2.5 ${p.team === myId ? "bg-blue/10" : ""}`}>
                 <span className="num text-sm font-bold text-muted">{p.slot}</span>
                 <span className="flex min-w-0 items-center gap-2.5">
-                  <TeamAvatar name={t?.name} size="sm" />
+                  <TeamAvatar team={t} size="sm" />
                   <span className="min-w-0 leading-tight">
                     <span className="block truncate text-sm font-semibold">{t?.name ?? "?"}</span>
                     {from && <span className="block truncate text-xs text-muted">from {from.name}</span>}
@@ -246,7 +246,7 @@ async function Cap({ teams, me, rosterMax }: { teams: TeamSummary[]; me?: Team; 
         const held = picks.filter((x) => x.team_id === t.id);
         return (
           <div key={t.id} className={`flex items-center gap-3 border-b border-line/60 px-4 py-2.5 ${t.id === myId ? "bg-blue/10" : ""}`}>
-            <TeamAvatar name={t.name} size="sm" />
+            <TeamAvatar team={t} size="sm" />
             <div className="flex min-w-0 flex-1 flex-wrap gap-1.5">
               {held.map((x) => {
                 const own = x.original.id === t.id;
