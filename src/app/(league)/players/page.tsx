@@ -113,7 +113,7 @@ async function StatsTable({ sp }: { sp: Params }) {
     <>
       <FilterBar sp={sp} show={show} play={play} perGame={perGame} period={period} periods={periods} teams={[...new Set(players.map((p) => p.nba_team).filter((t): t is string => !!t && t in NBA_TEAMS))].sort((a, b) => NBA_TEAMS[a].localeCompare(NBA_TEAMS[b]))} />
 
-      <ScrollBox at={href(sp, {})} className="-mx-4 min-h-0 overflow-auto overscroll-contain border-y border-line bg-card sm:mx-0 sm:rounded-xl sm:border">
+      <ScrollBox at={href(sp, {})} className="-mx-4 min-h-0 overflow-auto overscroll-contain border-y border-line bg-card sm:mx-0 sm:rounded-2xl sm:border">
         <table className="t players whitespace-nowrap">
           <thead>
             <tr className="group">

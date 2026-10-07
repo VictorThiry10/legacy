@@ -41,7 +41,7 @@ export default function LineupTable({ rows, players, head, empty, day, editable 
     <>
       {err && <p className="card text-sm text-bad">{err}</p>}
       {moving && <p className="text-sm text-accent">Moving {moving.name}</p>}
-      <div className="-mx-4 overflow-x-auto border-y border-line bg-card sm:mx-0 sm:rounded-xl sm:border">
+      <div className="-mx-4 overflow-x-auto border-y border-line bg-card sm:mx-0 sm:rounded-2xl sm:border">
         <table className="t whitespace-nowrap text-[13px] [&_td]:py-1.5 [&_th]:py-2">
           {head}
           <tbody>

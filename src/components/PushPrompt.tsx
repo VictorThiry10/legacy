@@ -34,7 +34,7 @@ export default function PushPrompt() {
     setShow(false);
   };
   return (
-    <div className="overflow-hidden rounded-xl border border-line bg-card">
+    <div className="overflow-hidden rounded-2xl border border-line bg-card">
       <div className="flex items-center gap-3 px-4 py-3">
         <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-crimson/10 text-crimson"><BellIcon /></span>
         <span className="min-w-0 flex-1 leading-tight">

@@ -61,10 +61,10 @@ body {
   color: var(--fg);
   font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
 }
-.card { @apply bg-card border border-line rounded-xl p-4; }
-.btn { @apply inline-flex items-center justify-center rounded-lg px-3 py-2 text-sm font-medium bg-fg text-bg disabled:opacity-40; }
-.btn-ghost { @apply inline-flex items-center justify-center rounded-lg px-3 py-2 text-sm border border-line; }
-.input { @apply rounded-lg border border-line bg-card px-3 py-2 text-base sm:text-sm w-full; } /* 16px on phones: iOS zooms into smaller inputs */
+.card { @apply bg-card border border-line rounded-2xl p-4; }
+.btn { @apply inline-flex items-center justify-center rounded-full px-4 py-2 text-sm font-medium bg-fg text-bg disabled:opacity-40; }
+.btn-ghost { @apply inline-flex items-center justify-center rounded-full px-4 py-2 text-sm border border-line; }
+.input { @apply rounded-full border border-line bg-card px-4 py-2 text-base sm:text-sm w-full; } /* 16px on phones: iOS zooms into smaller inputs */
 .label { @apply text-xs uppercase tracking-wide text-muted; }
 table.t { @apply w-full text-sm; }
 :where(table.t) th { @apply text-left font-medium text-muted text-xs uppercase tracking-wide py-2 px-2 border-b border-line; }

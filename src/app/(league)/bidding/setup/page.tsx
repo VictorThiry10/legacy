@@ -52,7 +52,7 @@ export default async function Setup({ searchParams }: PageProps<"/bidding/setup"
           </form>
           {q && !results.length && <p className="text-sm text-muted">No free agent matches.</p>}
           {results.length > 0 && (
-            <div className="divide-y divide-line rounded-xl border border-line bg-card">
+            <div className="divide-y divide-line rounded-2xl border border-line bg-card">
               {results.map((p) => (
                 <div key={p.id} className="flex flex-wrap items-center gap-3 p-2.5">
                   <div className="w-10 shrink-0"><PlayerCard p={p} size="thumb" /></div>
@@ -111,7 +111,7 @@ export default async function Setup({ searchParams }: PageProps<"/bidding/setup"
 
         <section className="space-y-3">
           <h2 className="text-xl font-semibold">GMs <span className="text-sm font-normal text-muted">{teams.length}/{leagueSize}</span></h2>
-          <div className="divide-y divide-line rounded-xl border border-line bg-card">
+          <div className="divide-y divide-line rounded-2xl border border-line bg-card">
             {teams.map((t) => (
               <div key={t.id} className="flex items-center gap-3 px-3 py-2.5">
                 <Gm team={{ name: t.name, logo_url: t.logo_url, color: t.color }} size="sm" />

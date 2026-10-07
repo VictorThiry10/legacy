@@ -61,7 +61,7 @@ export default function Results({ results, teams, me, skew, serverNow, canRenoun
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.04, duration: 0.3, ease }}
-              className={`flex min-w-0 gap-3 rounded-xl border bg-card p-3 ${mine ? "border-crimson/40" : "border-line"}`}
+              className={`flex min-w-0 gap-3 rounded-2xl border bg-card p-3 ${mine ? "border-crimson/40" : "border-line"}`}
             >
               <Link href={`/players/${p.id}`} transitionTypes={FORWARD} className="w-[4.5rem] shrink-0 active:opacity-80">
                 <PlayerCard p={p} size="thumb" className={w ? "" : "grayscale opacity-60"} />

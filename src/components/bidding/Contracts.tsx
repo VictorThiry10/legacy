@@ -58,7 +58,7 @@ export default function Contracts({ data }: { data: Room }) {
               })}
             </div>
           </div>
-          <div className="overflow-hidden rounded-xl border border-line bg-card">
+          <div className="overflow-hidden rounded-2xl border border-line bg-card">
             {mine.map((s) => {
               const cur = len(s.contractId, s.years);
               const bad = over.includes(cur);
@@ -116,7 +116,7 @@ export default function Contracts({ data }: { data: Room }) {
         {!teams.length && <p className="text-sm text-muted">Nobody signed anyone.</p>}
         <div className="grid gap-3 sm:grid-cols-2">
           {teams.map(({ t, list }) => (
-            <div key={t.id} className={`rounded-xl border bg-card p-4 ${t.id === data.meId ? "border-crimson/40" : "border-line"}`}>
+            <div key={t.id} className={`rounded-2xl border bg-card p-4 ${t.id === data.meId ? "border-crimson/40" : "border-line"}`}>
               <div className="flex items-center gap-3">
                 <Gm team={t.look} />
                 <div className="min-w-0 flex-1">
