@@ -105,7 +105,7 @@ export default async function Setup({ searchParams }: PageProps<"/bidding/setup"
       <div className="mt-3 divide-y divide-white/[0.06] border-y border-white/[0.06]">
         {teams.map((t) => (
           <div key={t.id} className="flex items-center gap-3 py-3">
-            <Gm name={t.name} size="sm" />
+            <Gm team={{ name: t.name, logo_url: t.logo_url, color: t.color }} size="sm" />
             <div className="min-w-0 flex-1 leading-tight">
               <div className="truncate text-sm font-semibold">{t.name}</div>
               <div className="truncate text-xs text-white/45">{t.manager_name ?? ""} · {t.manager_email}</div>

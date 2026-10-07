@@ -20,6 +20,7 @@ export default function Results({ results, teams, me, skew, serverNow, canRenoun
   const [err, setErr] = useState("");
   const [pending, start] = useTransition();
   const name = (id: string) => teams.find((t) => t.id === id)?.name ?? "A team";
+  const look = (id: string) => teams.find((t) => t.id === id)?.look ?? null;
   const leftovers = round.kind === "leftovers";
 
   const renounce = () =>
@@ -79,7 +80,7 @@ export default function Results({ results, teams, me, skew, serverNow, canRenoun
                 {w ? (
                   <>
                     <div className="mt-2 flex items-center gap-2">
-                      <Gm name={name(w.teamId)} size="sm" />
+                      <Gm team={look(w.teamId)} size="sm" />
                       <span className="truncate text-sm text-white/80">{name(w.teamId)}</span>
                     </div>
                     <div className="font-display mt-1.5 text-4xl leading-none text-[var(--gold)]">{money(w.amount)}</div>

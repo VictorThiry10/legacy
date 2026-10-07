@@ -8,6 +8,7 @@ import { fail, rpc } from "./db";
 import { getSettings, teamSummaries, type Team } from "./league";
 import { BID_STEP, maxBid, money, parseSchedule, revealRound, RENOUNCE_RIGHTS, slot, yearsLeft, type Bid, type RevealItem, type Schedule } from "./rules";
 import type { Json, Row } from "./supabase/types";
+import type { Look } from "./team-look";
 import type { SeasonLine } from "./espn-parse";
 
 // Free agency bidding (/bidding), by the clock: a round of players a day. Sealed bids while the round is open (8:00
@@ -86,7 +87,7 @@ export function cardOf(p: Row<"players">): CardPlayer {
 export const NEW_DEALS = ["draft", "rookie", "free_agent"];
 
 export type RoomTeam = {
-  id: string; name: string; manager: string | null; capSpace: number; maxBid: number; roster: number; spots: number; renouncesLeft: number; hasBid: boolean;
+  id: string; name: string; manager: string | null; look: Look; capSpace: number; maxBid: number; roster: number; spots: number; renouncesLeft: number; hasBid: boolean;
 };
 // A round and its three moments: bidding opens, closes (the results), settles (the renounce window ends, winners sign).
 // A round still waiting gets them from the schedule (null with no schedule).
@@ -108,7 +109,7 @@ export type Room = {
   teams: RoomTeam[];
   rounds: RoundInfo[];
   round: RoundInfo | null; // live round, or the next one while waiting
-  cardsWaiting: number; // players in the next round (still face down)
+  upcoming: { round: RoundInfo; players: CardPlayer[] }[]; // the rounds still to come, with their players (while waiting)
   players: CardPlayer[];
   myBids: Record<string, number>;
   reveal: RevealItem[] | null;
@@ -208,13 +209,14 @@ export async function room(team: Team): Promise<Room> {
   const d = db();
   // Everything in one wave of reads: the open round's players and bids come through an inner join on the
   // round (status and season), so they don't wait for the rounds list.
-  const [summaries, rs, ren, rp, bidRows, lens] = await Promise.all([
+  const [summaries, rs, ren, rp, bidRows, lens, up] = await Promise.all([
     teamSummaries(),
-    d.from("rounds").select("*, round_players(count)").eq("season", season).order("number"),
+    d.from("rounds").select("*").eq("season", season).order("number"),
     d.from("renounces").select("team_id, bid_id").eq("season", season),
     d.from("round_players").select("round_id, pos, player:players(*, contracts(active)), round:rounds!inner(status, season)").eq("round.status", "open").eq("round.season", season).order("pos"),
     d.from("bids").select("*, round:rounds!inner(status, season)").eq("round.status", "open").eq("round.season", season),
     d.from("contracts").select("years").eq("season_signed", season).in("acquired_via", NEW_DEALS),
+    d.from("round_players").select("round_id, pos, player:players(*, contracts(active)), round:rounds!inner(status, season)").eq("round.status", "setup").eq("round.season", season).order("pos"),
   ]);
   if (rs.error) fail(rs.error);
   const rounds = rs.data ?? [];
@@ -240,7 +242,8 @@ export async function room(team: Team): Promise<Room> {
   const bidders = new Set(bids.map((b) => b.teamId));
 
   const teams: RoomTeam[] = summaries.map((t) => ({
-    id: t.id, name: t.name, manager: t.manager_name, capSpace: t.capSpace, maxBid: Math.floor(maxBid(t.state, rules) / BID_STEP) * BID_STEP, roster: t.state.rosterCount,
+    id: t.id, name: t.name, manager: t.manager_name, look: { name: t.name, logo_url: t.logo_url, color: t.color },
+    capSpace: t.capSpace, maxBid: Math.floor(maxBid(t.state, rules) / BID_STEP) * BID_STEP, roster: t.state.rosterCount,
     spots: Math.max(0, rules.rosterMax - t.state.rosterCount), renouncesLeft: RENOUNCE_RIGHTS - (used.get(t.id) ?? 0), hasBid: phase === "bidding" && bidders.has(t.id),
   }));
   const players = phase === "waiting" || !live ? [] : freeCards((rp.data ?? []).filter((x) => x.round_id === live.id));
@@ -251,12 +254,18 @@ export async function room(team: Team): Promise<Room> {
     reveal = revealRound(players.map((p) => p.id), bids, summaries.map((t) => t.state), rules, renounced, live.id).items;
   }
   const cards = new Map((donePlayers?.data ?? []).map((p) => [p.id, cardOf(p)]));
+  const opened = rounds.filter((r) => r.status !== "setup").length;
+  const first = nextTimes(rounds, faSchedule, now);
 
   return {
     now, phase, meId: team.id, isCommish: await verified, needsLeagueLogin: team.is_commish && !(await verified), teams,
     rounds: rounds.map((r) => roundInfo(r)),
-    round: current ? roundInfo(current, current === next ? nextTimes(rounds, faSchedule, now) : null) : null,
-    cardsWaiting: phase === "waiting" ? (current?.round_players[0]?.count ?? 0) : 0,
+    round: current ? roundInfo(current, current === next ? first : null) : null,
+    // the rounds to come and their players, each with its times from the schedule (none once the schedule is stale)
+    upcoming: phase === "waiting" ? rounds.filter((r) => r.status === "setup").map((r, i) => ({
+      round: roundInfo(r, first && faSchedule ? slot(faSchedule, opened + i) : null),
+      players: freeCards((up.data ?? []).filter((x) => x.round_id === r.id)),
+    })) : [],
     players,
     myBids: Object.fromEntries(bids.filter((b) => b.teamId === team.id).map((b) => [b.playerId, b.amount])),
     reveal,

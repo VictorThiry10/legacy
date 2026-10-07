@@ -144,7 +144,7 @@ export default function Contracts({ data }: { data: Room }) {
         {teams.map(({ t, list }) => (
           <div key={t.id} className={`rounded-2xl p-4 ${t.id === data.meId ? "bg-white/[0.06] ring-1 ring-inset ring-white/15" : "bg-white/[0.025]"}`}>
             <div className="flex items-center gap-3">
-              <Gm name={t.name} />
+              <Gm team={t.look} />
               <div className="min-w-0 flex-1">
                 <div className="truncate font-semibold">{t.name}</div>
                 <div className="text-xs text-white/45">{money(list.reduce((a, s) => a + s.salary, 0))} on {list.length} {list.length === 1 ? "player" : "players"}</div>

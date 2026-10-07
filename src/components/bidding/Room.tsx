@@ -12,7 +12,6 @@ import RevealShow from "./RevealShow";
 import Results from "./Results";
 import Contracts from "./Contracts";
 import Portal from "./Portal";
-import { initials } from "@/lib/names";
 import { useClock } from "./clock";
 import { left, TimeLeft, useSecondsLeft, When } from "./time";
 import { ready } from "./preload";
@@ -24,7 +23,7 @@ import { ease, Gm, Kicker, Label, roundName } from "./ui";
 export default function Room({ data, me: who, app }: { data: Data; me: { id: string; name: string }; app: boolean }) {
   const router = useRouter();
   const skew = usePulse(data.v);
-  const me = data.teams.find((t) => t.id === data.meId) ?? { ...who, manager: null, capSpace: 0, maxBid: 0, roster: 0, spots: 0, renouncesLeft: 0, hasBid: false };
+  const me = data.teams.find((t) => t.id === data.meId) ?? { ...who, manager: null, look: { name: who.name }, capSpace: 0, maxBid: 0, roster: 0, spots: 0, renouncesLeft: 0, hasBid: false };
 
   // The bid sheet belongs to the round it was opened in: it never shows up again in a later one.
   const [open, setOpen] = useState<{ p: CardPlayer; round: string } | null>(null);
@@ -234,7 +233,7 @@ function Header({ data, me, app }: { data: Data; me: RoomTeam; app: boolean }) {
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M4 6h16M4 12h16M4 18h10" /></svg>
             </Link>
           ) : (
-            <Gm name={me.name} size="sm" />
+            <Gm team={me.look} size="sm" />
           )}
         </div>
       </div>
@@ -266,39 +265,25 @@ function Waiting({ data, me, skew, onReplay }: { data: Data; me: RoomTeam; skew:
           <TimeLeft iso={next.opensAt} skew={skew} serverNow={data.now} />
         </div>
       )}
-      {next && data.cardsWaiting > 0 && (
-        <div className="mt-8 grid grid-cols-4 gap-2 sm:grid-cols-8">
-          {Array.from({ length: data.cardsWaiting }, (_, i) => (
-            <motion.div
-              key={i}
-              className="bid-float"
-              style={{ animationDelay: `${i * 0.25}s` }}
-              initial={{ opacity: 0, y: 24 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.05, duration: 0.5, ease }}
-            >
-              <CardBack />
-            </motion.div>
-          ))}
-        </div>
-      )}
-      {data.last && <Results past results={data.last} teams={data.teams} me={me} skew={skew} serverNow={data.now} canRenounce={false} onReplay={onReplay} />}
-      <Label className="mt-10">GMs</Label>
-      <div className="mt-3 divide-y divide-white/[0.06] border-y border-white/[0.06]">
-        {data.teams.map((t) => (
-          <div key={t.id} className="flex items-center gap-3 py-3">
-            <Gm name={t.name} />
-            <div className="min-w-0 flex-1 leading-tight">
-              <div className={`truncate text-[15px] ${t.id === data.meId ? "font-semibold" : ""}`}>{t.name}</div>
-              <div className="truncate text-xs text-white/40">{t.manager ?? ""}</div>
+      {/* the rounds to come, with their players: the next one first (its time is in the heading) */}
+      {data.upcoming.map(({ round, players }, i) => (
+        <div key={round.id} className={i ? "mt-8" : "mt-6"}>
+          {i > 0 && (
+            <div className="flex items-baseline justify-between">
+              <Label>{roundName(round)}</Label>
+              {round.opensAt && <Label><When iso={round.opensAt} /></Label>}
             </div>
-            <div className="text-right leading-tight">
-              <div className="font-display text-xl">{money(t.capSpace)}</div>
-              <div className="text-[10px] text-white/35">{t.spots} {t.spots === 1 ? "spot" : "spots"}</div>
-            </div>
+          )}
+          <div className="mt-3 grid grid-cols-4 gap-2 sm:grid-cols-8">
+            {players.map((p, k) => (
+              <motion.div key={p.id} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: Math.min(k, 8) * 0.04, duration: 0.4, ease }}>
+                <PlayerCard p={p} size="thumb" />
+              </motion.div>
+            ))}
           </div>
-        ))}
-      </div>
+        </div>
+      ))}
+      {data.last && <Results past results={data.last} teams={data.teams} me={me} skew={skew} serverNow={data.now} canRenounce={false} onReplay={onReplay} />}
     </section>
   );
 }
@@ -345,23 +330,16 @@ function Bidding({ data, me, myBids, skew, onOpen, onReplay }: {
             {over && <span className="text-[10px] text-amber-300/70">over cap if all win</span>}
           </div>
         </div>
-        {/* who has bid this round: each GM's initials light up once they have (never what or on whom) */}
-        <div className="ml-auto text-right">
-          <Label>Bids in</Label>
-          <div className="mt-1.5 flex justify-end gap-1">
-            {data.teams.map((t) => (
-              <motion.span
-                key={t.id}
-                title={t.name}
-                className="grid h-6 w-6 place-items-center rounded-full text-[8px] font-semibold tracking-wide"
-                animate={t.hasBid ? { backgroundColor: "#f5f5f4", color: "#0a0a0c" } : { backgroundColor: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.35)" }}
-                transition={{ duration: 0.4 }}
-              >
-                {initials(t.name)}
-              </motion.span>
-            ))}
-          </div>
-        </div>
+      </div>
+
+      {/* who has bid this round: each GM's badge lights up once they have (never what or on whom) */}
+      <Label className="mt-5">Bids in</Label>
+      <div className="mt-2 flex items-center justify-between">
+        {data.teams.map((t) => (
+          <span key={t.id} title={t.name} className={`transition-[opacity,filter] duration-500 ${t.hasBid ? "" : "opacity-25 grayscale"}`}>
+            <Gm team={t.look} size="sm" />
+          </span>
+        ))}
       </div>
 
       <div className="mt-7 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
