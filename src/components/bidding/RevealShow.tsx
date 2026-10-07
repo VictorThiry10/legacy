@@ -10,8 +10,8 @@ import s from "./gold.module.css";
 
 // Each player's moments, in ms from when his photo is ready: the card gathers light and trembles, turns over,
 // the team he signs with spells itself out, the amount counts up and lands, then every other bid.
-const AT = { tremble: 1200, flip: 2000, team: 3600, amount: 4400, landed: 6300, others: 7200 } as const;
-const HOLD = 11500; // ms each player stays on screen
+const AT = { tremble: 1200, flip: 2000, team: 3600, amount: 4400, landed: 6000, others: 6800 } as const;
+const HOLD = 9500; // ms each player stays on screen
 
 // Stages a player goes through (the AT moments in order).
 const TREMBLE = 1, FLIPPED = 2, TEAM = 3, AMOUNT = 4, LANDED = 5, OTHERS = 6;
