@@ -166,6 +166,9 @@ export function parseSchedule(x: unknown): Schedule | null {
   return s as Schedule;
 }
 
+// No drop-and-rebuy: a GM who drops a player from this moment on can't bid on him in the auction (Victor, 2026-10-09).
+export const NO_REBUY_FROM = "2026-10-09T00:00:00Z";
+
 // Renounce Rights: each GM can give up one signing per season (Victor, 2026-10-09: "just 1 renounce per GM"). The player goes to the next bidder.
 export const RENOUNCE_RIGHTS = 1;
 

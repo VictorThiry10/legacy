@@ -6,7 +6,7 @@ import { db } from "./supabase/server";
 import { getMe } from "./auth";
 import { fail, rpc } from "./db";
 import { getSettings, teamSummaries, type Team } from "./league";
-import { BID_STEP, maxBid, money, parseSchedule, revealRound, RENOUNCE_RIGHTS, slot, yearsLeft, type Bid, type RevealItem, type Schedule } from "./rules";
+import { BID_STEP, maxBid, money, NO_REBUY_FROM, parseSchedule, revealRound, RENOUNCE_RIGHTS, slot, yearsLeft, type Bid, type RevealItem, type Schedule } from "./rules";
 import type { Json, Row } from "./supabase/types";
 import type { Look } from "./team-look";
 import type { SeasonLine } from "./espn-parse";
@@ -112,6 +112,7 @@ export type Room = {
   upcoming: { round: RoundInfo; players: CardPlayer[] }[]; // the rounds still to come, with their players (while waiting)
   players: CardPlayer[];
   myBids: Record<string, number>;
+  dropped: string[]; // players I dropped since the no-rebuy rule began: I can't bid on them
   reveal: RevealItem[] | null;
   canRenounce: boolean; // the results are in and the renounce window is still open
   last: Results | null; // the round that just finished, shown while waiting for the next one
@@ -216,7 +217,7 @@ export async function room(team: Team): Promise<Room> {
   const d = db();
   // Everything in one wave of reads: the open round's players and bids come through an inner join on the
   // round (status and season), so they don't wait for the rounds list.
-  const [summaries, rs, ren, rp, bidRows, lens, up] = await Promise.all([
+  const [summaries, rs, ren, rp, bidRows, lens, up, dropped] = await Promise.all([
     teamSummaries(),
     d.from("rounds").select("*").eq("season", season).order("number"),
     d.from("renounces").select("team_id, bid_id").eq("season", season),
@@ -224,6 +225,7 @@ export async function room(team: Team): Promise<Room> {
     d.from("bids").select("*, round:rounds!inner(status, season)").eq("round.status", "open").eq("round.season", season),
     d.from("contracts").select("years").eq("season_signed", season).in("acquired_via", NEW_DEALS),
     d.from("round_players").select("round_id, pos, player:players(*, contracts(active)), round:rounds!inner(status, season)").eq("round.status", "setup").eq("round.season", season).order("pos"),
+    droppedBy(team.id),
   ]);
   if (rs.error) fail(rs.error);
   const rounds = rs.data ?? [];
@@ -275,6 +277,7 @@ export async function room(team: Team): Promise<Room> {
     })) : [],
     players,
     myBids: Object.fromEntries(bids.filter((b) => b.teamId === team.id).map((b) => [b.playerId, b.amount])),
+    dropped: [...dropped],
     reveal,
     canRenounce: phase === "reveal" && (!live?.settles_at || Date.parse(live.settles_at) > now),
     last: done && doneItems.length ? { round: roundInfo(done), items: doneItems, players: doneItems.flatMap((i) => cards.get(i.playerId) ?? []) } : null,
@@ -360,7 +363,15 @@ export async function placeBid(team: Team, roundId: string, playerId: string, am
     const max = me ? maxBid(me.state, rules) : 0;
     if (amount > max) throw new Error(max ? `Your max bid is ${money(max)}.` : "Your roster is full.");
   }
+  if (amount !== null && (await droppedBy(team.id)).has(playerId)) throw new Error("You dropped him. You can't bid on him.");
   await rpc("bidding_place", { p_round: roundId, p_team: team.id, p_player: playerId, p_amount: amount });
+}
+
+// The players a team dropped since the no-rebuy rule began: it can't bid on them (no drop-and-rebuy at a lower price).
+async function droppedBy(teamId: string): Promise<Set<string>> {
+  const { data, error } = await db().from("transactions").select("player_id").eq("team_id", teamId).eq("kind", "release").gte("created_at", NO_REBUY_FROM);
+  if (error) fail(error);
+  return new Set((data ?? []).flatMap((t) => (t.player_id ? [t.player_id] : [])));
 }
 
 export async function renounce(team: Team, bidId: string) {
