@@ -257,6 +257,7 @@ function Bidding({ data, me, myBids, skew, onOpen, onReplay }: {
   }, [photos]);
 
   const bids = Object.values(myBids);
+  const dropped = new Set(data.dropped);
   const sum = bids.reduce((a, b) => a + b, 0);
   const overCap = sum > me.capSpace;
   return (
@@ -280,7 +281,7 @@ function Bidding({ data, me, myBids, skew, onOpen, onReplay }: {
         </div>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
           {data.players.map((p, i) => (
-            <DealtCard key={p.id} p={p} i={i} bid={myBids[p.id]} go={go} onOpen={onOpen} />
+            <DealtCard key={p.id} p={p} i={i} bid={myBids[p.id]} dropped={dropped.has(p.id)} go={go} onOpen={onOpen} />
           ))}
         </div>
       </section>
@@ -316,12 +317,12 @@ function subscribeFine(cb: () => void) {
 }
 const useFinePointer = () => useSyncExternalStore(subscribeFine, () => window.matchMedia(FINE).matches, () => false);
 
-type DealtProps = { p: CardPlayer; i: number; bid?: number; go: boolean; onOpen: (p: CardPlayer) => void };
+type DealtProps = { p: CardPlayer; i: number; bid?: number; dropped?: boolean; go: boolean; onOpen: (p: CardPlayer) => void };
 
 // A card dealt face down that flips over (once `go`) and tilts under the mouse. Once it has flipped it is a plain
 // card: no back face, no 3D. Polls bring fresh copies of the same players, so cards compare them by content.
 const DealtCard = memo(
-  function DealtCard({ p, i, bid, go, onOpen }: DealtProps) {
+  function DealtCard({ p, i, bid, dropped = false, go, onOpen }: DealtProps) {
     const rx = useSpring(0, { stiffness: 220, damping: 18 });
     const ry = useSpring(0, { stiffness: 220, damping: 18 });
     const tilt = useFinePointer();
@@ -339,7 +340,10 @@ const DealtCard = memo(
         onAnimationComplete={() => go && setFlipped(true)}
       >
         <div className={flipped ? undefined : "face"}>
-          <PlayerCard p={p} bid={bid} />
+          {/* a player I dropped: no bidding on him (no drop-and-rebuy) */}
+          <PlayerCard p={p} bid={bid} className={dropped ? "grayscale" : ""}>
+            {dropped && <div className="font-display absolute right-[7cqw] top-[7cqw] rounded-[1.5cqw] bg-[#0a0a0c] px-[2.5cqw] py-[1cqw] text-[7.5cqw] leading-none text-white">DROPPED</div>}
+          </PlayerCard>
         </div>
         {!flipped && (
           <div className="face absolute inset-0 [transform:rotateY(180deg)]">
@@ -351,7 +355,8 @@ const DealtCard = memo(
     return (
       <motion.button
         type="button"
-        onClick={() => onOpen(p)}
+        onClick={() => !dropped && onOpen(p)}
+        aria-disabled={dropped}
         className={`relative block w-full text-left ${flipped && !tilt ? "" : "[perspective:1000px]"}`}
         initial={{ opacity: 0, y: 24 }}
         animate={{ opacity: 1, y: 0 }}
