@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { addsLocked } from "@/lib/rules";
 import { db } from "@/lib/supabase/server";
 import { getSettings, type Player } from "@/lib/league";
 import { STAT_COLS, fmt, seasonLabel, stat, type StatKey } from "@/lib/player-stats";
@@ -156,6 +157,7 @@ async function StatsTable({ sp }: { sp: Params }) {
                   </td>
                   <td className="text-center text-xs font-semibold">
                     {o ? <Link href={`/teams/${o.id}`} prefetch={false} transitionTypes={["nav-forward"]} title={o.name} className="hover:underline">{initials(o.name)}</Link>
+                      : addsLocked() ? null
                       : waivers.has(p.id) ? <Link href={`/players/${p.id}/add`} prefetch={false} transitionTypes={["nav-forward"]} className="inline-flex h-6 w-6 items-center justify-center rounded-full border-[1.5px] border-orange text-orange font-bold" title="On waivers: sealed bids" aria-label={`Bid on ${p.name}`}>+</Link>
                       : <Link href={`/players/${p.id}/add`} prefetch={false} transitionTypes={["nav-forward"]} className="inline-flex h-6 w-6 items-center justify-center rounded-full border-[1.5px] border-good text-good font-bold" title="Free agent" aria-label={`Add ${p.name}`}>+</Link>}
                   </td>
