@@ -40,8 +40,8 @@ export type Database = {
         [FK<"rookie_lottery_views_team_id_fkey", "team_id", "teams">]
       >;
       contracts: Table<
-        { acquired_via: string; active: boolean; created_at: string; id: string; player_id: string; salary: number; season_signed: number; team_id: string; years: number },
-        { acquired_via?: string; active?: boolean; created_at?: string; id?: string; player_id: string; salary: number; season_signed: number; team_id: string; years: number },
+        { acquired_via: string; active: boolean; created_at: string; id: string; pick_length: boolean; player_id: string; salary: number; season_signed: number; team_id: string; years: number },
+        { acquired_via?: string; active?: boolean; created_at?: string; id?: string; pick_length?: boolean; player_id: string; salary: number; season_signed: number; team_id: string; years: number },
         [FK<"contracts_player_id_fkey", "player_id", "players">, FK<"contracts_team_id_fkey", "team_id", "teams">]
       >;
       extension_decisions: Table<
@@ -168,6 +168,7 @@ export type Database = {
       bidding_settle: { Args: { p_round: string; p_awards: Json; p_result: Json; p_renounces: number }; Returns: boolean };
       bidding_replace_taken: { Args: { p_season: number }; Returns: number };
       bidding_set_lengths: { Args: { p_team: string; p_season: number; p_rows: Json; p_limits: Json }; Returns: undefined };
+      contracts_pick_lengths: { Args: { p_team: string; p_season: number; p_rows: Json; p_limits: Json }; Returns: undefined };
       current_lineups: {
         Args: { p_teams: string[] | null; p_day: string };
         Returns: { day: string; player_id: string; saved_at: string; slot: string; team_id: string }[];

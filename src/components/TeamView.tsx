@@ -16,6 +16,7 @@ import { money } from "@/lib/rules";
 import { headshot } from "@/lib/names";
 import { openOffers } from "@/lib/trades";
 import { extensionOffer } from "@/lib/extensions";
+import { lengthChoice } from "@/lib/pick-lengths";
 import { appStatus } from "@/lib/bidding";
 import { AUCTION_ON_HOLD } from "@/lib/auction-hold";
 import LineupTable, { type LinePlayer } from "./LineupTable";
@@ -44,7 +45,7 @@ export default async function TeamView({ team, editable, base, sp, back, tradeHr
     return `${base}?${q}`;
   };
 
-  // my to-do card (rookie draft, free agency, trade offers, extensions): starts now, shown by Pending below
+  // my to-do card (contract lengths to assign, rookie draft, free agency, trade offers, extensions): starts now, shown by Pending below
   const offers = editable ? openOffers(team.id) : null;
   const extensions = editable ? extensionOffer(team).catch(() => null) : null;
   // on hold: no row for the GMs (the commissioner keeps his, to set the auction up and try it), but still a promise
@@ -52,6 +53,7 @@ export default async function TeamView({ team, editable, base, sp, back, tradeHr
   const freeAgency = editable ? (AUCTION_ON_HOLD && !team.is_commish ? Promise.resolve(null) : appStatus(team).catch(() => null)) : null;
   const rookieDraft = editable ? draftRow(team).catch(() => null) : null;
   const moves = editable ? movesRow(team.id).catch(() => null) : null;
+  const lengths = editable ? lengthChoice(team).catch(() => null) : null;
   const [{ rules, season }, roster, games, abbr] = await Promise.all([getSettings(), rosters([team.id]), gamesBetween(day, day), teamAbbrs()]);
   const [rows, lines] = await Promise.all([lineupFor(team.id, day, roster), boxLines(roster.map((p) => p.id))]);
   const players = new Map(roster.map((p) => [p.id, p]));
@@ -131,7 +133,7 @@ export default async function TeamView({ team, editable, base, sp, back, tradeHr
       )}
 
       {editable && <PushPrompt />}
-      {offers && extensions && freeAgency && rookieDraft && moves && <Pending offers={offers} extensions={extensions} freeAgency={freeAgency} rookieDraft={rookieDraft} moves={moves} />}
+      {offers && extensions && freeAgency && rookieDraft && moves && lengths && <Pending offers={offers} extensions={extensions} freeAgency={freeAgency} rookieDraft={rookieDraft} moves={moves} lengths={lengths} />}
 
       <div className="flex items-center border-y border-line -mx-4 sm:mx-0 sm:rounded-2xl sm:border sm:bg-card">
         <Link href={href({ d: addDays(day, -1) })} replace={!!back} prefetch={true} transitionTypes={BACK} className="px-4 py-2 text-xl text-muted hover:text-fg" aria-label="Previous day">‹</Link>
