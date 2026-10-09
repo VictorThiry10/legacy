@@ -116,7 +116,7 @@ export default function Results({ results, teams, me, skew, serverNow, canRenoun
               >
                 <div className="mx-auto w-20"><PlayerCard p={ask.player} size="thumb" /></div>
                 <h3 className="mt-4 text-lg font-semibold">Renounce {ask.player.name.split(" ").slice(-1)[0]}?</h3>
-                <p className="mt-1 text-sm text-muted">He goes to the next highest bidder. {me.renouncesLeft - 1} left after this.</p>
+                <p className="mt-1 text-sm text-muted">He goes to the next highest bidder. You can only do this once a season.</p>
                 <div className="mt-5 grid grid-cols-2 gap-2">
                   <button onClick={() => setAsk(null)} className={`${GHOST} py-3 font-semibold`}>Keep him</button>
                   <button disabled={pending} onClick={renounce} className="rounded-full bg-bad-fill py-3 font-semibold text-white disabled:opacity-60">
