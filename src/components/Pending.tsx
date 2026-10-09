@@ -9,21 +9,24 @@ import type { DraftRowInfo } from "@/lib/draft";
 import type { MovesRowInfo } from "@/lib/roster";
 import { headline } from "@/lib/moves";
 import { HistoryIcon } from "./PendingRow";
+import AssignLengthsRow from "./AssignLengths";
+import type { LengthChoice } from "@/lib/pick-lengths";
 
-// Everything waiting on my team, in one card at the top of the Team page: free agency while it runs, what I have
-// to decide, then the offers I sent. Each row opens the full thing (the auction room, the extensions pop-up, the
+// Everything waiting on my team, in one card at the top of the Team page: contract lengths to assign (players the
+// commissioner gave my team), free agency while it runs, what I have to decide, then the offers I sent. Each row opens the full thing (the auction room, the extensions pop-up, the
 // offer page with Accept / Decline). Last, the league's recent moves: the latest one, a red dot when there's one I
 // haven't seen. Takes promises already started (TeamView starts them early), so it never waits in line.
-export default async function Pending({ offers, extensions, freeAgency, rookieDraft, moves }: {
+export default async function Pending({ offers, extensions, freeAgency, rookieDraft, moves, lengths }: {
   offers: Promise<Offer[]>; extensions: Promise<ExtensionOffer | null>; freeAgency: Promise<AppStatus | null>; rookieDraft: Promise<DraftRowInfo | null>;
-  moves: Promise<MovesRowInfo | null>;
+  moves: Promise<MovesRowInfo | null>; lengths: Promise<LengthChoice | null>;
 }) {
-  const [all, ext, fa, draft, mv] = await Promise.all([offers, extensions, freeAgency, rookieDraft, moves]);
-  if (!fa && !ext && !draft && !all.length && !mv) return null;
+  const [all, ext, fa, draft, mv, len] = await Promise.all([offers, extensions, freeAgency, rookieDraft, moves, lengths]);
+  if (!fa && !ext && !draft && !all.length && !mv && !len) return null;
   const picks = (ps: { year: number }[]) => ps.map((p) => ({ name: `${p.year} pick` }));
   const deal = (o: Offer) => `${few([...o.get, ...picks(o.getPicks)])} for ${few([...o.give, ...picks(o.givePicks)])}`;
   return (
     <div className="divide-y divide-line overflow-hidden rounded-2xl border border-line bg-card">
+      {len && <AssignLengthsRow choice={len} />}
       {draft && <DraftRow info={draft} />}
       {fa && <FreeAgencyRow s={fa} />}
       {ext && <ExtensionsRow offer={ext} />}
