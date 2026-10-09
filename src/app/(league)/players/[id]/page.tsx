@@ -6,7 +6,7 @@ import { playerOverviewCached } from "@/lib/espn";
 import { regularSeasonStarted } from "@/lib/nba";
 import { getMe } from "@/lib/auth";
 import { getSettings, type Player } from "@/lib/league";
-import { money, yearsLeft } from "@/lib/rules";
+import { money, yearsLeft, addsLocked } from "@/lib/rules";
 import { seasonLabel } from "@/lib/player-stats";
 import TeamLogo from "@/components/TeamLogo";
 import { waiverFor } from "@/lib/waivers";
@@ -88,7 +88,9 @@ export default async function PlayerPage({ params, searchParams }: PageProps<"/p
               ) : "Free Agent"}
             </div>
             <div className="flex flex-wrap items-center gap-2 pt-1">
-              {!c && me?.team && (w ? (
+              {!c && me?.team && (addsLocked() ? (
+                <span className="rounded-full bg-line px-3 py-1.5 text-xs font-semibold">Adds open 20 Oct</span>
+              ) : w ? (
                 w.waiver.dropped_by === me.team.id ? (
                   <span className="rounded-full bg-line px-3 py-1.5 text-xs font-semibold">You dropped him</span>
                 ) : (

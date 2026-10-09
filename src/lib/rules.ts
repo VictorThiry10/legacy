@@ -169,6 +169,13 @@ export function parseSchedule(x: unknown): Schedule | null {
 // No drop-and-rebuy: a GM who drops a player from this moment on can't bid on him in the auction (Victor, 2026-10-09).
 export const NO_REBUY_FROM = "2026-10-09T00:00:00Z";
 
+// No adds before the season: free agent pickups and waiver bids are closed until 20 October 2026, midnight London
+// (Victor, 2026-10-09: "no one can add any players up until reg season starts"). The auction signs as usual, and
+// the commissioner's own signings are not held by this.
+export const ADDS_FROM = "2026-10-19T23:00:00Z";
+export const addsLocked = (now = Date.now()) => now < Date.parse(ADDS_FROM);
+export const ADDS_LOCKED = "No adds until the season starts, 20 October.";
+
 // Renounce Rights: each GM can give up one signing per season (Victor, 2026-10-09: "just 1 renounce per GM"). The player goes to the next bidder.
 export const RENOUNCE_RIGHTS = 1;
 

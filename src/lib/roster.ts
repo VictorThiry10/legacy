@@ -3,7 +3,7 @@ import { db } from "./supabase/server";
 import { all, fail, rpc } from "./db";
 import type { Move } from "./moves";
 import { getSettings, type Player } from "./league";
-import { money, rosterProblems, teamState } from "./rules";
+import { money, rosterProblems, teamState, addsLocked, ADDS_LOCKED } from "./rules";
 import { onIR } from "./lineup-store";
 import { gamesBetween } from "./nba";
 import { today } from "./dates";
@@ -93,6 +93,7 @@ export async function signPlayer(o: {
 // Free agent pickup: $min salary for 1 year, first come first served. A full roster must drop someone in the same step.
 // The dropped player goes on waivers (lib/waivers.ts), and so a player on waivers can't be picked up this way.
 export async function pickUp(o: { teamId: string; playerId: string; dropContractId?: string }) {
+  if (addsLocked()) throw new Error(ADDS_LOCKED);
   const { season, rules } = await getSettings();
   const { data: taken } = await db().from("contracts").select("id").eq("player_id", o.playerId).eq("active", true).maybeSingle();
   if (taken) throw new Error("Someone just picked him up.");

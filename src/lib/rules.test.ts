@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { resolveRound, revealRound, maxBid, yearsLeft, DEFAULT_SETTINGS as S, drawLottery, lotteryOdds, fantasyPoints, scoreRows, rosterProblems, teamState, rankWaiverBids, slot, parseSchedule, DAILY, type Schedule, type TeamState, type Bid } from "./rules";
+import { resolveRound, revealRound, maxBid, yearsLeft, DEFAULT_SETTINGS as S, drawLottery, lotteryOdds, fantasyPoints, scoreRows, rosterProblems, teamState, rankWaiverBids, slot, parseSchedule, DAILY, addsLocked, type Schedule, type TeamState, type Bid } from "./rules";
 
 const M = 1_000_000;
 const team = (id: string, salary = 0, rosterCount = 0): TeamState => ({ id, salary, rosterCount, slotsUsed: {} });
@@ -220,4 +220,10 @@ test("a stored schedule is checked: bidding and the renounce window must fit bef
   assert.equal(parseSchedule({ start: "nope", from: 0, ...DAILY }), null);
   assert.equal(parseSchedule({ start: "2026-10-12T07:00:00.000Z", from: 0, bidMinutes: 600, renounceMinutes: 120, everyMinutes: 600 }), null);
   assert.ok(parseSchedule({ start: "2026-10-12T07:00:00.000Z", from: 0, ...DAILY }));
+});
+
+test("no adds before the season: pickups and waiver bids open on 20 October 2026, midnight London", () => {
+  assert.equal(addsLocked(Date.parse("2026-10-15T12:00:00Z")), true);
+  assert.equal(addsLocked(Date.parse("2026-10-19T22:59:59Z")), true);
+  assert.equal(addsLocked(Date.parse("2026-10-19T23:00:00Z")), false);
 });

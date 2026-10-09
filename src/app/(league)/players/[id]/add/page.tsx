@@ -5,7 +5,7 @@ import { getSettings, teamSummaries } from "@/lib/league";
 import { rosters } from "@/lib/roster";
 import { onIR } from "@/lib/lineup-store";
 import { lowestBid, waiverFor } from "@/lib/waivers";
-import { money } from "@/lib/rules";
+import { money, addsLocked, ADDS_LOCKED } from "@/lib/rules";
 import Field from "@/components/Field";
 import LocalTime from "@/components/LocalTime";
 import Slide from "@/components/Slide";
@@ -77,6 +77,8 @@ export default async function AddPlayer({ params, searchParams }: PageProps<"/pl
         {err && <p className="card text-sm text-bad">{err}</p>}
         {owned ? (
           <p className="card text-sm">Already on {owned.team?.name ?? "another team"}.</p>
+        ) : addsLocked() ? (
+          <p className="card text-sm">{ADDS_LOCKED}</p>
         ) : w && w.dropped_by === me.id ? (
           <p className="card text-sm">You dropped him.</p>
         ) : w && new Date(w.closes_at) <= new Date() ? (

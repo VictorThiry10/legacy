@@ -4,7 +4,7 @@ import { fail, rpc } from "./db";
 import { getSettings } from "./league";
 import { capSpaces, lockedToday, problemsFor, rosters } from "./roster";
 import { onIR } from "./lineup-store";
-import { BID_STEP, money, rankWaiverBids } from "./rules";
+import { BID_STEP, money, rankWaiverBids, addsLocked, ADDS_LOCKED } from "./rules";
 import type { Row } from "./supabase/types";
 
 // Waivers. Every dropped player sits on waivers for 48 hours (settings.waiver_hours). Meanwhile GMs send sealed
@@ -55,6 +55,7 @@ async function problemsWith(teamId: string, playerId: string, amount: number, dr
 
 // Place or change my sealed bid. A full roster names who to drop, released only if the bid wins.
 export async function placeBid(o: { teamId: string; playerId: string; amount: number; dropContractId?: string }) {
+  if (addsLocked()) throw new Error(ADDS_LOCKED);
   const { rules } = await getSettings();
   const w = await openWaiver(o.playerId);
   if (!w) throw new Error("He is not on waivers anymore.");
