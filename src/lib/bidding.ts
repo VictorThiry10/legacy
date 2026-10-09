@@ -133,7 +133,12 @@ const roundInfo = (r: Row<"rounds">, times: Times = null): RoundInfo => ({
   settlesAt: r.settles_at ?? (times ? iso(times.settles) : null),
 });
 
-type RoundTimes = { status: string; closes_at: string | null; settles_at: string | null };
+type RoundTimes = { status: string; opens_at: string | null; closes_at: string | null; settles_at: string | null };
+
+// A round given its own times before it opens (set in the database: round 1 opening on a Sunday evening). It opens
+// on those instead of the schedule's slot; the rounds after it follow the schedule again.
+const ownTimes = (r: RoundTimes | null | undefined): Times =>
+  r?.opens_at && r.closes_at && r.settles_at ? { opens: Date.parse(r.opens_at), closes: Date.parse(r.closes_at), settles: Date.parse(r.settles_at) } : null;
 
 // Where free agency is, from the season's rounds (in order): the live round, else the next one set up.
 function phaseOf<R extends RoundTimes>(rounds: R[], faLocked: boolean, now: number) {
@@ -145,12 +150,11 @@ function phaseOf<R extends RoundTimes>(rounds: R[], faLocked: boolean, now: numb
   return { phase, live, next };
 }
 
-// When the next round to open opens, closes and settles: the schedule's slot after the rounds already opened.
-// Null with no schedule, or once that slot's bidding time has gone by (a stale schedule opens nothing).
+// When the next round to open opens, closes and settles: its own times if it has them, else the schedule's slot
+// after the rounds already opened. Null with neither, or once that bidding time has gone by (stale times open nothing).
 function nextTimes<R extends RoundTimes>(rounds: R[], schedule: Schedule | null, now: number): Times {
-  if (!schedule) return null;
-  const t = slot(schedule, rounds.filter((r) => r.status !== "setup").length);
-  return t.closes > now ? t : null;
+  const t = ownTimes(rounds.find((r) => r.status === "setup")) ?? (schedule ? slot(schedule, rounds.filter((r) => r.status !== "setup").length) : null);
+  return t && t.closes > now ? t : null;
 }
 
 // What advance() has to do right now, if anything: sign the live round, or open the next one.
@@ -170,7 +174,7 @@ export async function advance(): Promise<void> {
   // best free agent left, so every round still has its eight.
   await rpc("bidding_replace_taken", { p_season: season }).catch(() => {});
   for (let i = 0; i < 3; i++) {
-    const { data: rounds, error } = await db().from("rounds").select("id, status, closes_at, settles_at").eq("season", season).order("number");
+    const { data: rounds, error } = await db().from("rounds").select("id, status, opens_at, closes_at, settles_at").eq("season", season).order("number");
     if (error) fail(error);
     const todo = due(rounds ?? [], faSchedule, Date.now());
     if (!todo) return;
@@ -309,7 +313,7 @@ export async function pulse(): Promise<string> {
   const { season, faLocked, faSchedule } = await getSettings();
   const d = db();
   const read = () => Promise.all([
-    d.from("rounds").select("id, status, closes_at, settles_at").eq("season", season).order("number"),
+    d.from("rounds").select("id, status, opens_at, closes_at, settles_at").eq("season", season).order("number"),
     d.from("renounces").select("id", { count: "exact", head: true }).eq("season", season),
     d.from("contracts").select("years").eq("season_signed", season).in("acquired_via", NEW_DEALS),
     d.from("teams").select("id", { count: "exact", head: true }),
@@ -415,10 +419,10 @@ export async function scheduleView() {
   const opened = (rounds ?? []).filter((r) => r.status !== "setup");
   const waiting = (rounds ?? []).filter((r) => r.status === "setup");
   const lastChance = !(rounds ?? []).some((r) => r.kind === "leftovers"); // it's only created once the last regular round is signed
-  const times = (i: number) => (faSchedule ? slot(faSchedule, opened.length + i) : null);
+  const times = (i: number) => (i === 0 && ownTimes(waiting[0])) || (faSchedule ? slot(faSchedule, opened.length + i) : null);
   return {
     schedule: faSchedule,
-    stale: !!faSchedule && waiting.length > 0 && slot(faSchedule, opened.length).closes <= Date.now(),
+    stale: waiting.length > 0 && !!times(0) && !nextTimes(rounds ?? [], faSchedule, Date.now()),
     rows: [
       ...opened.map((r) => ({ label: r.kind === "leftovers" ? "Last chance" : `Round ${r.number}`, status: r.status, opens: r.opens_at, closes: r.closes_at, settles: r.settles_at })),
       ...waiting.map((r, i) => ({ label: r.kind === "leftovers" ? "Last chance" : `Round ${r.number}`, status: r.status, ...isoTimes(times(i)) })),

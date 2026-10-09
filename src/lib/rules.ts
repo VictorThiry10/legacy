@@ -166,8 +166,8 @@ export function parseSchedule(x: unknown): Schedule | null {
   return s as Schedule;
 }
 
-// Renounce Rights: each GM can give up 3 signings per season, in any rounds. The player goes to the next bidder.
-export const RENOUNCE_RIGHTS = 3;
+// Renounce Rights: each GM can give up one signing per season (Victor, 2026-10-09: "just 1 renounce per GM"). The player goes to the next bidder.
+export const RENOUNCE_RIGHTS = 1;
 
 export type BidStatus = "won" | "lost" | "voided" | "renounced";
 export type RevealItem = {
