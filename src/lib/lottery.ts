@@ -5,7 +5,7 @@ import { drawLottery, lotteryOdds } from "./rules";
 // Records only: the playoffs don't move anyone. The three teams level at 7-7 are split by the final ranking,
 // as the commissioner set it: Benji 5th, Awad 4th, Thiry 3rd.
 export const GMS = [
-  { id: "34ee3e73-cbae-4375-8d22-5e68c3e28082", name: "Elliot", color: "#f97316", record: "2-12" },
+  { id: "84af81f4-68b1-4803-85ed-8817f89657ea", name: "Jeremy", color: "#f97316", record: "2-12" }, // took over Elliot's spot (its record, its #7 pick) on 2026-10-09
   { id: "3801e216-2d94-4a2f-8127-d93f23349271", name: "Ilan", color: "#facc15", record: "4-10" },
   { id: "6d5b886f-4f6e-4ac1-a76d-3ac1e9f02f55", name: "Theo", color: "#ef4444", record: "6-8" },
   { id: "eadbbfbf-84dd-4e9a-a4bf-5ac10295035d", name: "Benji", color: "#22c55e", record: "7-7" },

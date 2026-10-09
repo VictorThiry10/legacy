@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { drawField, GMS, lotteryField } from "./lottery";
 
 const name = (id: string) => GMS.find((g) => g.id === id)!.name;
-const FIELD = ["Elliot", "Ilan", "Theo", "Benji", "Awad", "Thiry", "Chomi", "Brunson"];
+const FIELD = ["Jeremy", "Ilan", "Theo", "Benji", "Awad", "Thiry", "Chomi", "Brunson"];
 
 test("lottery field: worst record first, the 7-7 teams by final ranking, the league's odds", () => {
   const f = lotteryField();
