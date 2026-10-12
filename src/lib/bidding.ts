@@ -112,6 +112,7 @@ export type Room = {
   upcoming: { round: RoundInfo; players: CardPlayer[] }[]; // the rounds still to come, with their players (until the contracts)
   players: CardPlayer[];
   myBids: Record<string, number>;
+  myOrder: string[]; // my bids' players in priority order: the first is kept the longest if they go over the cap together
   dropped: string[]; // players I dropped since the no-rebuy rule began: I can't bid on them
   reveal: RevealItem[] | null;
   canRenounce: boolean; // the results are in and the renounce window is still open
@@ -190,7 +191,7 @@ type RoundPlayer = { player: (Row<"players"> & { contracts: { active: boolean }[
 const freeCards = (rows: RoundPlayer[]) =>
   rows.map((x) => one(x.player)).filter((p) => !!p && !p.contracts.some((c) => c.active)).map((p) => cardOf(p!));
 
-const bidOf = (b: Row<"bids">): Bid => ({ id: b.id, teamId: b.team_id, playerId: b.player_id, amount: Number(b.amount), years: b.years, createdAt: b.created_at });
+const bidOf = (b: Row<"bids">): Bid => ({ id: b.id, teamId: b.team_id, playerId: b.player_id, amount: Number(b.amount), years: b.years, createdAt: b.created_at, priority: b.priority });
 
 // The renounce window is over: sign the round's winners and freeze its results.
 async function settle(roundId: string, season: number) {
@@ -277,6 +278,7 @@ export async function room(team: Team): Promise<Room> {
     })) : [],
     players,
     myBids: Object.fromEntries(bids.filter((b) => b.teamId === team.id).map((b) => [b.playerId, b.amount])),
+    myOrder: bids.filter((b) => b.teamId === team.id).sort((a, b) => (a.priority ?? Infinity) - (b.priority ?? Infinity) || a.createdAt.localeCompare(b.createdAt)).map((b) => b.playerId),
     dropped: [...dropped],
     reveal,
     canRenounce: phase === "reveal" && (!live?.settles_at || Date.parse(live.settles_at) > now),
@@ -372,6 +374,11 @@ async function droppedBy(teamId: string): Promise<Set<string>> {
   const { data, error } = await db().from("transactions").select("player_id").eq("team_id", teamId).eq("kind", "release").gte("created_at", NO_REBUY_FROM);
   if (error) fail(error);
   return new Set((data ?? []).flatMap((t) => (t.player_id ? [t.player_id] : [])));
+}
+
+// My bids this round in the order I want them kept if they go over the cap together (player ids, first kept longest).
+export async function rankBids(team: Team, roundId: string, playerIds: string[]) {
+  await rpc("bidding_rank", { p_round: roundId, p_team: team.id, p_players: playerIds });
 }
 
 export async function renounce(team: Team, bidId: string) {

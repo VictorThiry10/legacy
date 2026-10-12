@@ -34,6 +34,10 @@ export async function bid(roundId: string, playerId: string, amountM: number | n
   return run(async () => B.placeBid(await me(), roundId, playerId, amountM === null ? null : Math.round(amountM * 1_000_000)));
 }
 
+export async function rank(roundId: string, playerIds: string[]) {
+  return run(async () => B.rankBids(await me(), roundId, playerIds));
+}
+
 export async function renounce(bidId: string) {
   return run(async () => B.renounce(await me(), bidId));
 }

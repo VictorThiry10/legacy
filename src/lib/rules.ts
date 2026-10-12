@@ -28,6 +28,7 @@ export type Bid = {
   amount: number;
   years: number;
   createdAt: string; // ISO
+  priority?: number | null; // the GM's order for his bids this round: 1 is kept the longest when they go over the cap together
 };
 
 export type Award = {
@@ -116,7 +117,8 @@ export function resolveRound(
       awards.push({ playerId: pid, teamId: top.teamId, amount: top.amount, years: top.years, bidId: top.id, ...(tie && { tie }) });
     }
 
-    // find the first illegal team, void its most recent winning bid
+    // find the first illegal team, void the winning bid that gives way: the lowest in the GM's priority (a bid he
+    // never ranked comes after the ranked ones), then the most recent
     let changed = false;
     for (const t of teams) {
       const mine = awards.filter((a) => a.teamId === t.id);
@@ -124,7 +126,8 @@ export function resolveRound(
       const problem = feasible(t, mine, s);
       if (!problem) continue;
       const bidOf = (a: Award) => bids.find((b) => b.id === a.bidId)!;
-      const latest = mine.reduce((x, y) => (bidOf(y).createdAt > bidOf(x).createdAt ? y : x));
+      const after = (y: Bid, x: Bid) => (y.priority ?? Infinity) > (x.priority ?? Infinity) || ((y.priority ?? Infinity) === (x.priority ?? Infinity) && y.createdAt > x.createdAt);
+      const latest = mine.reduce((x, y) => (after(bidOf(y), bidOf(x)) ? y : x));
       dead.add(latest.bidId);
       voided.push({ bidId: latest.bidId, reason: problem });
       changed = true;

@@ -8,6 +8,7 @@ import { money } from "@/lib/rules";
 import * as A from "@/app/(league)/bidding/actions";
 import PlayerCard, { CardBack, cardImages } from "./PlayerCard";
 import BidSheet from "./BidSheet";
+import PrioritySheet from "./PrioritySheet";
 import RevealShow from "./RevealShow";
 import Results from "./Results";
 import Contracts from "./Contracts";
@@ -15,7 +16,7 @@ import Portal from "./Portal";
 import { useClock } from "./clock";
 import { left, useSecondsLeft, When } from "./time";
 import { ready } from "./preload";
-import { ease, Gm, roundName } from "./ui";
+import { ease, GHOST, Gm, roundName } from "./ui";
 import { FORWARD } from "../Slide";
 
 // The auction room, under the page's back bar. One page that changes with the round: waiting (the rounds to come),
@@ -40,6 +41,22 @@ export default function Room({ data, me: who, app }: { data: Data; me: { id: str
   });
   const [, startBid] = useTransition();
   const [toast, setToast] = useState("");
+  // The priority sheet: my bids in the order they're kept if they go over the cap together. Bids placed since the
+  // last order come after it. A move shows at once and is saved; if the server says no, a message says why.
+  const [prio, setPrio] = useState<string | null>(null); // the round it was opened in
+  const [order, moveOrder] = useOptimistic(data.myOrder, (o, next: string[]) => next);
+  const myOrder = [...order.filter((id) => id in myBids), ...Object.keys(myBids).filter((id) => !order.includes(id))];
+  const move = (playerId: string, dir: -1 | 1) => {
+    const i = myOrder.indexOf(playerId), j = i + dir;
+    if (i < 0 || j < 0 || j >= myOrder.length) return;
+    const next = [...myOrder];
+    [next[i], next[j]] = [next[j], next[i]];
+    startBid(async () => {
+      moveOrder(next);
+      const r = await A.rank(roundId, next);
+      if (r?.error) setToast(r.error);
+    });
+  };
   const placeBid = (round: string, playerId: string, amount: number | null) => {
     setOpen(null);
     setToast("");
@@ -94,7 +111,7 @@ export default function Room({ data, me: who, app }: { data: Data; me: { id: str
           className="space-y-4"
         >
           {data.phase === "waiting" && <Waiting data={data} me={me} skew={skew} onReplay={onReplay} />}
-          {data.phase === "bidding" && <Bidding data={data} me={me} myBids={myBids} skew={skew} onOpen={onOpen} onReplay={onReplay} />}
+          {data.phase === "bidding" && <Bidding data={data} me={me} myBids={myBids} skew={skew} onOpen={onOpen} onPriority={() => setPrio(roundId)} onReplay={onReplay} />}
           {data.phase === "reveal" && results && (seen || replaying) && (
             <Results results={results} teams={data.teams} me={me} skew={skew} serverNow={data.now} canRenounce={data.canRenounce} next={next} onReplay={onReplay} />
           )}
@@ -112,6 +129,11 @@ export default function Room({ data, me: who, app }: { data: Data; me: { id: str
             onClose={() => setOpen(null)}
             onBid={(amount) => placeBid(open.round, open.p.id, amount)}
           />
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {prio && data.phase === "bidding" && prio === data.round?.id && myOrder.length > 1 && (
+          <PrioritySheet order={myOrder} players={data.players} amounts={myBids} onMove={move} onClose={() => setPrio(null)} />
         )}
       </AnimatePresence>
       <AnimatePresence>
@@ -246,8 +268,8 @@ function Waiting({ data, me, skew, onReplay }: { data: Data; me: RoomTeam; skew:
   );
 }
 
-function Bidding({ data, me, myBids, skew, onOpen, onReplay }: {
-  data: Data; me: RoomTeam; myBids: Record<string, number>; skew: number; onOpen: (p: CardPlayer) => void; onReplay: () => void;
+function Bidding({ data, me, myBids, skew, onOpen, onPriority, onReplay }: {
+  data: Data; me: RoomTeam; myBids: Record<string, number>; skew: number; onOpen: (p: CardPlayer) => void; onPriority: () => void; onReplay: () => void;
 }) {
   const closes = Date.parse(data.round?.closesAt ?? "");
   // The cards flip once their photos and logos are decoded (1.2 s at most), never onto a blank face.
@@ -275,6 +297,8 @@ function Bidding({ data, me, myBids, skew, onOpen, onReplay }: {
             <span className="text-muted">{bids.length === 1 ? "1 bid" : `${bids.length} bids`}</span> <b className={`tabular-nums ${overCap ? "text-orange" : ""}`}>{money(sum)}</b>
             {overCap && <span className="ml-1.5 text-xs text-orange">over the cap if all win</span>}
           </span>
+          {/* two bids or more: the order they're kept in if they go over the cap together */}
+          {bids.length > 1 && <button type="button" onClick={onPriority} className={GHOST}>Priority</button>}
         </div>
         {/* who has bid this round: each GM's badge lights up once they have (never what or on whom) */}
         <div className="flex items-center justify-between">

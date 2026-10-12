@@ -19,8 +19,8 @@ export type Database = {
         [FK<"bid_sessions_team_id_fkey", "team_id", "teams">]
       >;
       bids: Table<
-        { amount: number; created_at: string; id: string; player_id: string; round_id: string; team_id: string; years: number },
-        { amount: number; created_at?: string; id?: string; player_id: string; round_id: string; team_id: string; years: number },
+        { amount: number; created_at: string; id: string; player_id: string; priority: number | null; round_id: string; team_id: string; years: number },
+        { amount: number; created_at?: string; id?: string; player_id: string; priority?: number | null; round_id: string; team_id: string; years: number },
         [FK<"bids_player_id_fkey", "player_id", "players">, FK<"bids_round_id_fkey", "round_id", "rounds">, FK<"bids_team_id_fkey", "team_id", "teams">]
       >;
       cap_adjustments: Table<
@@ -163,6 +163,7 @@ export type Database = {
     Functions: {
       bidding_open: { Args: { p_round: string; p_opens: string; p_closes: string; p_settles: string }; Returns: boolean };
       bidding_place: { Args: { p_round: string; p_team: string; p_player: string; p_amount: number | null }; Returns: undefined };
+      bidding_rank: { Args: { p_round: string; p_team: string; p_players: string[] }; Returns: undefined };
       bidding_renounce: { Args: { p_bid: string; p_team: string; p_max: number }; Returns: undefined };
       bidding_restart: { Args: { p_season: number }; Returns: undefined };
       bidding_settle: { Args: { p_round: string; p_awards: Json; p_result: Json; p_renounces: number }; Returns: boolean };

@@ -4,9 +4,21 @@ import { resolveRound, revealRound, maxBid, yearsLeft, DEFAULT_SETTINGS as S, dr
 
 const M = 1_000_000;
 const team = (id: string, salary = 0, rosterCount = 0): TeamState => ({ id, salary, rosterCount, slotsUsed: {} });
-let n = 0;
-const bid = (teamId: string, playerId: string, amount: number, years = 1, t = n++): Bid => ({
-  id: `b${n}`, teamId, playerId, amount: amount * M, years, createdAt: new Date(1e12 + t * 1000).toISOString(),
+let n = 0, ids = 0;
+const bid = (teamId: string, playerId: string, amount: number, years = 1, t = n++, priority?: number): Bid => ({
+  id: `b${++ids}`, teamId, playerId, amount: amount * M, years, createdAt: new Date(1e12 + t * 1000).toISOString(), priority,
+});
+
+test("over cap: the GM's priority decides which win gives way, not the clock", () => {
+  // A has 100m committed. Wins p1 (30m, earlier, priority 2) and p2 (25m, later, priority 1): p1 gives way.
+  const bids = [bid("A", "p1", 30, 1, 0, 2), bid("A", "p2", 25, 1, 1, 1), bid("B", "p1", 20)];
+  const r = resolveRound(["p1", "p2"], bids, [team("A", 100 * M), team("B")]);
+  assert.equal(r.awards.find((a) => a.playerId === "p1")!.teamId, "B");
+  assert.equal(r.awards.find((a) => a.playerId === "p2")!.teamId, "A");
+  // a bid he never ranked gives way before the ranked ones
+  const r2 = resolveRound(["p1", "p2"], [bid("A", "p1", 30, 1, 0, 1), bid("A", "p2", 25, 1, 1), bid("B", "p1", 20)], [team("A", 100 * M), team("B")]);
+  assert.equal(r2.awards.find((a) => a.playerId === "p1")!.teamId, "A");
+  assert.equal(r2.unsold.includes("p2"), true);
 });
 
 test("highest bid wins", () => {
