@@ -11,32 +11,33 @@ import s from "./gold.module.css";
 
 const INJURY: Record<string, string> = { OUT: "OUT", "DAY-TO-DAY": "DTD", QUESTIONABLE: "Q", DOUBTFUL: "D", SUSPENSION: "SUS" };
 
-// large: the grid and the reveal, with the original photo. thumb: small cards in lists, a resized photo loaded lazily.
-export type CardSize = "large" | "thumb";
+// large: the grid and the reveal, with the original photo. small: the rounds to come, four a row, a resized photo and
+// the numbers kept. thumb: small cards in lists, no numbers.
+export type CardSize = "large" | "small" | "thumb";
 
 // The exact images a card draws, so they can be decoded before it's shown (preload.ts). p.headshot stays ESPN's raw address.
 export const cardImages = (p: CardPlayer, size: CardSize) => ({
-  face: headshot(p.headshot, size === "thumb" ? 160 : 0),
+  face: headshot(p.headshot, size === "thumb" ? 160 : size === "small" ? 300 : 0),
   logo: nbaLogo(p.nbaTeam, 96),
-  crest: nbaLogo(p.nbaTeam, size === "thumb" ? 160 : 320),
+  crest: nbaLogo(p.nbaTeam, size === "large" ? 320 : 160),
 });
 
 // The foil: fantasy points per game, like Ultimate Team's overall rating. Amethyst 40+, black 35+, gold 30+, pale gold 27+, silver below.
 export const tier = (fppg: number | undefined) => (fppg === undefined ? "silver" : fppg >= 40 ? "amethyst" : fppg >= 35 ? "black" : fppg >= 30 ? "gold" : fppg >= 27 ? "pale" : "silver");
 
-// `lazy`: a full card further down a long page; its photo loads when it comes into view.
-export default function PlayerCard({ p, bid, size = "large", lazy = false, className = "", children }: {
-  p: CardPlayer; bid?: number; size?: CardSize; lazy?: boolean; className?: string; children?: React.ReactNode;
+export default function PlayerCard({ p, bid, size = "large", className = "", children }: {
+  p: CardPlayer; bid?: number; size?: CardSize; className?: string; children?: React.ReactNode;
 }) {
   const [first, ...rest] = p.name.split(" ");
   const last = rest.join(" ") || first;
   const pos = (p.position ?? "").split(",").map((x) => x.trim()).filter(Boolean).join("/");
   const { face, logo, crest } = cardImages(p, size);
   const [c1] = teamColors(p.nbaTeam);
-  const loading = size === "thumb" || lazy ? "lazy" : undefined;
+  const loading = size === "large" ? undefined : "lazy";
   const injury = p.injury ? (INJURY[p.injury.toUpperCase()] ?? p.injury.slice(0, 3).toUpperCase()) : null;
   const st = p.stats;
   const thumb = size === "thumb";
+  const small = size === "small";
   const stats = st ? [["PTS", st.ppg], ["REB", st.rpg], ["AST", st.apg], ["STL", st.spg], ["BLK", st.bpg], ["GP", st.gp]] as const : [];
   return (
     <div className={`@container ${s.card} ${s[tier(st?.fppg)]} ${bid !== undefined ? s.bid : ""} ${className}`}>
@@ -60,15 +61,15 @@ export default function PlayerCard({ p, bid, size = "large", lazy = false, class
         )}
 
         {/* name across the middle, then the numbers: two columns, the values lined up on their right */}
-        <div className={`absolute inset-x-[8cqw] ${thumb ? "top-[66%]" : "top-[59%]"} text-center`}>
-          <div className={`font-display truncate ${thumb ? "text-[14cqw]" : "text-[10.5cqw]"} uppercase leading-[0.9] tracking-[0.04em]`}>{last}</div>
+        <div className={`absolute inset-x-[6cqw] ${thumb ? "top-[66%]" : "top-[58%]"} text-center`}>
+          <div className={`font-display truncate ${thumb ? "text-[14cqw]" : small ? "text-[12cqw]" : "text-[10.5cqw]"} uppercase leading-[0.9] tracking-[0.04em]`}>{last}</div>
         </div>
         {!thumb && stats.length > 0 && (
-          <div className="absolute inset-x-[8cqw] top-[69%] grid grid-cols-2 gap-x-[2cqw] leading-none">
+          <div className="absolute inset-x-[6cqw] top-[69%] grid grid-cols-2 gap-x-[2cqw] leading-none">
             {stats.map(([label, v]) => (
-              <div key={label} className="flex items-baseline gap-[2.2cqw] py-[1.5cqw]">
-                <span className="font-display w-[15cqw] text-right text-[9.5cqw]">{label === "GP" ? v : v.toFixed(1)}</span>
-                <span className={`${s.dim} text-[4.2cqw] font-bold tracking-[0.1em]`}>{label}</span>
+              <div key={label} className={`flex items-baseline ${small ? "gap-[1.5cqw] py-[1.6cqw]" : "gap-[2.2cqw] py-[1.5cqw]"}`}>
+                <span className={`font-display text-right ${small ? "w-[16cqw] text-[11cqw]" : "w-[15cqw] text-[9.5cqw]"}`}>{label === "GP" ? v : v.toFixed(1)}</span>
+                <span className={`${s.dim} font-bold ${small ? "text-[5cqw] tracking-[0.06em]" : "text-[4.2cqw] tracking-[0.1em]"}`}>{label}</span>
               </div>
             ))}
           </div>

@@ -109,7 +109,7 @@ export type Room = {
   teams: RoomTeam[];
   rounds: RoundInfo[];
   round: RoundInfo | null; // live round, or the next one while waiting
-  upcoming: { round: RoundInfo; players: CardPlayer[] }[]; // the rounds still to come, with their players (while waiting)
+  upcoming: { round: RoundInfo; players: CardPlayer[] }[]; // the rounds still to come, with their players (until the contracts)
   players: CardPlayer[];
   myBids: Record<string, number>;
   dropped: string[]; // players I dropped since the no-rebuy rule began: I can't bid on them
@@ -271,7 +271,7 @@ export async function room(team: Team): Promise<Room> {
     rounds: rounds.map((r) => roundInfo(r)),
     round: current ? roundInfo(current, current === next ? first : null) : null,
     // the rounds to come and their players, each with its times from the schedule (none once the schedule is stale)
-    upcoming: phase === "waiting" || phase === "reveal" ? rounds.filter((r) => r.status === "setup").map((r, i) => ({
+    upcoming: phase === "waiting" || phase === "bidding" || phase === "reveal" ? rounds.filter((r) => r.status === "setup").map((r, i) => ({
       round: roundInfo(r, first && faSchedule ? slot(faSchedule, opened + i) : null),
       players: freeCards((up.data ?? []).filter((x) => x.round_id === r.id)),
     })) : [],
