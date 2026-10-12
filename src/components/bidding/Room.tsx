@@ -214,27 +214,32 @@ function Heading({ title, right }: { title: React.ReactNode; right?: React.React
 }
 
 // Between rounds: when the next one opens, the rounds to come with their players, and the round that just finished.
+// The rounds still to come, each with its players: small cards, four a row, with the numbers (they're what GMs study
+// all week). `countdown`: a running clock to the first one (the waiting screen).
+function Upcoming({ data, skew, countdown }: { data: Data; skew: number; countdown: boolean }) {
+  return data.upcoming.map(({ round, players }, i) => (
+    <section key={round.id} className="space-y-3">
+      <Heading
+        title={roundName(round)}
+        right={round.opensAt ? <>Opens <When iso={round.opensAt} />{countdown && i === 0 && <> · <TimeLeft iso={round.opensAt} skew={skew} serverNow={data.now} /></>}</> : "Not scheduled yet"}
+      />
+      <div className="grid grid-cols-4 gap-2 sm:grid-cols-8">
+        {players.map((p, k) => (
+          <motion.div key={p.id} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: Math.min(k, 8) * 0.03, duration: 0.3, ease }}>
+            <Link href={`/players/${p.id}`} transitionTypes={FORWARD} className="block active:opacity-80">
+              <PlayerCard p={p} size="small" />
+            </Link>
+          </motion.div>
+        ))}
+      </div>
+    </section>
+  ));
+}
+
 function Waiting({ data, me, skew, onReplay }: { data: Data; me: RoomTeam; skew: number; onReplay: () => void }) {
   return (
     <>
-      {data.upcoming.map(({ round, players }, i) => (
-        <section key={round.id} className="space-y-3">
-          <Heading
-            title={i === 0 ? <>{roundName(round)}</> : roundName(round)}
-            right={round.opensAt ? <>Opens <When iso={round.opensAt} />{i === 0 && <> · <TimeLeft iso={round.opensAt} skew={skew} serverNow={data.now} /></>}</> : "Not scheduled yet"}
-          />
-          {/* small cards, four a row, with the numbers: the rounds are what GMs study all week */}
-          <div className="grid grid-cols-4 gap-2 sm:grid-cols-8">
-            {players.map((p, k) => (
-              <motion.div key={p.id} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: Math.min(k, 8) * 0.03, duration: 0.3, ease }}>
-                <Link href={`/players/${p.id}`} transitionTypes={FORWARD} className="block active:opacity-80">
-                  <PlayerCard p={p} size="small" />
-                </Link>
-              </motion.div>
-            ))}
-          </div>
-        </section>
-      ))}
+      <Upcoming data={data} skew={skew} countdown />
       {!data.upcoming.length && !data.last && <p className="text-sm text-muted">Nothing is scheduled yet.</p>}
       {data.last && <Results past results={data.last} teams={data.teams} me={me} skew={skew} serverNow={data.now} canRenounce={false} next={null} onReplay={onReplay} />}
     </>
@@ -285,6 +290,8 @@ function Bidding({ data, me, myBids, skew, onOpen, onReplay }: {
           ))}
         </div>
       </section>
+      {/* the rounds after this one, to plan the week's bids */}
+      <Upcoming data={data} skew={skew} countdown={false} />
       {data.last && <Results past results={data.last} teams={data.teams} me={me} skew={skew} serverNow={data.now} canRenounce={false} next={null} onReplay={onReplay} />}
     </>
   );
