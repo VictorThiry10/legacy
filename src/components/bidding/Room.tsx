@@ -86,7 +86,8 @@ export default function Room({ data, me: who, app }: { data: Data; me: { id: str
   // The show lives here, outside the page that changes with the phase, so moving on fades it out instead of
   // cutting it. It plays by itself the first time, except over a round that's open for bids (there it's a tap away).
   const results: RoundResults | null = data.phase === "reveal" && data.round && data.reveal ? { round: data.round, items: data.reveal, players: data.players } : data.last;
-  const revealRound = results?.round.id ?? null;
+  // One show per set of results: the round and the moment its bidding closed (a round run again, in a test, is new).
+  const revealRound = results ? `${results.round.id}:${results.round.closesAt ?? ""}` : null;
   const seen = useSeen(revealRound);
   const [replay, setReplay] = useState<string | null>(null); // the round being replayed
   const replaying = revealRound !== null && replay === revealRound;
@@ -431,7 +432,7 @@ function readSeen(round: string) {
   try {
     return localStorage.getItem(seenKey(round)) === "1";
   } catch {
-    return true;
+    return false; // storage off: the show plays once per visit (seenHere keeps it from looping)
   }
 }
 function markSeen(round: string) {
