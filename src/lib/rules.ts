@@ -117,8 +117,10 @@ export function resolveRound(
       awards.push({ playerId: pid, teamId: top.teamId, amount: top.amount, years: top.years, bidId: top.id, ...(tie && { tie }) });
     }
 
-    // find the first illegal team, void the winning bid that gives way: the lowest in the GM's priority (a bid he
-    // never ranked comes after the ranked ones), then the most recent
+    // find the first illegal team and void the winning bid that gives way. Down the GM's priority list (bids he
+    // never ranked come last, newest last), each win is kept if it fits with the ones kept above it; the first that
+    // doesn't fit is the one that gives way. So an expensive win that breaks the budget goes, and the cheaper ones
+    // below it that still fit stay (not: everything below it goes first).
     let changed = false;
     for (const t of teams) {
       const mine = awards.filter((a) => a.teamId === t.id);
@@ -126,10 +128,19 @@ export function resolveRound(
       const problem = feasible(t, mine, s);
       if (!problem) continue;
       const bidOf = (a: Award) => bids.find((b) => b.id === a.bidId)!;
-      const after = (y: Bid, x: Bid) => (y.priority ?? Infinity) > (x.priority ?? Infinity) || ((y.priority ?? Infinity) === (x.priority ?? Infinity) && y.createdAt > x.createdAt);
-      const latest = mine.reduce((x, y) => (after(bidOf(y), bidOf(x)) ? y : x));
-      dead.add(latest.bidId);
-      voided.push({ bidId: latest.bidId, reason: problem });
+      const rank = (a: Award) => bidOf(a).priority ?? Infinity;
+      const order = [...mine].sort((x, y) => rank(x) - rank(y) || bidOf(x).createdAt.localeCompare(bidOf(y).createdAt));
+      const kept: Award[] = [];
+      let gives = order[order.length - 1];
+      for (const a of order) {
+        if (!feasible(t, [...kept, a], s)) kept.push(a);
+        else {
+          gives = a;
+          break;
+        }
+      }
+      dead.add(gives.bidId);
+      voided.push({ bidId: gives.bidId, reason: problem });
       changed = true;
       break;
     }

@@ -239,3 +239,17 @@ test("no adds before the season: pickups and waiver bids open on 20 October 2026
   assert.equal(addsLocked(Date.parse("2026-10-19T22:59:59Z")), true);
   assert.equal(addsLocked(Date.parse("2026-10-19T23:00:00Z")), false);
 });
+
+test("over cap: an expensive win that breaks the budget gives way, the cheaper ones below it that fit stay", () => {
+  // A: $134m committed, 9 players, so $16m of space with 4 spots to fill ($1m kept for each spot still empty).
+  // Top on Miller 8 (1st), Knueppel 8 (2nd), Jerome 4 (3rd) and Bridges 3 (6th): Knueppel breaks the budget, the
+  // other three fit together. He keeps Miller, Jerome and Bridges; Knueppel goes to the next bidder.
+  const bids = [bid("A", "miller", 8, 1, 0, 1), bid("A", "knueppel", 8, 1, 1, 2), bid("A", "jerome", 4, 1, 2, 3), bid("A", "bridges", 3, 1, 3, 6), bid("B", "knueppel", 7)];
+  const r = resolveRound(["miller", "knueppel", "jerome", "bridges"], bids, [team("A", 134 * M, 9), team("B", 100 * M, 5)]);
+  const won = (p: string) => r.awards.find((a) => a.playerId === p)?.teamId;
+  assert.equal(won("miller"), "A");
+  assert.equal(won("jerome"), "A");
+  assert.equal(won("bridges"), "A");
+  assert.equal(won("knueppel"), "B");
+  assert.equal(r.voided.length, 1);
+});
