@@ -1,5 +1,6 @@
 "use client";
 import { Fragment, useEffect, useRef, useState } from "react";
+import { useVisible } from "./time";
 import { animate, AnimatePresence, motion, MotionConfig, useIsPresent, useMotionValue, useTransform } from "motion/react";
 import type { CardPlayer, Results, RoomTeam } from "@/lib/bidding";
 import { BID_STEP, money, type RevealItem } from "@/lib/rules";
@@ -97,8 +98,20 @@ function Stage({ item, player, teams, meId, leftovers, onStart, onFinish }: {
     live.current = present;
   });
   // The clock starts once his photo and logo are decoded (0.8 s at most), so the card never flips onto a blank face.
+  // It only runs while the page is on screen: hidden (the phone locked, another tab in front), it stops, and he
+  // starts over when the page is back. So a show never plays itself out unwatched and gets marked as seen.
   const { face, logo } = cardImages(player, "large");
+  const visible = useVisible();
+  const [wasVisible, setWasVisible] = useState(visible);
+  if (visible !== wasVisible) {
+    setWasVisible(visible);
+    if (visible) {
+      setStage(0); // back on screen: he starts over
+      setJumped(false);
+    }
+  }
   useEffect(() => {
+    if (!visible) return;
     let alive = true;
     let ts: ReturnType<typeof setTimeout>[] = [];
     ready([face, logo], 800).then(() => {
@@ -114,7 +127,7 @@ function Stage({ item, player, teams, meId, leftovers, onStart, onFinish }: {
       alive = false;
       ts.forEach(clearTimeout);
     };
-  }, [face, logo]);
+  }, [face, logo, visible]);
   // Only in the last chance round: tap to jump to the end of a player, tap again for the next.
   const tap = () => {
     if (!live.current || !leftovers) return;

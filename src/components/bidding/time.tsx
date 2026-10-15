@@ -37,3 +37,10 @@ export function left(secs: number) {
 export function TimeLeft({ iso, skew, serverNow }: { iso: string; skew: number; serverNow: number }) {
   return <span className="tabular-nums">{left(useSecondsLeft(Date.parse(iso), skew, serverNow))}</span>;
 }
+
+// Whether the page is on screen (the tab in front, the phone unlocked). True on the server.
+const onVisible = (cb: () => void) => {
+  document.addEventListener("visibilitychange", cb);
+  return () => document.removeEventListener("visibilitychange", cb);
+};
+export const useVisible = () => useSyncExternalStore(onVisible, () => document.visibilityState === "visible", () => true);
