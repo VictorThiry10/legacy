@@ -212,6 +212,36 @@ async function settle(roundId: string, season: number) {
   });
 }
 
+// The rows of the contract lengths screen: every contract signed this season (the auction, the rookie draft,
+// pickups), and my other contracts with 2+ seasons left (years = seasons left), since they use length slots too.
+async function lengthRows(season: number, teamId: string): Promise<{ signings: Signing[]; held: Signing[] }> {
+  const d = db();
+  const [signed, mine] = await Promise.all([
+    d.from("contracts").select("id, team_id, salary, years, player:players(*)").eq("season_signed", season).in("acquired_via", NEW_DEALS).eq("active", true),
+    d.from("contracts").select("id, team_id, salary, years, season_signed, acquired_via, player:players(*)").eq("team_id", teamId).eq("active", true),
+  ]);
+  return {
+    signings: (signed.data ?? []).flatMap((c) => {
+      const p = one(c.player);
+      return p ? [{ contractId: c.id, teamId: c.team_id, salary: Number(c.salary), years: c.years, player: cardOf(p) }] : [];
+    }),
+    held: (mine.data ?? []).flatMap((c) => {
+      const p = one(c.player);
+      const left = yearsLeft(c, season);
+      const signing = NEW_DEALS.includes(c.acquired_via) && c.season_signed === season;
+      return p && !signing && left >= 2 ? [{ contractId: c.id, teamId: c.team_id, salary: Number(c.salary), years: left, player: cardOf(p) }] : [];
+    }).sort((a, b) => b.years - a.years || b.salary - a.salary),
+  };
+}
+
+// The contract lengths screen ahead of its time (the commissioner, to try it while the auction is still on): the
+// room as it is, with the phase forced to "contracts" and the rows filled in. Saving lengths is real (they stay
+// editable until the lock); the lock buttons are left out.
+export async function lengthsPreview(team: Team): Promise<Room> {
+  const [r, { season }] = await Promise.all([room(team), getSettings()]);
+  return { ...r, ...(await lengthRows(season, team.id)), phase: "contracts", isCommish: false, round: null, players: [], reveal: null, upcoming: [], last: null };
+}
+
 export async function room(team: Team): Promise<Room> {
   const verified = commishVerified(team); // league login check, only does work for the commissioner
   const { season, rules, faLocked, faSchedule } = await getSettings();
@@ -240,9 +270,8 @@ export async function room(team: Team): Promise<Room> {
   // A second wave once the phase is known (nothing is live then). The finished round's players; for the contracts
   // screens the signings, and my other contracts, since the ones with 2+ seasons left count against the length limits.
   const contracts = phase === "contracts" || phase === "done";
-  const [signed, myContracts, donePlayers] = await Promise.all([
-    contracts ? d.from("contracts").select("id, team_id, salary, years, player:players(*)").eq("season_signed", season).in("acquired_via", NEW_DEALS).eq("active", true) : null,
-    contracts ? d.from("contracts").select("id, team_id, salary, years, season_signed, acquired_via, player:players(*)").eq("team_id", team.id).eq("active", true) : null,
+  const [lengths, donePlayers] = await Promise.all([
+    contracts ? lengthRows(season, team.id) : { signings: [], held: [] },
     doneItems.length ? d.from("players").select("*").in("id", doneItems.map((i) => i.playerId)) : null,
   ]);
   // Rows of the live round only (the reads ran side by side, so check they agree on which round that is).
@@ -283,16 +312,7 @@ export async function room(team: Team): Promise<Room> {
     reveal,
     canRenounce: phase === "reveal" && (!live?.settles_at || Date.parse(live.settles_at) > now),
     last: done && doneItems.length ? { round: roundInfo(done), items: doneItems, players: doneItems.flatMap((i) => cards.get(i.playerId) ?? []) } : null,
-    signings: (signed?.data ?? []).flatMap((c) => {
-      const p = one(c.player);
-      return p ? [{ contractId: c.id, teamId: c.team_id, salary: Number(c.salary), years: c.years, player: cardOf(p) }] : [];
-    }),
-    held: (myContracts?.data ?? []).flatMap((c) => {
-      const p = one(c.player);
-      const left = yearsLeft(c, season);
-      const signing = NEW_DEALS.includes(c.acquired_via) && c.season_signed === season;
-      return p && !signing && left >= 2 ? [{ contractId: c.id, teamId: c.team_id, salary: Number(c.salary), years: left, player: cardOf(p) }] : [];
-    }).sort((a, b) => b.years - a.years || b.salary - a.salary),
+    ...lengths,
     limits: rules.slotLimits,
     minSalary: rules.minSalary,
     v: fingerprint({
