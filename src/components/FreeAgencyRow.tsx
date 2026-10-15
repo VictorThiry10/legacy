@@ -17,7 +17,14 @@ export default function FreeAgencyRow({ s }: { s: AppStatus }) {
     : s.phase === "reveal" ? { title: `${round} results`, sub: <>Renounce until <When iso={s.round?.settlesAt ?? null} style="time" /></>, action: "See" }
     : s.signings ? { title: "Free agency contracts", sub: `Pick lengths for your ${s.signings} signing${s.signings === 1 ? "" : "s"}`, action: "Pick" }
     : { title: "Free agency is over", sub: "See every signing", action: s.isCommish ? "Lock" : undefined };
-  return <PendingRow href="/bidding" icon={<GavelIcon />} {...row} />;
+  // The commissioner, while the auction is on: the contract lengths screen ahead of its time, to try it.
+  const preview = s.isCommish && (s.phase === "waiting" || s.phase === "bidding" || s.phase === "reveal");
+  return (
+    <>
+      <PendingRow href="/bidding" icon={<GavelIcon />} {...row} />
+      {preview && <PendingRow href="/bidding/lengths" icon={<GavelIcon />} title="Contract lengths" sub="Preview" action="Try" />}
+    </>
+  );
 }
 
 const GavelIcon = () => (
