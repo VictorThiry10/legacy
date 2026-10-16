@@ -9,6 +9,7 @@ import { gamesBetween } from "./nba";
 import { lineupsFrom, savedUpTo } from "./lineup-store";
 import { rosters } from "./roster";
 import { buildSchedule, conferenceGroups, rehearsalSchedule, semifinalPairs, winner } from "./schedule";
+import { CONFERENCES, isConference } from "./conferences";
 import type { Row } from "./supabase/types";
 
 // The season: who plays whom each week, each team's frozen daily lineups and points, scores and standings.
@@ -49,7 +50,9 @@ export async function createSchedule(firstDay: string) {
   await d.from("lineup_points").delete().lt("day", firstDay);
   const ins = await d.from("matchups").insert(rows);
   if (ins.error) throw new Error(ins.error.message);
-  return `${weeks} regular season weeks${byConference ? " by conference" : ""}, then semifinals and a final (two weeks each).`;
+  return byConference
+    ? `${weeks} regular season weeks (everyone twice, then your conference once more), then conference semifinals and a final (two weeks each).`
+    : `${weeks} regular season weeks, then semifinals and a final (two weeks each).`;
 }
 
 // Commissioner: the preseason dress rehearsal. The teams that have joined play a mini season on real NBA
@@ -161,15 +164,22 @@ async function fillPlayoffs(ms: Matchup[]) {
   };
   const regularOver = regular.length > 0 && regular.every((m) => m.ends < now);
   if (regularOver && semis.length === 2 && semis.some((m) => !m.home_team_id)) {
-    const seeds = (await standings([...new Set(regular.flatMap((m) => [m.home_team_id!, m.away_team_id!]))])).map((s) => s.teamId);
-    const pairs = semifinalPairs(seeds);
+    const ids = [...new Set(regular.flatMap((m) => [m.home_team_id!, m.away_team_id!]))];
+    const [table, { data: teams }] = await Promise.all([standings(ids), db().from("teams").select("id, conference").in("id", ids)]);
+    const seeds = table.map((s) => s.teamId);
+    // with conferences: each one's top two, in the league's conference order (Paris, then London)
+    const conf = (id: string) => teams?.find((t) => t.id === id)?.conference;
+    const byConference = (teams ?? []).every((t) => isConference(t.conference)) && (teams ?? []).length === ids.length
+      ? Object.keys(CONFERENCES).map((c) => seeds.filter((id) => conf(id) === c))
+      : undefined;
+    const pairs = semifinalPairs(seeds, byConference);
     for (const [i, m] of semis.entries()) await set(m.id, ...pairs[i]);
     return;
   }
   if (final && !final.home_team_id && semis.length === 2 && semis.every((m) => m.home_team_id && m.ends < now)) {
     const s = await scores(semis);
     const [a, b] = semis.map((m) => winner({ home_team_id: m.home_team_id!, away_team_id: m.away_team_id! }, s.get(m.id)!.home, s.get(m.id)!.away));
-    await set(final.id, a, b); // the 1 v 4 winner hosts
+    await set(final.id, a, b); // the first semifinal's winner hosts
   }
 }
 

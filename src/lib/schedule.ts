@@ -30,23 +30,15 @@ export function scoringWeeks(firstDay: string, count: number): { week: number; s
   return out;
 }
 
-// Conferences: every team plays its conference rivals three times (the round robin three times over, homes
-// alternating) and the other conference's teams once, then one more week across so that 4 + 4 teams fill 14 weeks
-// (the first across round again, homes swapped). Two conference weeks, then one across, and so on.
+// Conferences: every team plays everyone twice (two legs, homes swapped), then once more against each of its
+// conference rivals (a third round robin inside each conference): 17 weeks for 4 + 4 teams. The playoffs then
+// seed by conference (semifinalPairs).
 export function conferenceRounds(a: string[], b: string[]): [string, string][][] {
-  const flip = (r: [string, string][]) => r.map(([h, w]) => [w, h] as [string, string]);
-  const within: [string, string][][] = [];
+  const legOne = roundRobin([...a, ...b]);
+  const legTwo = legOne.map((r) => r.map(([h, w]) => [w, h] as [string, string]));
   const [ra, rb] = [roundRobin(a), roundRobin(b)];
-  for (let c = 0; c < 3; c++) for (let r = 0; r < ra.length; r++) within.push(c % 2 ? [...flip(ra[r]), ...flip(rb[r])] : [...ra[r], ...rb[r]]);
-  const n = a.length;
-  const across: [string, string][][] = Array.from({ length: n }, (_, i) => a.map((x, j) => (i % 2 ? [b[(j + i) % n], x] : [x, b[(j + i) % n]]) as [string, string]));
-  across.push(flip(across[0]));
-  const weeks: [string, string][][] = [];
-  for (let i = 0, x = 0; i < within.length || x < across.length; ) {
-    for (let k = 0; k < 2 && i < within.length; k++) weeks.push(within[i++]);
-    if (x < across.length) weeks.push(across[x++]);
-  }
-  return weeks;
+  const third = ra.map((r, i) => [...r, ...(rb[i] ?? [])]);
+  return [...legOne, ...legTwo, ...third];
 }
 
 // Two conferences of the same size, from each team's conference; null when the teams don't split that way.
@@ -109,8 +101,10 @@ export function rehearsalSchedule(teamIds: string[], first: string, last: string
   ];
 }
 
-// Semifinals from the final standings (best first): 1 v 4 and 2 v 3, higher seed at home.
-export const semifinalPairs = (seeds: string[]): [string, string][] => [[seeds[0], seeds[3]], [seeds[1], seeds[2]]];
+// Semifinals from the final standings (best first). With conferences (each conference's standings, in the
+// league's conference order): its top two meet, 1st at home. Without: 1 v 4 and 2 v 3, higher seed at home.
+export const semifinalPairs = (seeds: string[], byConference?: string[][]): [string, string][] =>
+  byConference ? byConference.map((s) => [s[0], s[1]] as [string, string]) : [[seeds[0], seeds[3]], [seeds[1], seeds[2]]];
 
 // Who goes through: more points over the two weeks; a tie goes to the higher seed (home).
 export const winner = (m: { home_team_id: string; away_team_id: string }, home: number, away: number) =>
