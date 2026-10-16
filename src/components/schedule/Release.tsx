@@ -8,15 +8,15 @@ import type { Release } from "@/lib/schedule-release";
 import { teamColor, type Look } from "@/lib/team-look";
 
 const EASE = [0.22, 1, 0.36, 1] as const;
-// When each part comes in, in seconds from the open: the title, its words, the line under it, the opening
-// matchup, the first row of the season, the playoffs, the button.
-const T = { kicker: 0.15, word: 0.3, sub: 1.05, hero: 1.6, list: 3.4, playoffs: 4.8, button: 5.4 };
+// When each part comes in, in seconds from the open: the title's words, the opening matchup, the first week of
+// the season, the playoffs, the button.
+const T = { word: 0.2, hero: 1.4, list: 3.1, playoffs: 4.4, button: 5.0 };
 const ROW = 0.075; // between one row of the season and the next
 
 // The schedule release, as a show over the league app: the title slides up out of a mask, the GM's opening
 // matchup flies in from both sides and meets at a VS (a glow in each team's colour behind), then every week of
-// his season cascades in, then the playoffs, then Let's go. The page scrolls, so nothing has to leave to make
-// room. Closing fades out, then leaves.
+// his season cascades in, then the playoffs, then Let's go. Nothing but the schedule: no words of explanation.
+// The page scrolls, so nothing has to leave to make room. Closing fades out, then leaves.
 export default function ScheduleRelease({ data, onClose }: { data: Release; onClose: () => void }) {
   const [closing, setClosing] = useState(false);
   useScrollLock(); // the app behind stays still; the show itself scrolls (data-scrolls)
@@ -58,16 +58,10 @@ export default function ScheduleRelease({ data, onClose }: { data: Release; onCl
         </button>
 
         <div className="mx-auto max-w-lg px-5 pb-[max(3rem,env(safe-area-inset-bottom))] pt-[max(3.5rem,env(safe-area-inset-top))]">
-          <header>
-            <Kicker delay={T.kicker}>Legacy League · {data.season} season</Kicker>
-            <h1 className="font-display mt-3 text-[4.6rem] leading-[0.86] sm:text-8xl">
-              <Word delay={T.word}>Schedule</Word>
-              <Word delay={T.word + 0.14}>Release</Word>
-            </h1>
-            <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: T.sub, duration: 0.6 }} className="mt-4 text-sm text-white/55">
-              {data.weeks} weeks, every team twice. The top 4 go to the playoffs.
-            </motion.p>
-          </header>
+          <h1 className="font-display text-[4.6rem] leading-[0.86] sm:text-8xl">
+            <Word delay={T.word}>Schedule</Word>
+            <Word delay={T.word + 0.14}>Release</Word>
+          </h1>
 
           {/* the opening matchup */}
           <motion.section
@@ -109,8 +103,7 @@ export default function ScheduleRelease({ data, onClose }: { data: Release; onCl
 
           {/* every week */}
           <section aria-label="Your season" className="mt-8">
-            <Kicker delay={T.list - 0.25}>Your season</Kicker>
-            <ol className="mt-3 divide-y divide-white/[0.07] border-y border-white/[0.07]">
+            <ol className="divide-y divide-white/[0.07] border-y border-white/[0.07]">
               {data.games.map((g, i) => (
                 <motion.li
                   key={g.week}
@@ -138,23 +131,18 @@ export default function ScheduleRelease({ data, onClose }: { data: Release; onCl
             transition={{ delay: T.playoffs, duration: 0.6, ease: EASE }}
             className="mt-8 overflow-hidden rounded-3xl border border-amber-300/20 bg-gradient-to-b from-amber-300/[0.1] to-transparent px-4 py-4"
           >
-            <div className="flex items-baseline justify-between gap-3">
-              <Kicker tone="amber">Playoffs</Kicker>
-              <span className="text-xs text-amber-100/60">Top 4 · two weeks a round</span>
-            </div>
-            <ol className="mt-3 space-y-2.5">
+            <Kicker tone="amber">Playoffs</Kicker>
+            <ol className="mt-3 space-y-2">
               {data.rounds.map((r, i) => (
                 <motion.li
                   key={r.name}
                   initial={{ opacity: 0, x: -12 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: T.playoffs + 0.3 + i * 0.18, duration: 0.5, ease: EASE }}
+                  className="flex items-baseline justify-between gap-3"
                 >
-                  <div className="flex items-baseline justify-between gap-3">
-                    <span className="font-display text-2xl leading-none">{r.name}</span>
-                    <span className="num shrink-0 text-xs text-white/55">{r.dates}</span>
-                  </div>
-                  <div className="mt-0.5 text-xs text-white/45">{r.note}</div>
+                  <span className="font-display text-2xl leading-none">{r.name}</span>
+                  <span className="num shrink-0 text-xs text-white/55">{r.dates}</span>
                 </motion.li>
               ))}
             </ol>
