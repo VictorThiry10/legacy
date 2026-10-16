@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildSchedule, rehearsalSchedule, roundRobin, scoringWeeks, semifinalPairs, winner } from "./schedule";
+import { buildSchedule, conferenceGroups, conferenceRounds, rehearsalSchedule, roundRobin, scoringWeeks, semifinalPairs, winner } from "./schedule";
 
 test("round robin: 8 teams, 7 rounds, everyone meets everyone once", () => {
   const teams = ["a", "b", "c", "d", "e", "f", "g", "h"];
@@ -45,6 +45,52 @@ test("season: two legs, then semis and a final over two weeks each", () => {
   assert.deepEqual([semis[0].week, semis[0].starts, semis[0].ends], [15, "2027-01-25", "2027-02-07"]);
   assert.deepEqual([final[0].week, final[0].starts, final[0].ends], [17, "2027-02-08", "2027-02-21"]);
   assert.equal(semis[0].home_team_id, null);
+});
+
+test("conferences: rivals three times, the other conference once plus one more, 14 full weeks", () => {
+  const paris = ["p1", "p2", "p3", "p4"], london = ["l1", "l2", "l3", "l4"];
+  const weeks = conferenceRounds(paris, london);
+  assert.equal(weeks.length, 14);
+  const games = new Map<string, number>();
+  const homes = new Map<string, number>();
+  for (const w of weeks) {
+    assert.equal(w.length, 4);
+    assert.equal(new Set(w.flat()).size, 8); // everybody plays every week, once
+    for (const [h, a] of w) {
+      games.set([h, a].sort().join(), (games.get([h, a].sort().join()) ?? 0) + 1);
+      homes.set(h, (homes.get(h) ?? 0) + 1);
+    }
+  }
+  const same = (x: string, y: string) => x[0] === y[0];
+  let twice = 0;
+  for (const [pair, n] of games) {
+    const [x, y] = pair.split(",");
+    if (same(x, y)) assert.equal(n, 3, `${pair} should meet three times`);
+    else {
+      assert.ok(n === 1 || n === 2, `${pair} should meet once or twice`);
+      if (n === 2) twice++;
+    }
+  }
+  assert.equal(twice, 4); // one extra across game per team
+  const played = new Map<string, number>();
+  for (const w of weeks) for (const t of w.flat()) played.set(t, (played.get(t) ?? 0) + 1);
+  for (const t of [...paris, ...london]) {
+    assert.equal(played.get(t), 14);
+    assert.ok((homes.get(t) ?? 0) >= 5); // homes can't come out even: nine conference games each
+  }
+  // the weeks alternate: two within the conference, one across
+  assert.equal(same(...weeks[0][0]), true);
+  assert.equal(same(...weeks[2][0]), false);
+
+  // built into a season through buildSchedule, from each team's conference
+  const conf = (id: string) => (id[0] === "p" ? "paris" : "london");
+  const s = buildSchedule([...paris, ...london], "2026-10-19", conf);
+  assert.equal(s.filter((m) => m.round === "regular").length, 56);
+  assert.equal(s.filter((m) => m.round === "semi").length, 2);
+  // teams without conferences, or uneven ones, fall back to two legs
+  assert.equal(conferenceGroups(["a", "b", "c", "d"], () => null), null);
+  assert.equal(conferenceGroups(["a", "b", "c", "d"], (id) => (id === "a" ? "x" : "y")), null);
+  assert.deepEqual(conferenceGroups(["a", "b", "c", "d"], (id) => ("ab".includes(id) ? "y" : "x")), [["c", "d"], ["a", "b"]]);
 });
 
 test("playoffs: 1 v 4, 2 v 3; ties go to the higher seed", () => {

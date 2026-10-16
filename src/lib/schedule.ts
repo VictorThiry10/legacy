@@ -30,15 +30,48 @@ export function scoringWeeks(firstDay: string, count: number): { week: number; s
   return out;
 }
 
+// Conferences: every team plays its conference rivals three times (the round robin three times over, homes
+// alternating) and the other conference's teams once, then one more week across so that 4 + 4 teams fill 14 weeks
+// (the first across round again, homes swapped). Two conference weeks, then one across, and so on.
+export function conferenceRounds(a: string[], b: string[]): [string, string][][] {
+  const flip = (r: [string, string][]) => r.map(([h, w]) => [w, h] as [string, string]);
+  const within: [string, string][][] = [];
+  const [ra, rb] = [roundRobin(a), roundRobin(b)];
+  for (let c = 0; c < 3; c++) for (let r = 0; r < ra.length; r++) within.push(c % 2 ? [...flip(ra[r]), ...flip(rb[r])] : [...ra[r], ...rb[r]]);
+  const n = a.length;
+  const across: [string, string][][] = Array.from({ length: n }, (_, i) => a.map((x, j) => (i % 2 ? [b[(j + i) % n], x] : [x, b[(j + i) % n]]) as [string, string]));
+  across.push(flip(across[0]));
+  const weeks: [string, string][][] = [];
+  for (let i = 0, x = 0; i < within.length || x < across.length; ) {
+    for (let k = 0; k < 2 && i < within.length; k++) weeks.push(within[i++]);
+    if (x < across.length) weeks.push(across[x++]);
+  }
+  return weeks;
+}
+
+// Two conferences of the same size, from each team's conference; null when the teams don't split that way.
+export function conferenceGroups(teamIds: string[], conferenceOf: (id: string) => string | null | undefined): [string[], string[]] | null {
+  const groups = new Map<string, string[]>();
+  for (const id of teamIds) {
+    const c = conferenceOf(id);
+    if (!c) return null;
+    groups.set(c, [...(groups.get(c) ?? []), id]);
+  }
+  const [a, b] = [...groups.keys()].sort().map((k) => groups.get(k)!);
+  return a && b && groups.size === 2 && a.length === b.length && a.length >= 2 ? [a, b] : null;
+}
+
 export type ScheduleRow = { week: number; starts: string; ends: string; round: "regular" | "semi" | "final"; home_team_id: string | null; away_team_id: string | null };
 
 /**
- * The season: two legs (every pairing twice, home and away swapped), then semifinals and a final,
- * each played over two weeks (total points). Playoff teams are left empty until the standings decide them.
+ * The season: by conference when the teams have them (conferenceRounds), otherwise two legs (every pairing twice,
+ * home and away swapped); then semifinals and a final, each played over two weeks (total points). Playoff teams
+ * are left empty until the standings decide them.
  */
-export function buildSchedule(teamIds: string[], firstDay: string): ScheduleRow[] {
+export function buildSchedule(teamIds: string[], firstDay: string, conferenceOf?: (id: string) => string | null | undefined): ScheduleRow[] {
+  const groups = conferenceOf ? conferenceGroups(teamIds, conferenceOf) : null;
   const legOne = roundRobin(teamIds);
-  const rounds = [...legOne, ...legOne.map((r) => r.map(([h, a]) => [a, h] as [string, string]))];
+  const rounds = groups ? conferenceRounds(...groups) : [...legOne, ...legOne.map((r) => r.map(([h, a]) => [a, h] as [string, string]))];
   const weeks = scoringWeeks(firstDay, rounds.length + 4);
   const regular: ScheduleRow[] = rounds.flatMap((pairs, i) =>
     pairs.map(([home, away]) => ({ ...weeks[i], round: "regular" as const, home_team_id: home, away_team_id: away })),
