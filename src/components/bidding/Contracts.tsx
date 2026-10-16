@@ -8,6 +8,7 @@ import { headshot } from "@/lib/names";
 import { money } from "@/lib/rules";
 import * as A from "@/app/(league)/bidding/actions";
 import PlayerCard from "./PlayerCard";
+import ClientTime from "../ClientTime";
 import { BTN, GHOST, Gm, PRIMARY } from "./ui";
 
 const MAX_YEARS = 4;
@@ -50,7 +51,10 @@ export default function Contracts({ data }: { data: Room }) {
     <>
       {!locked && mine.length > 0 && (
         <section className="space-y-3">
-          <h2 className="text-xl font-semibold">Contract lengths</h2>
+          <div>
+            <h2 className="text-xl font-semibold">Contract lengths</h2>
+            {data.lockAt && <p className="mt-0.5 text-xs text-white/45">Lock <ClientTime iso={data.lockAt} mode="day" /> <ClientTime iso={data.lockAt} /></p>}
+          </div>
           {/* the slots: a circle per long contract allowed this season, with the face of the player in it; empty
               circles are free; last season's players sit in theirs with a small lock. A face slides from one
               column to another as its length changes. Red when a column has more faces than circles. */}
