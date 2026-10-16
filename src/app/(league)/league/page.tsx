@@ -12,6 +12,7 @@ import Slide, { FORWARD } from "@/components/Slide";
 import PushToggle from "@/components/PushToggle";
 import { Dot } from "@/components/PendingRow";
 import { head, TeamCell } from "./ui";
+import { CONFERENCES, isConference, type Conference } from "@/lib/conferences";
 
 export const dynamic = "force-dynamic";
 
@@ -64,28 +65,42 @@ const pct = (r: Standing) => {
   return v >= 1 ? "1.000" : v.toFixed(3).replace(/^0/, "");
 };
 
+// By conference when every team has one (the playoffs seed by conference): each ranked on its own, games back
+// within it, a line under the two that would go through. One table otherwise.
 async function Standings({ teams, myId }: { teams: TeamSummary[]; myId?: string }) {
   const table = await load(() => standings(teams.map((t) => t.id)));
   if ("err" in table) return <p className="bg-card px-4 py-4 text-sm text-bad">{table.err}</p>;
-  const lead = table.ok[0];
-  const gb = (r: Standing) => {
-    const g = (lead.w - r.w + (r.l - lead.l)) / 2;
-    return g <= 0 ? "-" : String(g);
-  };
+  const byConference = teams.every((t) => isConference(t.conference));
+  const groups = byConference
+    ? (Object.keys(CONFERENCES) as Conference[]).map((c) => ({ title: CONFERENCES[c], rows: table.ok.filter((r) => teams.find((t) => t.id === r.teamId)?.conference === c) }))
+    : [{ title: "League standings", rows: table.ok }];
+  const cols = "grid grid-cols-[1.5rem_minmax(0,1fr)_4.5rem_3.5rem_2.5rem] items-center gap-2";
   return (
     <div className="bg-card">
-      <div className={`grid grid-cols-[1.5rem_minmax(0,1fr)_4.5rem_3.5rem_2.5rem] items-center gap-2 border-y border-line px-4 py-2 ${head}`}>
-        <span /><span>League standings</span><span className="text-center">Record</span><span className="text-center">Win%</span><span className="text-center">GB</span>
-      </div>
-      {table.ok.map((r, i) => {
-        const t = teams.find((x) => x.id === r.teamId);
+      {groups.map(({ title, rows }) => {
+        const lead = rows[0];
+        const gb = (r: Standing) => {
+          const g = (lead.w - r.w + (r.l - lead.l)) / 2;
+          return g <= 0 ? "-" : String(g);
+        };
         return (
-          <div key={r.teamId} className={`grid grid-cols-[1.5rem_minmax(0,1fr)_4.5rem_3.5rem_2.5rem] items-center gap-2 border-b border-line/60 px-4 py-3 ${r.teamId === myId ? "bg-blue/10" : ""}`}>
-            <span className="text-muted">{i + 1}</span>
-            <TeamCell t={t} />
-            <span className="text-center num">{r.w}-{r.l}-{r.t}</span>
-            <span className="text-center num">{pct(r)}</span>
-            <span className="text-center num text-muted">{gb(r)}</span>
+          <div key={title}>
+            <div className={`${cols} border-y border-line px-4 py-2 ${head}`}>
+              <span /><span>{title}</span><span className="text-center">Record</span><span className="text-center">Win%</span><span className="text-center">GB</span>
+            </div>
+            {rows.map((r, i) => {
+              const t = teams.find((x) => x.id === r.teamId);
+              const line = byConference && i === 1 && rows.length > 2; // the playoff line
+              return (
+                <div key={r.teamId} className={`${cols} px-4 py-3 ${line ? "border-b-2 border-line" : "border-b border-line/60"} ${r.teamId === myId ? "bg-blue/10" : ""}`}>
+                  <span className="text-muted">{i + 1}</span>
+                  <TeamCell t={t} />
+                  <span className="text-center num">{r.w}-{r.l}-{r.t}</span>
+                  <span className="text-center num">{pct(r)}</span>
+                  <span className="text-center num text-muted">{gb(r)}</span>
+                </div>
+              );
+            })}
           </div>
         );
       })}
@@ -143,8 +158,13 @@ async function Playoffs({ team }: { team: (id: string | null) => TeamSummary | u
   if ("err" in r) return <p className="bg-card px-4 py-4 text-sm text-bad">{r.err}</p>;
   const { all, s } = r.ok;
   if (!all.length) return <p className="bg-card px-4 py-6 text-center text-sm text-muted">No playoffs yet.</p>;
+  // the semifinals seed by conference when the teams have them (Paris, then London), 1 v 4 and 2 v 3 otherwise
+  const names = Object.values(CONFERENCES);
+  const byConference = (await teamSummaries()).every((t) => isConference(t.conference));
   const placeholder = (m: Matchup, i: number) =>
-    m.round === "final" ? ["Semifinal 1 winner", "Semifinal 2 winner"] : i === 0 ? ["4th seed", "1st seed"] : ["3rd seed", "2nd seed"];
+    m.round === "final" ? ["Semifinal 1 winner", "Semifinal 2 winner"]
+    : byConference ? [`${names[i]} 2nd seed`, `${names[i]} 1st seed`]
+    : i === 0 ? ["4th seed", "1st seed"] : ["3rd seed", "2nd seed"];
   return (
     <div className="bg-card">
       {(["semi", "final"] as const).map((round) => {

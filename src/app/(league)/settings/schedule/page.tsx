@@ -4,6 +4,7 @@ import { today, weekLabel } from "@/lib/dates";
 import ActionForm from "@/components/ActionForm";
 import Field from "@/components/Field";
 import { buildSeason, rehearse } from "../actions";
+import { CONFERENCES, isConference } from "@/lib/conferences";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +14,8 @@ export default async function Schedule() {
   const started = ms.some((m) => !m.is_test && m.starts <= today());
   const testing = ms.some((m) => m.is_test);
   const full = teams.length === leagueSize;
+  const names = Object.values(CONFERENCES);
+  const semiSeeds = teams.length && teams.every((t) => isConference(t.conference)) ? names.map((n) => `${n} 1st vs 2nd`) : ["1st vs 4th", "2nd vs 3rd"];
   const group = (round: string) => {
     const rows = ms.filter((m) => m.round === round);
     return [...new Set(rows.map((m) => m.week))].map((w) => rows.filter((m) => m.week === w));
@@ -59,7 +62,7 @@ export default async function Schedule() {
           <section className="space-y-2">
             <h2 className="font-semibold">Playoffs</h2>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {group("semi").map((games) => <Week key="semi" games={games} seeds={["1st vs 4th", "2nd vs 3rd"]} />)}
+              {group("semi").map((games) => <Week key="semi" games={games} seeds={semiSeeds} />)}
               {group("final").map((games) => <Week key="final" games={games} seeds={["Semifinal winners"]} />)}
             </div>
           </section>
