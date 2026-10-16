@@ -4,6 +4,7 @@ import Link from "next/link";
 import { AnimatePresence, motion } from "motion/react";
 import { FORWARD } from "../Slide";
 import type { Room } from "@/lib/bidding";
+import { headshot } from "@/lib/names";
 import { money } from "@/lib/rules";
 import * as A from "@/app/(league)/bidding/actions";
 import PlayerCard from "./PlayerCard";
@@ -50,25 +51,38 @@ export default function Contracts({ data }: { data: Room }) {
       {!locked && mine.length > 0 && (
         <section className="space-y-3">
           <h2 className="text-xl font-semibold">Contract lengths</h2>
-          {/* the slots: a pip per long contract allowed this season, filled as they're used (locked when all are), red when over */}
+          {/* the slots: a circle per long contract allowed this season, with the face of the player in it; empty
+              circles are free; last season's players sit in theirs with a small lock. A face slides from one
+              column to another as its length changes. Red when a column has more faces than circles. */}
           <div className="grid grid-cols-3 divide-x divide-line overflow-hidden rounded-2xl border border-line bg-card">
             {LONG.map((n) => {
-              const used = count(n), max = data.limits[n] ?? 0;
-              const bad = used > max, full = used === max;
+              const max = data.limits[n] ?? 0;
+              const faces = [
+                ...mine.filter((s) => len(s.contractId, s.years) === n).map((s) => ({ ...s, locked: false })),
+                ...data.held.filter((h) => h.years === n).map((h) => ({ ...h, locked: true })),
+              ];
+              const bad = faces.length > max;
               return (
                 <div key={n} className={`flex flex-col items-center gap-2 py-3 transition-colors ${bad ? "bg-bad/10" : ""}`}>
                   <span className={`text-xs font-semibold uppercase tracking-[0.12em] ${bad ? "text-bad" : "text-muted"}`}>{n} yrs</span>
                   <div className="flex items-center gap-1.5">
-                    {Array.from({ length: Math.max(max, used) }, (_, i) => (
-                      <motion.span
-                        key={i}
-                        layout
-                        animate={{ scale: i === used - 1 ? [1, 1.35, 1] : 1 }}
-                        transition={{ duration: 0.3 }}
-                        className={`h-2.5 w-2.5 rounded-full transition-colors ${i < used ? (bad ? "bg-bad" : "bg-crimson") : "ring-1 ring-inset ring-line"}`}
-                      />
-                    ))}
-                    {full && <span className={`ml-0.5 ${bad ? "text-bad" : "text-muted"}`}><LockIcon /></span>}
+                    {Array.from({ length: Math.max(max, faces.length) }, (_, i) => {
+                      const f = faces[i];
+                      if (!f) return <span key={`free-${i}`} className="h-7 w-7 rounded-full ring-1 ring-inset ring-line" />;
+                      const face = headshot(f.player.headshot, 96);
+                      return (
+                        <motion.span
+                          key={f.contractId}
+                          layoutId={`slot-${f.contractId}`}
+                          transition={{ type: "spring", stiffness: 420, damping: 32 }}
+                          title={f.player.name}
+                          className={`relative h-7 w-7 overflow-hidden rounded-full bg-line ring-2 ${bad && i >= max ? "ring-bad" : "ring-card"} ${f.locked ? "opacity-60 grayscale" : ""}`}
+                        >
+                          {face && <img src={face} alt={f.player.name} decoding="async" className="h-full w-full object-cover object-top" />}
+                          {f.locked && <span className="absolute inset-0 grid place-items-center bg-black/35 text-white [&_svg]:h-3 [&_svg]:w-3"><LockIcon /></span>}
+                        </motion.span>
+                      );
+                    })}
                   </div>
                 </div>
               );
