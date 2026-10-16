@@ -109,6 +109,7 @@ function Intro() {
     <div className="relative flex h-full flex-col items-center justify-center px-6 text-center">
       <Flash at={at} />
       <Glow at={at} color="#ffffff" />
+      <Burst at={at} color="#ffffff" />
       <motion.span
         initial={{ opacity: 0, letterSpacing: "0.7em" }}
         animate={{ opacity: 1, letterSpacing: "0.42em" }}
@@ -125,23 +126,22 @@ function Intro() {
   );
 }
 
-// 2. "You have been placed in", the dots, the city, confetti, its icon, the three others.
+// 2. "You have been placed in", the dots, the city, confetti, its icon.
 function Placed({ data }: { data: ConferenceReveal }) {
   const mine = data.mine;
   const tint = TINT[mine];
   const at = 2.7; // when the city lands
-  const others = data[mine].teams.filter((t) => t.id !== data.me).map((t) => t.gm);
-  const list = others.length > 1 ? `${others.slice(0, -1).join(", ")} and ${others[others.length - 1]}` : others.join("");
   return (
     <div className="relative flex h-full flex-col items-center justify-center px-6 text-center">
       <Glow at={at} color={tint} />
       <Confetti colors={PAPER[mine]} from={at} />
       <Flash at={at} />
+      <Burst at={at} color={tint} />
       <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3, duration: 0.8 }} className="relative text-sm text-white/55">
         You have been placed in
       </motion.span>
       <Dots at={1.1} until={at} />
-      <Stamp at={at} className="font-display relative block px-3 text-[5.5rem] leading-[0.92] tracking-[0.04em] sm:text-9xl" style={{ color: tint }}>
+      <Stamp at={at} className="font-display relative z-[1] block px-3 text-[5.5rem] leading-[0.92] tracking-[0.04em] sm:text-9xl" style={{ color: tint }}>
         {data[mine].name}
       </Stamp>
       <motion.img
@@ -153,11 +153,6 @@ function Placed({ data }: { data: ConferenceReveal }) {
         transition={{ delay: at + 0.9, duration: 0.8, ease: EASE }}
         className="relative mt-5 h-36 w-36 sm:h-48 sm:w-48"
       />
-      {!!others.length && (
-        <motion.p initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: at + 1.6, duration: 0.7, ease: EASE }} className="relative mt-5 text-base text-white/75">
-          with <span className="font-semibold text-white">{list}</span>
-        </motion.p>
-      )}
     </div>
   );
 }
@@ -240,6 +235,35 @@ function Flash({ at }: { at: number }) {
     </>
   );
 }
+
+// Sparks flying out from the middle of the screen the moment something lands, as in the auction's reveal
+// (bidding/RevealShow.tsx), only bigger and in a colour. Nothing shows before the moment.
+function Burst({ at, color }: { at: number; color: string }) {
+  return (
+    <div aria-hidden className="pointer-events-none absolute left-1/2 top-1/2">
+      {Array.from({ length: 36 }, (_, k) => {
+        const a = (k / 36) * Math.PI * 2 + rand(k, 1) * 0.3;
+        const d = 170 + rand(k, 2) * 170;
+        const size = 3 + Math.round(rand(k, 3) * 4);
+        return (
+          <motion.span
+            key={k}
+            className="absolute block rounded-full"
+            style={{ width: size, height: size, background: color, boxShadow: `0 0 10px ${color}` }}
+            initial={{ x: 0, y: 0, opacity: 0, scale: 1 }}
+            animate={{ x: [0, 0, Math.cos(a) * d], y: [0, 0, Math.sin(a) * d], opacity: [0, 1, 0], scale: [1, 1, 0.3] }}
+            transition={{ delay: at, duration: 1.3 + rand(k, 4) * 0.6, times: [0, 0.03, 1], ease: [0.1, 0.8, 0.3, 1] }}
+          />
+        );
+      })}
+    </div>
+  );
+}
+// The same "random" numbers on every render, so the sparks don't jump.
+const rand = (k: number, n: number) => {
+  const x = Math.sin(k * 127.1 + n * 311.7) * 43758.5453;
+  return x - Math.floor(x);
+};
 
 // A soft glow in a colour behind the middle of the screen, there from the moment something lands.
 function Glow({ at, color }: { at: number; color: string }) {
