@@ -49,14 +49,30 @@ export default function Contracts({ data }: { data: Room }) {
     <>
       {!locked && mine.length > 0 && (
         <section className="space-y-3">
-          <div className="flex items-end justify-between gap-3">
-            <h2 className="text-xl font-semibold">Contract lengths</h2>
-            <div className="flex gap-4 text-sm tabular-nums">
-              {LONG.map((n) => {
-                const bad = count(n) > (data.limits[n] ?? 0);
-                return <span key={n} className={bad ? "font-semibold text-bad" : "text-muted"}>{n}y {count(n)}/{data.limits[n] ?? 0}</span>;
-              })}
-            </div>
+          <h2 className="text-xl font-semibold">Contract lengths</h2>
+          {/* the slots: a pip per long contract allowed this season, filled as they're used (locked when all are), red when over */}
+          <div className="grid grid-cols-3 divide-x divide-line overflow-hidden rounded-2xl border border-line bg-card">
+            {LONG.map((n) => {
+              const used = count(n), max = data.limits[n] ?? 0;
+              const bad = used > max, full = used === max;
+              return (
+                <div key={n} className={`flex flex-col items-center gap-2 py-3 transition-colors ${bad ? "bg-bad/10" : ""}`}>
+                  <span className={`text-xs font-semibold uppercase tracking-[0.12em] ${bad ? "text-bad" : "text-muted"}`}>{n} yrs</span>
+                  <div className="flex items-center gap-1.5">
+                    {Array.from({ length: Math.max(max, used) }, (_, i) => (
+                      <motion.span
+                        key={i}
+                        layout
+                        animate={{ scale: i === used - 1 ? [1, 1.35, 1] : 1 }}
+                        transition={{ duration: 0.3 }}
+                        className={`h-2.5 w-2.5 rounded-full transition-colors ${i < used ? (bad ? "bg-bad" : "bg-crimson") : "ring-1 ring-inset ring-line"}`}
+                      />
+                    ))}
+                    {full && <span className={`ml-0.5 ${bad ? "text-bad" : "text-muted"}`}><LockIcon /></span>}
+                  </div>
+                </div>
+              );
+            })}
           </div>
           <div className="overflow-hidden rounded-2xl border border-line bg-card">
             {mine.map((s) => {
