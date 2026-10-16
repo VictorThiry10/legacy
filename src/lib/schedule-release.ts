@@ -4,7 +4,6 @@ import { fail } from "./db";
 import { monthDay } from "./dates";
 import { lotteryPrompt } from "./draft";
 import { getSettings, type Team } from "./league";
-import { seasonLabel } from "./player-stats";
 import { matchups } from "./season";
 import type { Look } from "./team-look";
 
@@ -12,8 +11,8 @@ import type { Look } from "./team-look";
 // built (components/schedule/Release.tsx), and never again once he has closed it.
 
 export type ReleaseGame = { week: number; starts: string; dates: string; home: boolean; opponent: Look };
-export type ReleaseRound = { name: string; dates: string; note: string };
-export type Release = { season: string; me: Look; games: ReleaseGame[]; rounds: ReleaseRound[]; weeks: number; teams: number };
+export type ReleaseRound = { name: string; dates: string };
+export type Release = { me: Look; games: ReleaseGame[]; rounds: ReleaseRound[] };
 
 // What this GM's show says, or null: no real schedule yet, already seen, or the lottery show comes first.
 export async function scheduleRelease(team: Team): Promise<Release | null> {
@@ -37,18 +36,12 @@ export async function scheduleRelease(team: Team): Promise<Release | null> {
   const semi = real.find((m) => m.round === "semi");
   const final = real.find((m) => m.round === "final");
   return {
-    season: seasonLabel(season + 1),
     me: look(team.id),
     games: mine.map((m) => {
       const home = m.home_team_id === team.id;
       return { week: m.week, starts: monthDay(m.starts), dates: span(m), home, opponent: look(home ? m.away_team_id : m.home_team_id) };
     }),
-    rounds: [
-      ...(semi ? [{ name: "Semifinals", dates: span(semi), note: "1st vs 4th · 2nd vs 3rd" }] : []),
-      ...(final ? [{ name: "Final", dates: span(final), note: "The semifinal winners" }] : []),
-    ],
-    weeks: new Set(real.filter((m) => m.round === "regular").map((m) => m.week)).size,
-    teams: (teams ?? []).length,
+    rounds: [...(semi ? [{ name: "Semifinals", dates: span(semi) }] : []), ...(final ? [{ name: "Final", dates: span(final) }] : [])],
   };
 }
 
