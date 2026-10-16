@@ -28,7 +28,8 @@ export const getSettings = cache(async () => {
     leagueName: s?.league_name ?? "Legacy League",
     leagueSize: s?.league_size ?? 8,
     waiverHours: s?.waiver_hours ?? 24, // a dropped player stays on waivers this long, then until the next 8:00 London
-    faLocked: s?.fa_locked ?? false, // free agency contract lengths locked by the commissioner
+    faLockAt: s?.fa_lock_at ?? null, // when the free agency contract lengths lock by themselves (null: only by hand)
+    faLocked: (s?.fa_locked ?? false) || (!!s?.fa_lock_at && Date.parse(s.fa_lock_at) <= Date.now()), // locked by hand, or the time has come
     faSchedule: parseSchedule(s?.fa_schedule ?? null), // free agency by the clock (rules.ts), null: nothing opens by itself
     scoring: { ...SCORING, ...(s?.scoring as Partial<Scoring> | null) } as Scoring,
     rules,

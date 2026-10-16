@@ -120,6 +120,7 @@ export type Room = {
   signings: Signing[];
   held: Signing[]; // my other contracts with 2+ seasons left (years = seasons left): they use length slots too
   limits: Record<number, number>; // contract lengths: years left -> how many a team can have
+  lockAt: string | null; // when the lengths lock by themselves (settings.fa_lock_at)
   minSalary: number;
   v: string; // the room's fingerprint (what pulse() returns), so the page knows if a poll brings news
 };
@@ -244,7 +245,7 @@ export async function lengthsPreview(team: Team): Promise<Room> {
 
 export async function room(team: Team): Promise<Room> {
   const verified = commishVerified(team); // league login check, only does work for the commissioner
-  const { season, rules, faLocked, faSchedule } = await getSettings();
+  const { season, rules, faLocked, faLockAt, faSchedule } = await getSettings();
   const d = db();
   // Everything in one wave of reads: the open round's players and bids come through an inner join on the
   // round (status and season), so they don't wait for the rounds list.
@@ -314,6 +315,7 @@ export async function room(team: Team): Promise<Room> {
     last: done && doneItems.length ? { round: roundInfo(done), items: doneItems, players: doneItems.flatMap((i) => cards.get(i.playerId) ?? []) } : null,
     ...lengths,
     limits: rules.slotLimits,
+    lockAt: faLockAt,
     minSalary: rules.minSalary,
     v: fingerprint({
       rounds, faLocked, bidders: [...bidders], renounces: ren.data?.length ?? 0, years: (lens.data ?? []).map((l) => l.years), teams: summaries.length,
@@ -357,10 +359,10 @@ export async function pulse(): Promise<string> {
 
 // The league app's way in (the Team page's to-do card): where free agency is for this team. Null before any round
 // is set up and once contracts are locked.
-export type AppStatus = { phase: Exclude<Phase, "done">; round: RoundInfo | null; isCommish: boolean; signings: number };
+export type AppStatus = { phase: Exclude<Phase, "done">; round: RoundInfo | null; isCommish: boolean; signings: number; lockAt: string | null };
 
 export async function appStatus(team: Team): Promise<AppStatus | null> {
-  const { season, faLocked, faSchedule } = await getSettings();
+  const { season, faLocked, faLockAt, faSchedule } = await getSettings();
   const { data: rounds } = await db().from("rounds").select("*").eq("season", season).order("number");
   if (!rounds?.length) return null;
   const now = Date.now();
@@ -370,7 +372,7 @@ export async function appStatus(team: Team): Promise<AppStatus | null> {
     ? await db().from("contracts").select("id", { count: "exact", head: true }).eq("team_id", team.id).eq("season_signed", season).in("acquired_via", NEW_DEALS).eq("active", true)
     : { count: 0 };
   const round = live ? roundInfo(live) : next ? roundInfo(next, nextTimes(rounds, faSchedule, now)) : null;
-  return { phase, round, isCommish: team.is_commish, signings: count ?? 0 };
+  return { phase, round, isCommish: team.is_commish, signings: count ?? 0, lockAt: faLockAt };
 }
 
 // ---------- GM moves ----------
@@ -472,7 +474,8 @@ const isoTimes = (t: Times) => ({ opens: t ? iso(t.opens) : null, closes: t ? is
 
 export async function lockContracts(team: Team, locked: boolean) {
   await commish(team);
-  const { error } = await db().from("settings").update({ fa_locked: locked }).eq("id", 1);
+  // unlocking also drops the time the lengths would lock by themselves, or they would lock again at once
+  const { error } = await db().from("settings").update(locked ? { fa_locked: true } : { fa_locked: false, fa_lock_at: null }).eq("id", 1);
   if (error) fail(error);
 }
 

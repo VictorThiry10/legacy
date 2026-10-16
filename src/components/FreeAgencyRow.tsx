@@ -2,6 +2,7 @@ import type { AppStatus } from "@/lib/bidding";
 import { roundName } from "./bidding/ui";
 import { When } from "./bidding/time";
 import PendingRow from "./PendingRow";
+import LocalTime from "./LocalTime";
 
 // The Team page's way into free agency (Pending.tsx): where the auction is and until when (in my own time zone),
 // with a crimson button when it's on me. The room (/bidding) knows the league login, so there's no second sign in.
@@ -15,7 +16,11 @@ export default function FreeAgencyRow({ s }: { s: AppStatus }) {
     }
     : s.phase === "bidding" ? { title: `${round} is open`, sub: <>Sealed bids until <When iso={s.round?.closesAt ?? null} style="time" /></>, action: "Bid" }
     : s.phase === "reveal" ? { title: `${round} results`, sub: <>Renounce until <When iso={s.round?.settlesAt ?? null} style="time" /></>, action: "See" }
-    : s.signings ? { title: "Free agency contracts", sub: `Pick lengths for your ${s.signings} signing${s.signings === 1 ? "" : "s"}`, action: "Pick" }
+    : s.signings ? {
+      title: "Free agency contracts",
+      sub: <>Pick lengths for your {s.signings} signing{s.signings === 1 ? "" : "s"}{s.lockAt && <> · by <LocalTime iso={s.lockAt} mode="day" /> <LocalTime iso={s.lockAt} /></>}</>,
+      action: "Pick",
+    }
     : { title: "Free agency is over", sub: "See every signing", action: s.isCommish ? "Lock" : undefined };
   // The commissioner, while the auction is on: the contract lengths screen ahead of its time, to try it.
   const preview = s.isCommish && (s.phase === "waiting" || s.phase === "bidding" || s.phase === "reveal");
