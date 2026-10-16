@@ -10,7 +10,8 @@ import type { Look } from "./team-look";
 // the schedule release, and never again once closed.
 
 export type RevealTeam = Look & { id: string; gm: string };
-export type ConferenceReveal = Record<Conference, { name: string; teams: RevealTeam[] }>;
+// me: the viewer's team; mine: his conference (the second story is about it).
+export type ConferenceReveal = Record<Conference, { name: string; teams: RevealTeam[] }> & { me: string; mine: Conference };
 
 // What this GM's reveal shows, or null: not open to him yet, already seen, or the schedule release comes first.
 export async function conferenceReveal(team: Team): Promise<ConferenceReveal | null> {
@@ -22,12 +23,12 @@ export async function conferenceReveal(team: Team): Promise<ConferenceReveal | n
     db().from("schedule_views").select("team_id").eq("season", season).eq("team_id", team.id).maybeSingle(),
   ]);
   if (error) fail(error);
-  if (seen || !schedule) return null;
+  if (seen || !schedule || !isConference(team.conference)) return null;
   const side = (c: Conference) => ({
     name: CONFERENCES[c],
     teams: (teams ?? []).filter((t) => t.conference === c).map((t) => ({ id: t.id, name: t.name, logo_url: t.logo_url, color: t.color, gm: gm(t.id).name })),
   });
-  const out = { paris: side("paris"), london: side("london") };
+  const out = { me: team.id, mine: team.conference, paris: side("paris"), london: side("london") };
   if (!out.paris.teams.length || !out.london.teams.length || !(teams ?? []).every((t) => isConference(t.conference))) return null;
   return out;
 }
