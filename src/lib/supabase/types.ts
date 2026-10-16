@@ -34,6 +34,9 @@ export type Database = {
         [FK<"draft_picks_original_team_fkey", "original_team", "teams">, FK<"draft_picks_team_id_fkey", "team_id", "teams">, FK<"draft_picks_player_id_fkey", "player_id", "players">]
       >;
       rookie_lotteries: Table<{ drawn_at: string; odds: Json; year: number }, { drawn_at?: string; odds: Json; year: number }>;
+      schedule_views: Table<{ season: number; seen_at: string; team_id: string }, { season: number; seen_at?: string; team_id: string },
+        [FK<"schedule_views_team_id_fkey", "team_id", "teams">]
+      >;
       rookie_lottery_views: Table<
         { seen_at: string; team_id: string; year: number },
         { seen_at?: string; team_id: string; year: number },
