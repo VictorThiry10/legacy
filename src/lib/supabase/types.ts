@@ -205,6 +205,7 @@ export type Database = {
       snapshot_lineups: { Args: { p_day: string; p_rows: Json }; Returns: undefined };
       waiver_bid: { Args: { p_amount: number | null; p_drop: string | null; p_team: string; p_waiver: string }; Returns: undefined };
       waiver_settle: { Args: { p_bid: string | null; p_bids: number; p_note: string; p_season: number; p_waiver: string }; Returns: undefined };
+      waiver_clear: { Args: Record<string, never>; Returns: number };
     };
     Enums: { [_ in never]: never };
     CompositeTypes: { [_ in never]: never };
