@@ -7,10 +7,13 @@ import { onIR } from "./lineup-store";
 import { BID_STEP, money, rankWaiverBids, addsLocked, ADDS_LOCKED } from "./rules";
 import type { Row } from "./supabase/types";
 
-// Waivers. Every dropped player sits on waivers for 48 hours (settings.waiver_hours). Meanwhile GMs send sealed
+// Waivers. Every dropped player sits on waivers for 24 hours (settings.waiver_hours) and then until the next 8:00
+// London, when all waivers clear (the database works out the time: waiver_closes_at). Meanwhile GMs send sealed
 // bids: the salary they'd pay him on a 1 year contract. Nobody sees anyone else's bid, and the team that dropped him
 // can't bid. When time is up the best bid that keeps its team legal signs him; with none he becomes a free agent,
 // first come first served (roster.ts pickUp). Bids close on the database clock, so none can land late.
+// Once the auction's last chance round has signed, every free agent goes on waivers until the next 8:00 London
+// (bidding_settle): nobody dropped them, so every GM can bid, and the adds lock doesn't hold those bids.
 
 export type Waiver = Row<"waivers">;
 export type WaiverBidRow = Row<"waiver_bids">;
@@ -55,10 +58,10 @@ async function problemsWith(teamId: string, playerId: string, amount: number, dr
 
 // Place or change my sealed bid. A full roster names who to drop, released only if the bid wins.
 export async function placeBid(o: { teamId: string; playerId: string; amount: number; dropContractId?: string }) {
-  if (addsLocked()) throw new Error(ADDS_LOCKED);
   const { rules } = await getSettings();
   const w = await openWaiver(o.playerId);
   if (!w) throw new Error("He is not on waivers anymore.");
+  if (w.dropped_by && addsLocked()) throw new Error(ADDS_LOCKED); // a dropped player; the post-auction waivers are open to bids
   if (w.dropped_by === o.teamId) throw new Error("You dropped him, so you can't bid on him until he clears waivers.");
   if (!Number.isInteger(o.amount / BID_STEP)) throw new Error("Bids are in whole millions.");
   if (!(o.amount >= rules.minSalary)) throw new Error(`The lowest bid is ${money(lowestBid(rules.minSalary))}.`);
@@ -114,7 +117,13 @@ export async function settleWaivers(): Promise<{ claimed: number; unclaimed: num
   const { data: due, error } = await db().from("waivers").select("*").eq("status", "open").lte("closes_at", new Date().toISOString()).order("closes_at");
   if (error) fail(error);
   const out = { claimed: 0, unclaimed: 0, postponed: 0 };
-  for (const w of due ?? []) {
+  if (!due?.length) return out;
+  // The ones nobody bid on clear in one go (after the auction that is every free agent); the rest settle one by one.
+  const { data: bidOn, error: e2 } = await db().from("waiver_bids").select("waiver_id, waivers!inner(status)").eq("waivers.status", "open");
+  if (e2) fail(e2);
+  const withBids = new Set((bidOn ?? []).map((b) => b.waiver_id));
+  out.unclaimed += await rpc("waiver_clear", {});
+  for (const w of due.filter((w) => withBids.has(w.id))) {
     try {
       out[await settle(w)]++;
     } catch (e) {
