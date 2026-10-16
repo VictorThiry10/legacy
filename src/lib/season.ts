@@ -8,7 +8,7 @@ import { freezeLineup, isSlot, isStarter } from "./lineup";
 import { gamesBetween } from "./nba";
 import { lineupsFrom, savedUpTo } from "./lineup-store";
 import { rosters } from "./roster";
-import { buildSchedule, rehearsalSchedule, semifinalPairs, winner } from "./schedule";
+import { buildSchedule, conferenceGroups, rehearsalSchedule, semifinalPairs, winner } from "./schedule";
 import type { Row } from "./supabase/types";
 
 // The season: who plays whom each week, each team's frozen daily lineups and points, scores and standings.
@@ -35,10 +35,12 @@ export async function createSchedule(firstDay: string) {
   const { season, leagueSize } = await getSettings();
   const existing = await matchups();
   if (existing.some((m) => !m.is_test && m.starts <= today())) throw new Error("The season has started: the schedule can't be rebuilt.");
-  const { data: teams } = await db().from("teams").select("id").order("created_at");
+  const { data: teams } = await db().from("teams").select("id, conference").order("created_at");
   const ids = (teams ?? []).map((t) => t.id);
   if (ids.length !== leagueSize) throw new Error(`Wait until all ${leagueSize} teams have joined (${ids.length} so far).`);
-  const rows = buildSchedule(ids, firstDay).map((m) => ({ ...m, season }));
+  const conferenceOf = (id: string) => teams?.find((t) => t.id === id)?.conference;
+  const byConference = !!conferenceGroups(ids, conferenceOf);
+  const rows = buildSchedule(ids, firstDay, conferenceOf).map((m) => ({ ...m, season }));
   const weeks = rows.filter((m) => m.round === "regular").reduce((a, m) => Math.max(a, m.week), 0);
   const d = db();
   const del = await d.from("matchups").delete().eq("season", season);
@@ -47,7 +49,7 @@ export async function createSchedule(firstDay: string) {
   await d.from("lineup_points").delete().lt("day", firstDay);
   const ins = await d.from("matchups").insert(rows);
   if (ins.error) throw new Error(ins.error.message);
-  return `${weeks} regular season weeks, then semifinals and a final (two weeks each).`;
+  return `${weeks} regular season weeks${byConference ? " by conference" : ""}, then semifinals and a final (two weeks each).`;
 }
 
 // Commissioner: the preseason dress rehearsal. The teams that have joined play a mini season on real NBA
