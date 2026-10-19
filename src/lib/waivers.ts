@@ -12,7 +12,7 @@ import type { Row } from "./supabase/types";
 // bids: the salary they'd pay him on a 1 year contract. Nobody sees anyone else's bid, and the team that dropped him
 // can't bid. When time is up the best bid that keeps its team legal signs him; with none he becomes a free agent,
 // first come first served (roster.ts pickUp). Bids close on the database clock, so none can land late.
-// Once the auction's last chance round has signed, every free agent goes on waivers until the next 8:00 London
+// Once the auction's last chance round has signed, every free agent goes on waivers for the same 24 hours and 8:00
 // (bidding_settle): nobody dropped them, so every GM can bid, and the adds lock doesn't hold those bids.
 
 export type Waiver = Row<"waivers">;
