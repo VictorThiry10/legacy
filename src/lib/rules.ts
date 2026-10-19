@@ -189,6 +189,8 @@ export const NO_REBUY_FROM = "2026-10-09T00:00:00Z";
 export const ADDS_FROM = "2026-10-19T23:00:00Z";
 export const addsLocked = (now = Date.now()) => now < Date.parse(ADDS_FROM);
 export const ADDS_LOCKED = "No adds until the season starts, 20 October.";
+// The lock does not hold a waiver nobody dropped: after the auction every free agent is on waivers and those bids are open.
+export const addsLockedFor = (waiver: { dropped_by: string | null } | null | undefined, now = Date.now()) => addsLocked(now) && !(waiver && !waiver.dropped_by);
 
 // Renounce Rights: each GM can give up one signing per season (Victor, 2026-10-09: "just 1 renounce per GM"). The player goes to the next bidder.
 export const RENOUNCE_RIGHTS = 1;

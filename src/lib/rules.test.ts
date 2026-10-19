@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { resolveRound, revealRound, maxBid, yearsLeft, DEFAULT_SETTINGS as S, drawLottery, lotteryOdds, fantasyPoints, scoreRows, rosterProblems, teamState, rankWaiverBids, slot, parseSchedule, DAILY, addsLocked, type Schedule, type TeamState, type Bid } from "./rules";
+import { resolveRound, revealRound, maxBid, yearsLeft, DEFAULT_SETTINGS as S, drawLottery, lotteryOdds, fantasyPoints, scoreRows, rosterProblems, teamState, rankWaiverBids, slot, parseSchedule, DAILY, addsLocked, addsLockedFor, type Schedule, type TeamState, type Bid } from "./rules";
 
 const M = 1_000_000;
 const team = (id: string, salary = 0, rosterCount = 0): TeamState => ({ id, salary, rosterCount, slotsUsed: {} });
@@ -238,6 +238,12 @@ test("no adds before the season: pickups and waiver bids open on 20 October 2026
   assert.equal(addsLocked(Date.parse("2026-10-15T12:00:00Z")), true);
   assert.equal(addsLocked(Date.parse("2026-10-19T22:59:59Z")), true);
   assert.equal(addsLocked(Date.parse("2026-10-19T23:00:00Z")), false);
+  // the post-auction waivers (nobody dropped him) take bids through the lock; a dropped player waits
+  const locked = Date.parse("2026-10-19T12:00:00Z");
+  assert.equal(addsLockedFor({ dropped_by: null }, locked), false);
+  assert.equal(addsLockedFor({ dropped_by: "team-a" }, locked), true);
+  assert.equal(addsLockedFor(null, locked), true);
+  assert.equal(addsLockedFor({ dropped_by: null }, Date.parse("2026-10-21T12:00:00Z")), false);
 });
 
 test("over cap: an expensive win that breaks the budget gives way, the cheaper ones below it that fit stay", () => {
