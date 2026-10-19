@@ -4,7 +4,7 @@ import { fail, rpc } from "./db";
 import { getSettings } from "./league";
 import { capSpaces, lockedToday, problemsFor, rosters } from "./roster";
 import { onIR } from "./lineup-store";
-import { BID_STEP, money, rankWaiverBids, addsLocked, ADDS_LOCKED } from "./rules";
+import { BID_STEP, money, rankWaiverBids, addsLockedFor, ADDS_LOCKED } from "./rules";
 import type { Row } from "./supabase/types";
 
 // Waivers. Every dropped player sits on waivers for 24 hours (settings.waiver_hours) and then until the next 8:00
@@ -61,7 +61,7 @@ export async function placeBid(o: { teamId: string; playerId: string; amount: nu
   const { rules } = await getSettings();
   const w = await openWaiver(o.playerId);
   if (!w) throw new Error("He is not on waivers anymore.");
-  if (w.dropped_by && addsLocked()) throw new Error(ADDS_LOCKED); // a dropped player; the post-auction waivers are open to bids
+  if (addsLockedFor(w)) throw new Error(ADDS_LOCKED);
   if (w.dropped_by === o.teamId) throw new Error("You dropped him, so you can't bid on him until he clears waivers.");
   if (!Number.isInteger(o.amount / BID_STEP)) throw new Error("Bids are in whole millions.");
   if (!(o.amount >= rules.minSalary)) throw new Error(`The lowest bid is ${money(lowestBid(rules.minSalary))}.`);
