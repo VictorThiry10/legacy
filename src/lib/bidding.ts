@@ -194,6 +194,14 @@ const freeCards = (rows: RoundPlayer[]) =>
 
 const bidOf = (b: Row<"bids">): Bid => ({ id: b.id, teamId: b.team_id, playerId: b.player_id, amount: Number(b.amount), years: b.years, createdAt: b.created_at, priority: b.priority });
 
+// The league lock on contract lengths (settings), unless the commissioner reopened this team until a time still
+// to come (teams.lengths_open_until): then its lengths are open and that time is its lock.
+async function lengthsLock(team: Team, now: number) {
+  const { faLocked, faLockAt } = await getSettings();
+  const open = !!team.lengths_open_until && Date.parse(team.lengths_open_until) > now;
+  return { faLocked: faLocked && !open, faLockAt: open ? team.lengths_open_until : faLockAt };
+}
+
 // The renounce window is over: sign the round's winners and freeze its results.
 async function settle(roundId: string, season: number) {
   const { rules } = await getSettings();
@@ -245,7 +253,7 @@ export async function lengthsPreview(team: Team): Promise<Room> {
 
 export async function room(team: Team): Promise<Room> {
   const verified = commishVerified(team); // league login check, only does work for the commissioner
-  const { season, rules, faLocked, faLockAt, faSchedule } = await getSettings();
+  const { season, rules, faSchedule } = await getSettings();
   const d = db();
   // Everything in one wave of reads: the open round's players and bids come through an inner join on the
   // round (status and season), so they don't wait for the rounds list.
@@ -262,6 +270,7 @@ export async function room(team: Team): Promise<Room> {
   if (rs.error) fail(rs.error);
   const rounds = rs.data ?? [];
   const now = Date.now();
+  const { faLocked, faLockAt } = await lengthsLock(team, now);
   const { phase, live, next } = phaseOf(rounds, faLocked, now);
   const current = live ?? (phase === "waiting" ? next : null);
   // The round that just finished (the latest final one), for its results under the next round.
@@ -362,10 +371,11 @@ export async function pulse(): Promise<string> {
 export type AppStatus = { phase: Exclude<Phase, "done">; round: RoundInfo | null; isCommish: boolean; signings: number; lockAt: string | null };
 
 export async function appStatus(team: Team): Promise<AppStatus | null> {
-  const { season, faLocked, faLockAt, faSchedule } = await getSettings();
+  const { season, faSchedule } = await getSettings();
   const { data: rounds } = await db().from("rounds").select("*").eq("season", season).order("number");
   if (!rounds?.length) return null;
   const now = Date.now();
+  const { faLocked, faLockAt } = await lengthsLock(team, now);
   const { phase, live, next } = phaseOf(rounds, faLocked, now);
   if (phase === "done") return null;
   const { count } = phase === "contracts"
