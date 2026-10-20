@@ -20,6 +20,8 @@ import { lengthChoice } from "@/lib/pick-lengths";
 import { appStatus } from "@/lib/bidding";
 import { AUCTION_ON_HOLD } from "@/lib/auction-hold";
 import LineupTable, { type LinePlayer } from "./LineupTable";
+import QuickLineup from "./QuickLineup";
+import { matchups } from "@/lib/season";
 import BackBar from "./BackBar";
 import TeamAvatar from "./TeamAvatar";
 
@@ -54,7 +56,8 @@ export default async function TeamView({ team, editable, base, sp, back, tradeHr
   const rookieDraft = editable ? draftRow(team).catch(() => null) : null;
   const moves = editable ? movesRow(team.id).catch(() => null) : null;
   const lengths = editable ? lengthChoice(team).catch(() => null) : null;
-  const [{ rules, season }, roster, games, abbr] = await Promise.all([getSettings(), rosters([team.id]), gamesBetween(day, day), teamAbbrs()]);
+  const [{ rules, season }, roster, games, abbr, weeks] = await Promise.all([getSettings(), rosters([team.id]), gamesBetween(day, day), teamAbbrs(), editable ? matchups(team.id) : []]);
+  const week = weeks.find((m) => m.starts <= day && day <= m.ends); // the matchup this day is part of (Quick lineup's "rest of matchup")
   const [rows, lines] = await Promise.all([lineupFor(team.id, day, roster), boxLines(roster.map((p) => p.id))]);
   const players = new Map(roster.map((p) => [p.id, p]));
   const gameOf = (p?: RosterPlayer) => (p?.nba_team_id ? games.find((g) => g.home_team_id === p.nba_team_id || g.away_team_id === p.nba_team_id) : undefined);
@@ -149,10 +152,13 @@ export default async function TeamView({ team, editable, base, sp, back, tradeHr
         <Link href={href({ d: addDays(day, 1) })} replace={!!back} prefetch={true} transitionTypes={FORWARD} className="px-4 py-2 text-xl text-muted hover:text-fg" aria-label="Next day">›</Link>
       </div>
 
-      <Link href={viewsHref} transitionTypes={FORWARD} className="flex items-center justify-center gap-1.5 rounded-full border-[1.5px] border-accent py-2 text-sm font-semibold text-accent hover:bg-accent/10">
-        {periodName}
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="m6 9 6 6 6-6" /></svg>
-      </Link>
+      <div className="flex gap-2">
+        <Link href={viewsHref} transitionTypes={FORWARD} className="flex flex-1 items-center justify-center gap-1.5 rounded-full border-[1.5px] border-accent py-2 text-sm font-semibold text-accent hover:bg-accent/10">
+          {periodName}
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="m6 9 6 6 6-6" /></svg>
+        </Link>
+        {editable && day >= now && <QuickLineup day={day} today={now} until={week && week.ends > day ? week.ends : null} />}
+      </div>
 
       <Slide key={day}>
       <div className="space-y-4">

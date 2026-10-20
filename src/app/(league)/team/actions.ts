@@ -8,7 +8,8 @@ import { rosters } from "@/lib/roster";
 import { lineupFor, saveLineup } from "@/lib/lineup-store";
 import { refreshScores } from "@/lib/season";
 import { swap } from "@/lib/lineup";
-import { isDay, today } from "@/lib/dates";
+import { quickLineup } from "@/lib/quick-lineup";
+import { addDays, etDay, isDay, today } from "@/lib/dates";
 import { guard, type ActionResult } from "@/lib/guard";
 
 // Move a player into a slot (swapping with whoever is there) for one day. Later days follow until changed.
@@ -38,6 +39,39 @@ export async function moveSlot(day: string, playerId: string, to: string): Promi
     }
     await saveLineup(team.id, day, next);
     if (day === today()) after(() => refreshScores()); // live matchup shows the new lineup, without making this tap wait
+  });
+  revalidatePath("/", "layout");
+  return result;
+}
+
+// Quick lineup (the button by the lineup): the best starters for each day from `from` to `to` (one day, or the rest
+// of the matchup), by projected fantasy points per game (ESPN's projection, else last season). Players whose game
+// has started and IR stay put. Each day gets its own save when something changes; later days follow the last one.
+export async function setQuickLineup(from: string, to: string): Promise<ActionResult> {
+  const result = await guard(async () => {
+    const team = await requireTeam();
+    if (!isDay(from) || !isDay(to) || to < from || addDays(from, 13) < to) throw new Error("Bad dates.");
+    if (from < today()) throw new Error("That day is over. Lineups can only change for today and later.");
+    const [roster, games] = await Promise.all([rosters([team.id]), gamesBetween(from, to)]);
+    const players = new Map(roster.map((p) => [p.id, p]));
+    const value = (id: string) => {
+      const p = players.get(id);
+      const s = p?.projection?.gp ? p.projection : p?.last_season?.gp ? p.last_season : null;
+      return s ? s.fpts / s.gp : 0;
+    };
+    const now = Date.now();
+    for (let day = from; day <= to; day = addDays(day, 1)) {
+      const todays = games.filter((g) => etDay(g.start) === day);
+      const gameOf = (id: string) => {
+        const t = players.get(id)?.nba_team_id;
+        return t ? todays.find((g) => g.home_team_id === t || g.away_team_id === t) : undefined;
+      };
+      const rows = await lineupFor(team.id, day, roster);
+      const next = quickLineup(rows, players, { value, plays: (id) => !!gameOf(id), locked: (id) => Date.parse(gameOf(id)?.start ?? "") <= now });
+      if (next.every((r, i) => r.slot === rows[i]?.slot && r.playerId === rows[i]?.playerId)) continue; // as it was: no save, the day keeps following
+      await saveLineup(team.id, day, next);
+    }
+    if (from === today()) after(() => refreshScores());
   });
   revalidatePath("/", "layout");
   return result;
