@@ -3,7 +3,7 @@ import { db } from "./supabase/server";
 import { all, fail, rpc } from "./db";
 import type { Move } from "./moves";
 import { getSettings, type Player } from "./league";
-import { money, rosterProblems, teamState, addsLocked, ADDS_LOCKED } from "./rules";
+import { ADDS_LOCKED, addsLocked, capOf, capSpace, money, rosterProblems, teamState } from "./rules";
 import { onIR } from "./lineup-store";
 import { gamesBetween } from "./nba";
 import { today } from "./dates";
@@ -49,7 +49,8 @@ export async function problemsFor(changes: Change[], capOnly = false): Promise<s
   const { rules } = await getSettings();
   const problems: string[] = [];
   for (const { name, state } of await statesAfter(changes)) {
-    const found = capOnly ? (state.salary > rules.cap ? [`over the ${money(rules.cap)} cap by ${money(state.salary - rules.cap)}`] : []) : rosterProblems(state, rules);
+    const cap = capOf(state, rules);
+    const found = capOnly ? (state.salary > cap ? [`over the ${money(cap)} cap by ${money(state.salary - cap)}`] : []) : rosterProblems(state, rules);
     problems.push(...found.map((p) => `${name}: ${p}`));
   }
   return problems;
@@ -60,7 +61,7 @@ export async function capSpaces(teamIds: string[]): Promise<Map<string, number>>
   if (!teamIds.length) return new Map();
   const { rules } = await getSettings();
   const states = await statesAfter(teamIds.map((teamId) => ({ teamId, add: [], remove: [] })));
-  return new Map(states.map(({ state }) => [state.id, rules.cap - state.salary]));
+  return new Map(states.map(({ state }) => [state.id, capSpace(state, rules)]));
 }
 
 // Same, but throws with every problem unless overridden.

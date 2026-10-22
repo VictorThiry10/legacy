@@ -1,7 +1,7 @@
 import "server-only";
 import { cache } from "react";
 import { db } from "./supabase/server";
-import { parseSchedule, SCORING, teamState, type Scoring, type Settings, type TeamState } from "./rules";
+import { capSpace, parseSchedule, SCORING, teamState, type Scoring, type Settings, type TeamState } from "./rules";
 import type { Row } from "./supabase/types";
 import type { SeasonLine } from "./espn-parse";
 import { onIR } from "./lineup-store";
@@ -52,6 +52,6 @@ export const teamSummaries = cache(async (): Promise<TeamSummary[]> => {
     const mine = (contracts ?? []).filter((c) => c.team_id === t.id);
     const adjustments = (adj ?? []).filter((a) => a.team_id === t.id).reduce((a, b) => a + Number(b.amount), 0);
     const state = teamState(t.id, mine, adjustments, season, ir);
-    return { ...t, state, capSpace: rules.cap - state.salary, adjustments };
+    return { ...t, state, capSpace: capSpace(state, rules), adjustments };
   });
 });
