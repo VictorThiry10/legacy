@@ -2,7 +2,7 @@ import "server-only";
 import { db } from "./supabase/server";
 import { fail, rpc } from "./db";
 import { getSettings } from "./league";
-import { capSpaces, lockedToday, problemsFor, rosters } from "./roster";
+import { ADDS_USED, addsThisWeek, capSpaces, lockedToday, problemsFor, rosters } from "./roster";
 import { onIR } from "./lineup-store";
 import { BID_STEP, money, rankWaiverBids, addsLockedFor, ADDS_LOCKED } from "./rules";
 import type { Row } from "./supabase/types";
@@ -50,10 +50,11 @@ export async function waiverFor(playerId: string, teamId?: string): Promise<{ wa
 
 // What would break if this team signed him at this salary, after dropping the player its bid names (if still there)?
 async function problemsWith(teamId: string, playerId: string, amount: number, drop: string | null) {
-  const { season } = await getSettings();
-  const mine = drop ? await rosters([teamId]) : [];
+  const [{ season }, mine, adds] = await Promise.all([getSettings(), drop ? rosters([teamId]) : [], addsThisWeek(teamId)]);
   const remove = drop && mine.some((p) => p.contract_id === drop) ? [drop] : [];
-  return problemsFor([{ teamId, add: [{ player_id: playerId, salary: amount, years: 1, season_signed: season }], remove }]);
+  const problems = await problemsFor([{ teamId, add: [{ player_id: playerId, salary: amount, years: 1, season_signed: season }], remove }]);
+  if (adds.used >= adds.limit) problems.push(`this week's add is used (${adds.limit} per week)`); // the claim would be one more
+  return problems;
 }
 
 // Place or change my sealed bid. A full roster names who to drop, released only if the bid wins.
@@ -62,6 +63,8 @@ export async function placeBid(o: { teamId: string; playerId: string; amount: nu
   const w = await openWaiver(o.playerId);
   if (!w) throw new Error("He is not on waivers anymore.");
   if (addsLockedFor(w)) throw new Error(ADDS_LOCKED);
+  const adds = await addsThisWeek(o.teamId);
+  if (adds.used >= adds.limit) throw new Error(ADDS_USED(adds));
   if (w.dropped_by === o.teamId) throw new Error("You dropped him, so you can't bid on him until he clears waivers.");
   if (!Number.isInteger(o.amount / BID_STEP)) throw new Error("Bids are in whole millions.");
   if (!(o.amount >= rules.minSalary)) throw new Error(`The lowest bid is ${money(lowestBid(rules.minSalary))}.`);

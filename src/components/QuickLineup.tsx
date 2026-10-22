@@ -3,10 +3,8 @@ import { useEffect, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { setQuickLineup } from "@/app/(league)/team/actions";
-import { monthDay, weekday } from "@/lib/dates";
+import { dayName } from "@/lib/dates";
 import { useScrollLock } from "./ScrollLock";
-
-const name = (d: string) => `${weekday(d).charAt(0)}${weekday(d).slice(1).toLowerCase()}, ${monthDay(d)}`;
 
 // ESPN's Quick Lineup: a button next to the stats view, a sheet with two choices (this day, or the rest of the
 // matchup) and Confirm. The server starts the highest projected players who have a game (team/actions.ts).
@@ -41,8 +39,8 @@ function Sheet({ day, today, until, onClose }: { day: string; today: string; unt
   }, [onClose]);
 
   const options = [
-    { to: day, title: day === today ? "Today" : name(day), sub: day === today ? name(day) : "That day only" },
-    ...(until ? [{ to: until, title: "Rest of matchup", sub: `${name(day)} to ${name(until)}` }] : []),
+    { to: day, title: day === today ? "Today" : dayName(day), sub: day === today ? dayName(day) : "That day only" },
+    ...(until ? [{ to: until, title: "Rest of matchup", sub: `${dayName(day)} to ${dayName(until)}` }] : []),
   ];
   const confirm = () =>
     start(async () => {

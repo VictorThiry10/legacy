@@ -21,6 +21,7 @@ export const shortDate = (day: string) => show(day, { month: "short", day: "nume
 export const monthDay = (day: string) => show(day, { month: "short", day: "numeric" }); // Oct 20
 export const longDate = (day: string) => show(day, { month: "long", day: "numeric" }); // October 20
 export const weekday = (day: string) => show(day, { weekday: "short" }).toUpperCase(); // TUE
+export const dayName = (day: string) => `${weekday(day).charAt(0)}${weekday(day).slice(1).toLowerCase()}, ${monthDay(day)}`; // Tue, Oct 20
 
 const ROUND: Record<string, string> = { semi: "Semifinal", final: "Final" };
 export const weekLabel = (m: { week: number; starts: string; ends: string; round?: string; is_test?: boolean }) =>

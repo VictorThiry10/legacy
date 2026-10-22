@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { resolveRound, revealRound, maxBid, yearsLeft, DEFAULT_SETTINGS as S, drawLottery, lotteryOdds, fantasyPoints, scoreRows, rosterProblems, teamState, capOf, capSpace, rankWaiverBids, slot, parseSchedule, DAILY, addsLocked, addsLockedFor, type Schedule, type TeamState, type Bid } from "./rules";
+import { resolveRound, revealRound, maxBid, yearsLeft, DEFAULT_SETTINGS as S, drawLottery, lotteryOdds, fantasyPoints, scoreRows, rosterProblems, teamState, capOf, capSpace, weekOf, rankWaiverBids, slot, parseSchedule, DAILY, addsLocked, addsLockedFor, type Schedule, type TeamState, type Bid } from "./rules";
 
 const M = 1_000_000;
 const team = (id: string, salary = 0, rosterCount = 0): TeamState => ({ id, salary, rosterCount, onIR: 0, slotsUsed: {} });
@@ -243,6 +243,12 @@ test("a stored schedule is checked: bidding and the renounce window must fit bef
   assert.equal(parseSchedule({ start: "nope", from: 0, ...DAILY }), null);
   assert.equal(parseSchedule({ start: "2026-10-12T07:00:00.000Z", from: 0, bidMinutes: 600, renounceMinutes: 120, everyMinutes: 600 }), null);
   assert.ok(parseSchedule({ start: "2026-10-12T07:00:00.000Z", from: 0, ...DAILY }));
+});
+
+test("adds: one per Monday to Sunday week", () => {
+  assert.deepEqual(weekOf("2026-10-22"), { starts: "2026-10-19", ends: "2026-10-25" }); // a Thursday
+  assert.deepEqual(weekOf("2026-10-25"), { starts: "2026-10-19", ends: "2026-10-25" }); // Sunday still counts
+  assert.deepEqual(weekOf("2026-10-26"), { starts: "2026-10-26", ends: "2026-11-01" }); // Monday starts fresh
 });
 
 test("no adds before the season: pickups and waiver bids open on 20 October 2026, midnight London", () => {
