@@ -1,5 +1,7 @@
 // Core league rules. Pure functions: no database, easy to test.
 
+import { addDays, weekdayIndex } from "./dates";
+
 export type Settings = {
   cap: number; // hard salary cap per team, in dollars
   rosterMax: number; // max players per roster
@@ -198,6 +200,15 @@ export const addsLocked = (now = Date.now()) => now < Date.parse(ADDS_FROM);
 export const ADDS_LOCKED = "No adds until the season starts, 20 October.";
 // The lock does not hold a waiver nobody dropped: after the auction every free agent is on waivers and those bids are open.
 export const addsLockedFor = (waiver: { dropped_by: string | null } | null | undefined, now = Date.now()) => addsLocked(now) && !(waiver && !waiver.dropped_by);
+
+// One add per week (Victor, 2026-10-22): free agent pickups and waiver claims together, per Monday to Sunday week
+// (US Eastern days, like the matchup weeks). Dropping him again doesn't give the add back. The commissioner's own
+// signings and trades are not adds.
+export const ADDS_PER_WEEK = 1;
+export function weekOf(day: string) {
+  const starts = addDays(day, -((weekdayIndex(day) + 6) % 7)); // back to Monday
+  return { starts, ends: addDays(starts, 6) };
+}
 
 // Renounce Rights: each GM can give up one signing per season (Victor, 2026-10-09: "just 1 renounce per GM"). The player goes to the next bidder.
 export const RENOUNCE_RIGHTS = 1;

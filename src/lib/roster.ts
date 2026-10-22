@@ -3,10 +3,10 @@ import { db } from "./supabase/server";
 import { all, fail, rpc } from "./db";
 import type { Move } from "./moves";
 import { getSettings, type Player } from "./league";
-import { ADDS_LOCKED, addsLocked, capOf, capSpace, money, rosterProblems, teamState } from "./rules";
+import { ADDS_LOCKED, ADDS_PER_WEEK, addsLocked, capOf, capSpace, money, rosterProblems, teamState, weekOf } from "./rules";
 import { onIR } from "./lineup-store";
 import { gamesBetween } from "./nba";
-import { today } from "./dates";
+import { addDays, dayName, etDay, today } from "./dates";
 
 // Rosters and every way they change. All roster moves go through here: each one is checked against the
 // league rules, then written in one step together with its line in the transactions log.
@@ -91,10 +91,25 @@ export async function signPlayer(o: {
   return `Signed for ${money(o.salary)}, ${o.years} year${o.years > 1 ? "s" : ""}.`;
 }
 
+// A team's adds this week (free agent pickups and waiver claims, whether or not he was dropped since) against the
+// weekly limit (rules.ts). A reverted add is deleted, so it doesn't count.
+export async function addsThisWeek(teamId: string, day = today()) {
+  const week = weekOf(day);
+  const { data, error } = await db().from("contracts").select("created_at").eq("team_id", teamId)
+    .in("acquired_via", ["free_agent", "waiver"]).gte("created_at", `${addDays(week.starts, -1)}T00:00:00Z`);
+  if (error) fail(error);
+  const used = (data ?? []).filter((c) => etDay(c.created_at) >= week.starts && etDay(c.created_at) <= week.ends).length;
+  return { used, limit: ADDS_PER_WEEK, ...week, next: addDays(week.ends, 1) };
+}
+export const ADDS_USED = (a: { limit: number; next: string }) =>
+  `${a.limit} add${a.limit === 1 ? "" : "s"} per week: you've used this week's. Next one ${dayName(a.next)}.`;
+
 // Free agent pickup: $min salary for 1 year, first come first served. A full roster must drop someone in the same step.
 // The dropped player goes on waivers (lib/waivers.ts), and so a player on waivers can't be picked up this way.
 export async function pickUp(o: { teamId: string; playerId: string; dropContractId?: string }) {
   if (addsLocked()) throw new Error(ADDS_LOCKED);
+  const adds = await addsThisWeek(o.teamId);
+  if (adds.used >= adds.limit) throw new Error(ADDS_USED(adds));
   const { season, rules } = await getSettings();
   const { data: taken } = await db().from("contracts").select("id").eq("player_id", o.playerId).eq("active", true).maybeSingle();
   if (taken) throw new Error("Someone just picked him up.");

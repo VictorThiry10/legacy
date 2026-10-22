@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { db } from "@/lib/supabase/server";
 import { myTeamOrWelcome } from "@/lib/auth";
 import { getSettings, teamSummaries } from "@/lib/league";
-import { rosters } from "@/lib/roster";
+import { ADDS_USED, addsThisWeek, rosters } from "@/lib/roster";
 import { onIR } from "@/lib/lineup-store";
 import { lowestBid, waiverFor } from "@/lib/waivers";
 import { money, addsLockedFor, ADDS_LOCKED } from "@/lib/rules";
@@ -20,13 +20,14 @@ export const dynamic = "force-dynamic";
 // Either way a full roster picks who to drop (for a bid, only if it wins).
 export default async function AddPlayer({ params, searchParams }: PageProps<"/players/[id]/add">) {
   const [{ id }, sp, me, { rules, season }] = await Promise.all([params, searchParams, myTeamOrWelcome(), getSettings()]);
-  const [{ data: p }, { data: owned }, roster, ir, onWaivers, summaries] = await Promise.all([
+  const [{ data: p }, { data: owned }, roster, ir, onWaivers, summaries, adds] = await Promise.all([
     db().from("players").select("id, name, nba_team, position, headshot").eq("id", id).maybeSingle(),
     db().from("contracts").select("team:teams(name)").eq("player_id", id).eq("active", true).maybeSingle(),
     rosters([me.id]),
     onIR([me.id]),
     waiverFor(id, me.id),
     teamSummaries(),
+    addsThisWeek(me.id),
   ]);
   if (!p) notFound();
   const playing = roster.filter((r) => !ir.has(r.id));
@@ -79,6 +80,16 @@ export default async function AddPlayer({ params, searchParams }: PageProps<"/pl
           <p className="card text-sm">Already on {owned.team?.name ?? "another team"}.</p>
         ) : addsLockedFor(w) ? (
           <p className="card text-sm">{ADDS_LOCKED}</p>
+        ) : adds.used >= adds.limit ? (
+          <>
+            <p className="card text-sm">{ADDS_USED(adds)}</p>
+            {w && myBid && (
+              <form action={unbid}>
+                <input type="hidden" name="player_id" value={p.id} />
+                <SubmitButton className="btn-ghost w-full">Withdraw bid</SubmitButton>
+              </form>
+            )}
+          </>
         ) : w && w.dropped_by === me.id ? (
           <p className="card text-sm">You dropped him.</p>
         ) : w && new Date(w.closes_at) <= new Date() ? (
