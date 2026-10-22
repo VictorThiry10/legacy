@@ -19,7 +19,9 @@ export default async function CapSheet() {
           <TeamCell t={t} />
           <span className="text-center num">{t.state.rosterCount}/{rules.rosterMax}</span>
           <span className="text-right num">{money(t.state.salary)}</span>
-          <span className={`text-right num font-semibold ${t.capSpace < 0 ? "text-bad" : ""}`}>{money(t.capSpace)}</span>
+          <span className={`text-right num font-semibold ${t.capSpace < 0 ? "text-bad" : ""}`} title={t.state.onIR > 0 ? `incl. ${money(rules.minSalary)} IR relief` : undefined}>
+            {t.state.onIR > 0 && <span className="mr-1 text-[10px] font-normal text-muted">IR</span>}{money(t.capSpace)}
+          </span>
         </div>
       ))}
     </IntelPage>

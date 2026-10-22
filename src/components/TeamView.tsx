@@ -120,7 +120,7 @@ export default async function TeamView({ team, editable, base, sp, back, tradeHr
         <BackBar
           href={back}
           title={<span className="flex items-center gap-2"><TeamAvatar team={team} size="sm" />{team.name}</span>}
-          sub={<>{team.manager_name ?? team.manager_email} · {team.state.rosterCount}/{rules.rosterMax} players · <span className={team.capSpace < 0 ? "text-bad" : ""}>{money(team.capSpace)} cap space</span></>}
+          sub={<>{team.manager_name ?? team.manager_email} · {team.state.rosterCount}/{rules.rosterMax} players · <span className={team.capSpace < 0 ? "text-bad" : ""}>{money(team.capSpace)} cap space</span>{team.state.onIR > 0 && <> · incl. {money(rules.minSalary)} IR relief</>}</>}
           right={tradeHref && <Link href={tradeHref} transitionTypes={FORWARD} className="shrink-0 rounded-full bg-blue-fill px-4 py-1.5 text-sm font-semibold text-white">Trade</Link>}
         />
       ) : (
@@ -130,6 +130,7 @@ export default async function TeamView({ team, editable, base, sp, back, tradeHr
             <p className="text-muted text-sm">
               {team.manager_name ?? team.manager_email} · {team.state.rosterCount}/{rules.rosterMax} players · {money(team.state.salary)} salary ·{" "}
               <span className={team.capSpace < 0 ? "text-bad" : ""}>{money(team.capSpace)} cap space</span>
+              {team.state.onIR > 0 && <> · incl. {money(rules.minSalary)} IR relief</>}
             </p>
           </div>
         </div>

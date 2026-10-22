@@ -1,9 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { resolveRound, revealRound, maxBid, yearsLeft, DEFAULT_SETTINGS as S, drawLottery, lotteryOdds, fantasyPoints, scoreRows, rosterProblems, teamState, rankWaiverBids, slot, parseSchedule, DAILY, addsLocked, addsLockedFor, type Schedule, type TeamState, type Bid } from "./rules";
+import { resolveRound, revealRound, maxBid, yearsLeft, DEFAULT_SETTINGS as S, drawLottery, lotteryOdds, fantasyPoints, scoreRows, rosterProblems, teamState, capOf, capSpace, rankWaiverBids, slot, parseSchedule, DAILY, addsLocked, addsLockedFor, type Schedule, type TeamState, type Bid } from "./rules";
 
 const M = 1_000_000;
-const team = (id: string, salary = 0, rosterCount = 0): TeamState => ({ id, salary, rosterCount, slotsUsed: {} });
+const team = (id: string, salary = 0, rosterCount = 0): TeamState => ({ id, salary, rosterCount, onIR: 0, slotsUsed: {} });
 let n = 0, ids = 0;
 const bid = (teamId: string, playerId: string, amount: number, years = 1, t = n++, priority?: number): Bid => ({
   id: `b${++ids}`, teamId, playerId, amount: amount * M, years, createdAt: new Date(1e12 + t * 1000).toISOString(), priority,
@@ -166,9 +166,9 @@ test("custom scoring weights", () => {
 });
 
 test("roster problems: cap, roster size, contract slots", () => {
-  const ok: TeamState = { id: "a", salary: 150_000_000, rosterCount: 13, slotsUsed: { 4: 1 } };
+  const ok: TeamState = { id: "a", salary: 150_000_000, rosterCount: 13, onIR: 0, slotsUsed: { 4: 1 } };
   assert.deepEqual(rosterProblems(ok, S), []);
-  const bad: TeamState = { id: "a", salary: 151_000_000, rosterCount: 14, slotsUsed: { 4: 2 } };
+  const bad: TeamState = { id: "a", salary: 151_000_000, rosterCount: 14, onIR: 0, slotsUsed: { 4: 2 } };
   const p = rosterProblems(bad, S);
   assert.equal(p.length, 3);
   assert.match(p[0], /over the \$150m cap by \$1m/);
@@ -179,7 +179,18 @@ test("team state: every contract counts against the cap, IR doesn't take a roste
   const t = teamState("a", [c("p1", 10_000_000), c("p2", 5_000_000, 2026), { ...c("p3", 3_000_000), active: false }], 1_000_000, 2026, new Set(["p2"]));
   assert.equal(t.salary, 16_000_000); // released p3 doesn't count, the $1m adjustment does
   assert.equal(t.rosterCount, 1); // p2 is on IR
+  assert.equal(t.onIR, 1);
   assert.deepEqual(t.slotsUsed, { 2: 1 }); // only this season's signing uses a slot
+});
+
+test("IR relief: a player on IR adds the minimum salary to the cap", () => {
+  const full: TeamState = { id: "a", salary: 151_000_000, rosterCount: 12, onIR: 1, slotsUsed: {} };
+  assert.equal(capOf(full, S), 151_000_000);
+  assert.equal(capSpace(full, S), 0);
+  assert.deepEqual(rosterProblems(full, S), []); // $151m is fine with a player on IR
+  assert.match(rosterProblems({ ...full, onIR: 0 }, S)[0], /over the \$150m cap by \$1m/); // not once he is off it
+  assert.equal(maxBid({ ...full, salary: 140_000_000 }, S), 11_000_000); // one open spot: the relief is bid room
+  assert.equal(maxBid({ ...full, salary: 140_000_000, onIR: 0 }, S), 10_000_000);
 });
 
 test("waivers: highest sealed bid first, ties to more cap space, then the earlier bid", () => {

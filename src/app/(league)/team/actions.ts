@@ -2,7 +2,7 @@
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
 import { requireTeam } from "@/lib/auth";
-import { getSettings } from "@/lib/league";
+import { getSettings, teamSummaries } from "@/lib/league";
 import { gamesBetween } from "@/lib/nba";
 import { rosters } from "@/lib/roster";
 import { lineupFor, saveLineup } from "@/lib/lineup-store";
@@ -11,6 +11,7 @@ import { swap } from "@/lib/lineup";
 import { quickLineup } from "@/lib/quick-lineup";
 import { addDays, etDay, isDay, today } from "@/lib/dates";
 import { guard, type ActionResult } from "@/lib/guard";
+import { money } from "@/lib/rules";
 
 // Move a player into a slot (swapping with whoever is there) for one day. Later days follow until changed.
 // The lineup on screen moves straight away; this checks and saves it. The live matchup catches up just after.
@@ -36,6 +37,11 @@ export async function moveSlot(day: string, playerId: string, to: string): Promi
     const { rules } = await getSettings();
     if (irBefore && irBefore !== irAfter && roster.length - (irAfter ? 1 : 0) > rules.rosterMax) {
       throw new Error(`Your roster is full (${rules.rosterMax}): release a player before bringing ${players.get(irBefore)!.name} off IR.`);
+    }
+    // the same for the IR relief: an empty IR slot takes the cap back to the league's
+    const salary = (await teamSummaries()).find((t) => t.id === team.id)?.state.salary ?? 0;
+    if (irBefore && !irAfter && salary > rules.cap) {
+      throw new Error(`Over the cap: with nobody on IR your cap is ${money(rules.cap)} and you are at ${money(salary)}. Release a player before bringing ${players.get(irBefore)!.name} off IR.`);
     }
     await saveLineup(team.id, day, next);
     if (day === today()) after(() => refreshScores()); // live matchup shows the new lineup, without making this tap wait

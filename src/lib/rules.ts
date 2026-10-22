@@ -18,6 +18,7 @@ export type TeamState = {
   id: string;
   salary: number; // committed salary incl. cap adjustments (injury relief is negative)
   rosterCount: number;
+  onIR: number; // rostered players in the IR slot (0 or 1): each frees a roster spot and the minimum salary (capOf)
   slotsUsed: Record<number, number>; // contract length -> signings this season
 };
 
@@ -46,8 +47,14 @@ export type Resolution = {
   voided: { bidId: string; reason: string }[];
 };
 
+// A team's cap: the league's hard cap, plus IR relief (the minimum salary while a player sits on IR, so the
+// roster spot he frees can be filled). Every cap check goes through here.
+export function capOf(t: TeamState, s: Settings) {
+  return s.cap + (t.onIR > 0 ? s.minSalary : 0);
+}
+
 export function capSpace(t: TeamState, s: Settings) {
-  return s.cap - t.salary;
+  return capOf(t, s) - t.salary;
 }
 
 // Is a team still legal after taking the extra awards?
@@ -56,7 +63,7 @@ function feasible(t: TeamState, extra: Award[], s: Settings): string | null {
   const roster = t.rosterCount + extra.length;
   if (roster > s.rosterMax) return "roster_full";
   const openSpots = s.rosterMax - roster;
-  if (salary + openSpots * s.minSalary > s.cap) return "over_cap";
+  if (salary + openSpots * s.minSalary > capOf(t, s)) return "over_cap";
   for (const [len, max] of Object.entries(s.slotLimits)) {
     const n = (t.slotsUsed[+len] ?? 0) + extra.filter((a) => a.years === +len).length;
     if (n > max) return `no_${len}yr_slot`;
@@ -68,7 +75,7 @@ function feasible(t: TeamState, extra: Award[], s: Settings): string | null {
 // still empty after this signing. A full roster can't bid.
 export function maxBid(t: TeamState, s: Settings) {
   if (t.rosterCount >= s.rosterMax) return 0;
-  return Math.max(0, s.cap - t.salary - (s.rosterMax - t.rosterCount - 1) * s.minSalary);
+  return Math.max(0, capOf(t, s) - t.salary - (s.rosterMax - t.rosterCount - 1) * s.minSalary);
 }
 
 // FNV-1a: a stable "random" number from a string, so a computer pick is the same on every screen and every reload.
@@ -336,7 +343,7 @@ export function scoreRows(l: StatLine, w: Scoring = SCORING) {
 }
 
 // A team's cap picture from its contracts. Every active contract counts against the cap; a player on IR
-// doesn't take a roster spot; this season's signings use contract-length slots.
+// doesn't take a roster spot and earns IR relief (capOf); this season's signings use contract-length slots.
 export function teamState(
   id: string,
   contracts: { player_id?: string; salary: number; years: number; season_signed: number; active: boolean }[],
@@ -347,14 +354,15 @@ export function teamState(
   const active = contracts.filter((c) => c.active);
   const slotsUsed: Record<number, number> = {};
   contracts.filter((c) => c.season_signed === season).forEach((c) => (slotsUsed[c.years] = (slotsUsed[c.years] ?? 0) + 1));
-  const rosterCount = active.filter((c) => !c.player_id || !ir.has(c.player_id)).length;
-  return { id, salary: active.reduce((a, c) => a + Number(c.salary), 0) + adjustments, rosterCount, slotsUsed };
+  const onIR = active.filter((c) => c.player_id && ir.has(c.player_id)).length;
+  return { id, salary: active.reduce((a, c) => a + Number(c.salary), 0) + adjustments, rosterCount: active.length - onIR, onIR, slotsUsed };
 }
 
 // Is a team legal after a roster move? Hard cap, roster size, and contract-length slots for this season's signings.
 export function rosterProblems(t: TeamState, s: Settings): string[] {
   const out: string[] = [];
-  if (t.salary > s.cap) out.push(`over the ${money(s.cap)} cap by ${money(t.salary - s.cap)}`);
+  const cap = capOf(t, s);
+  if (t.salary > cap) out.push(`over the ${money(cap)} cap by ${money(t.salary - cap)}`);
   if (t.rosterCount > s.rosterMax) out.push(`${t.rosterCount} players, max is ${s.rosterMax}`);
   for (const [len, max] of Object.entries(s.slotLimits)) {
     const n = t.slotsUsed[+len] ?? 0;
