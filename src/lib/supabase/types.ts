@@ -56,8 +56,8 @@ export type Database = {
         [FK<"extension_decisions_team_id_fkey", "team_id", "teams">]
       >;
       games: Table<
-        { away_score: number | null; away_team_id: string; final: boolean; home_score: number | null; home_team_id: string; id: string; season_type: number | null; start: string; state: string; updated_at: string },
-        { away_score?: number | null; away_team_id: string; final?: boolean; home_score?: number | null; home_team_id: string; id: string; season_type?: number | null; start: string; state: string; updated_at?: string }
+        { away_score: number | null; away_team_id: string; clock: string | null; final: boolean; home_score: number | null; home_team_id: string; id: string; season_type: number | null; start: string; state: string; updated_at: string },
+        { away_score?: number | null; away_team_id: string; clock?: string | null; final?: boolean; home_score?: number | null; home_team_id: string; id: string; season_type?: number | null; start: string; state: string; updated_at?: string }
       >;
       lineup_points: Table<
         { day: string; fpts: number; games: number; player_id: string; slot: string; team_id: string },

@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { parseSummary, parseInjuries, parseRookies } from "./espn-parse";
+import { clockLabel, parseSummary, parseInjuries, parseRookies } from "./espn-parse";
 
 // Real ESPN box score: Bucks 125, Nets 108 (Apr 10, 2026). E.J. Liddell ejected, double technical Wilson/Dieng.
 const summary = JSON.parse(readFileSync(new URL("./fixtures/summary-401811034.json", import.meta.url), "utf8"));
@@ -119,4 +119,15 @@ test("rookies are the roster's players with 0 years of experience", () => {
     { id: "5142718", name: "AJ Dybantsa", position: "SF", nba_team: "WSH" },
     { id: "5105841", name: "Felix Okpara", position: null, nba_team: "WSH" },
   ]);
+});
+
+test("live game clock", () => {
+  const s = (name: string, state: string, period: number, displayClock = "0.0") => clockLabel({ period, displayClock, type: { name, state } });
+  assert.equal(s("STATUS_IN_PROGRESS", "in", 3, "5:42"), "Q3 5:42");
+  assert.equal(s("STATUS_HALFTIME", "in", 2), "Half");
+  assert.equal(s("STATUS_END_PERIOD", "in", 3), "End Q3");
+  assert.equal(s("STATUS_IN_PROGRESS", "in", 5, "1:12"), "OT 1:12");
+  assert.equal(s("STATUS_IN_PROGRESS", "in", 6, "45.3"), "2OT 45.3");
+  assert.equal(s("STATUS_FINAL", "post", 4), null);
+  assert.equal(game.clock, null);
 });
