@@ -64,14 +64,24 @@ export function parseInjuries(json: InjuryJson): InjuryRow[] {
 export type GameRow = {
   id: string; start: string; state: "pre" | "in" | "post"; final: boolean;
   home_team_id: string; away_team_id: string; home_score: number | null; away_score: number | null;
+  clock: string | null; // "Q3 5:42" while the game is on (only the scoreboard has it, not the summary)
   season_type?: number; // 1 preseason, 2 regular season, 3 playoffs (left out when ESPN doesn't say)
 };
 
 type Competition = {
   id: string; date: string;
-  status: { type: { state: string; completed?: boolean } };
+  status: { period?: number; displayClock?: string; type: { name?: string; state: string; completed?: boolean } };
   competitors: { id: string; homeAway: string; winner?: boolean; score?: string | { value?: number } }[];
 };
+
+// "Q3 5:42", "Half", "End Q3", "OT 1:12", "2OT 0:45": null unless the game is on.
+export function clockLabel(s: Competition["status"]): string | null {
+  if (s.type.state !== "in" || !s.period) return null;
+  if (s.type.name === "STATUS_HALFTIME") return "Half";
+  const q = s.period > 4 ? `${s.period > 5 ? s.period - 4 : ""}OT` : `Q${s.period}`;
+  if (s.type.name === "STATUS_END_PERIOD") return `End ${q}`;
+  return s.displayClock ? `${q} ${s.displayClock}` : q;
+}
 
 function gameFrom(c: Competition, seasonType?: number): GameRow {
   const home = c.competitors.find((x) => x.homeAway === "home")!;
@@ -89,6 +99,7 @@ function gameFrom(c: Competition, seasonType?: number): GameRow {
     away_team_id: away.id,
     home_score: score(home),
     away_score: score(away),
+    clock: clockLabel(c.status),
     ...(seasonType ? { season_type: seasonType } : {}),
   };
 }

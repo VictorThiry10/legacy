@@ -80,7 +80,7 @@ export async function syncDay(date: string, force = false) {
   let lines = 0;
   for (const g of games.filter((g) => g.state !== "pre" && !finished.has(g.id))) {
     const { game, lines: rows } = parseSummary(await get(`/summary?event=${g.id}`), scoring);
-    await saveGames([game]);
+    await saveGames([{ ...game, clock: game.state === "in" ? g.clock : null }]);
     const { error } = await db().from("player_games").upsert(
       rows.map((l) => ({
         game_id: l.gameId, player_id: l.playerId, nba_team_id: l.teamId, played: l.played, min: l.min,
