@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildLineup, canPlay, swap, type LineupPlayer, type LineupRow, freezeLineup } from "./lineup";
+import { buildLineup, canPlay, irFrees, swap, type LineupPlayer, type LineupRow, freezeLineup } from "./lineup";
 import { addDays, etDay } from "./dates";
 
 const p = (id: string, position: string, injury_status: string | null = null): LineupPlayer => ({ id, position, injury_status });
@@ -46,6 +46,15 @@ test("swap checks both players fit", () => {
   assert.equal(slotOf(moved, "sg"), "BE2");
   assert.equal(typeof swap(rows, "c", "IR", players), "string");
   assert.ok(Array.isArray(swap(rows, "hurt", "IR", players)));
+});
+
+test("the IR slot frees a spot only while its player is still Out", () => {
+  const players = new Map(roster.map((x) => [x.id, x]));
+  const rows = buildLineup([{ slot: "IR", playerId: "hurt" }], roster);
+  assert.ok(irFrees(rows, players));
+  const better = new Map(players).set("hurt", p("hurt", "C", "Day-To-Day"));
+  assert.ok(!irFrees(rows, better)); // got better: counts again, even though he is still in the slot
+  assert.ok(!irFrees(buildLineup([], roster), players)); // nobody on IR
 });
 
 test("dates are US Eastern", () => {

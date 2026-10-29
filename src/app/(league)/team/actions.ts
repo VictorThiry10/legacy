@@ -7,7 +7,7 @@ import { gamesBetween } from "@/lib/nba";
 import { rosters } from "@/lib/roster";
 import { lineupFor, saveLineup } from "@/lib/lineup-store";
 import { refreshScores } from "@/lib/season";
-import { swap } from "@/lib/lineup";
+import { irFrees, swap } from "@/lib/lineup";
 import { quickLineup } from "@/lib/quick-lineup";
 import { addDays, etDay, isDay, today } from "@/lib/dates";
 import { guard, type ActionResult } from "@/lib/guard";
@@ -31,17 +31,22 @@ export async function moveSlot(day: string, playerId: string, to: string): Promi
     if (started(playerId) || started(rows.find((r) => r.slot === to)?.playerId)) throw new Error("Locked: that player's game has started.");
     const next = swap(rows, playerId, to, players);
     if (typeof next === "string") throw new Error(next);
-    // IR doesn't take a roster spot, so coming off it needs a free one.
+    // The IR slot frees a roster spot and $1m of cap only while its player is still Out. The move can't leave the
+    // team over either: coming off IR needs room, and a player who got better counts again, so his team is stuck
+    // (no lineup changes) until someone is dropped or traded.
+    const [{ rules }, mine] = await Promise.all([getSettings(), teamSummaries()]);
+    const salary = mine.find((t) => t.id === team.id)?.state.salary ?? 0;
     const irBefore = rows.find((r) => r.slot === "IR")?.playerId;
     const irAfter = next.find((r) => r.slot === "IR")?.playerId;
-    const { rules } = await getSettings();
-    if (irBefore && irBefore !== irAfter && roster.length - (irAfter ? 1 : 0) > rules.rosterMax) {
-      throw new Error(`Your roster is full (${rules.rosterMax}): release a player before bringing ${players.get(irBefore)!.name} off IR.`);
-    }
-    // the same for the IR relief: an empty IR slot takes the cap back to the league's
-    const salary = (await teamSummaries()).find((t) => t.id === team.id)?.state.salary ?? 0;
-    if (irBefore && !irAfter && salary > rules.cap) {
-      throw new Error(`Over the cap: with nobody on IR your cap is ${money(rules.cap)} and you are at ${money(salary)}. Release a player before bringing ${players.get(irBefore)!.name} off IR.`);
+    const frees = irFrees(next, players);
+    const counted = roster.length - (frees ? 1 : 0);
+    const cap = rules.cap + (frees ? rules.minSalary : 0);
+    if (counted > rules.rosterMax || salary > cap) {
+      const why = counted > rules.rosterMax ? `${counted}/${rules.rosterMax} players` : `${money(salary - cap)} over the ${money(cap)} cap`;
+      const stuck = irAfter && irAfter === irBefore ? players.get(irAfter)! : null; // got better, still sitting on IR
+      if (stuck) throw new Error(`${stuck.name} is no longer Out, so he counts again: ${why}. Drop or trade a player before changing your lineup.`);
+      if (irBefore && !irAfter) throw new Error(`${why} with ${players.get(irBefore)!.name} off IR: release a player first.`);
+      throw new Error(`${why}: drop or trade a player before changing your lineup.`);
     }
     await saveLineup(team.id, day, next);
     if (day === today()) after(() => refreshScores()); // live matchup shows the new lineup, without making this tap wait
@@ -58,7 +63,12 @@ export async function setQuickLineup(from: string, to: string): Promise<ActionRe
     const team = await requireTeam();
     if (!isDay(from) || !isDay(to) || to < from || addDays(from, 13) < to) throw new Error("Bad dates.");
     if (from < today()) throw new Error("That day is over. Lineups can only change for today and later.");
-    const [roster, games] = await Promise.all([rosters([team.id]), gamesBetween(from, to)]);
+    const [roster, games, { rules }, mine] = await Promise.all([rosters([team.id]), gamesBetween(from, to), getSettings(), teamSummaries()]);
+    const me = mine.find((t) => t.id === team.id);
+    if (me && (me.state.rosterCount > rules.rosterMax || me.capSpace < 0)) { // stuck (see moveSlot): fix the roster first
+      const why = me.state.rosterCount > rules.rosterMax ? `${me.state.rosterCount}/${rules.rosterMax} players` : `${money(-me.capSpace)} over the cap`;
+      throw new Error(`${why}: drop or trade a player before changing your lineup.`);
+    }
     const players = new Map(roster.map((p) => [p.id, p]));
     const value = (id: string) => {
       const p = players.get(id);

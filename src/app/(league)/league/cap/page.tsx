@@ -17,7 +17,7 @@ export default async function CapSheet() {
       {teams.map((t) => (
         <div key={t.id} className={`grid grid-cols-[minmax(0,1fr)_3rem_4rem_4rem] items-center gap-2 border-b border-line/60 px-4 py-3 ${t.id === myId ? "bg-blue/10" : ""}`}>
           <TeamCell t={t} />
-          <span className="text-center num">{t.state.rosterCount}/{rules.rosterMax}</span>
+          <span className={`text-center num ${t.state.rosterCount > rules.rosterMax ? "font-semibold text-bad" : ""}`}>{t.state.rosterCount}/{rules.rosterMax}</span>
           <span className="text-right num">{money(t.state.salary)}</span>
           <span className={`text-right num font-semibold ${t.capSpace < 0 ? "text-bad" : ""}`} title={t.state.onIR > 0 ? `incl. ${money(rules.minSalary)} IR relief` : undefined}>
             {t.state.onIR > 0 && <span className="mr-1 text-[10px] font-normal text-muted">IR</span>}{money(t.capSpace)}
