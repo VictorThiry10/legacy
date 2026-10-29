@@ -72,6 +72,16 @@ export function buildLineup(saved: { slot: string; playerId: string }[], roster:
   return rows;
 }
 
+/**
+ * A later day's save, after a move on or off IR made on an earlier day. IR is a roster state, not one day's
+ * lineup, so the change is carried forward: `on` takes IR there (whoever had it goes to the bench), `off` is placed
+ * like a new player (open bench spot, then any open slot).
+ */
+export function carryIR(saved: { slot: string; playerId: string }[], roster: LineupPlayer[], ir: { on: string | null; off: string | null }): LineupRow[] {
+  const rest = saved.filter((r) => r.playerId !== ir.on && r.playerId !== ir.off);
+  return buildLineup([...(ir.on ? [{ slot: "IR", playerId: ir.on }] : []), ...rest], roster);
+}
+
 /** Swap the player in `from` with whatever is in `to`. Returns an error message, or the new lineup. */
 export function swap(rows: LineupRow[], playerId: string, to: string, players: Map<string, LineupPlayer>): LineupRow[] | string {
   const i = rows.findIndex((r) => r.playerId === playerId);

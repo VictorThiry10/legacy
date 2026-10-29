@@ -5,7 +5,7 @@ import { requireTeam } from "@/lib/auth";
 import { getSettings, teamSummaries } from "@/lib/league";
 import { gamesBetween } from "@/lib/nba";
 import { rosters } from "@/lib/roster";
-import { lineupFor, saveLineup } from "@/lib/lineup-store";
+import { carryIRForward, lineupFor, saveLineup } from "@/lib/lineup-store";
 import { refreshScores } from "@/lib/season";
 import { irFrees, swap } from "@/lib/lineup";
 import { quickLineup } from "@/lib/quick-lineup";
@@ -49,6 +49,7 @@ export async function moveSlot(day: string, playerId: string, to: string): Promi
       throw new Error(`${why}: drop or trade a player before changing your lineup.`);
     }
     await saveLineup(team.id, day, next);
+    if (irBefore !== irAfter) await carryIRForward(team.id, day, roster, { on: irAfter ?? null, off: irBefore ?? null });
     if (day === today()) after(() => refreshScores()); // live matchup shows the new lineup, without making this tap wait
   });
   revalidatePath("/", "layout");

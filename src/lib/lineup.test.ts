@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildLineup, canPlay, irFrees, swap, type LineupPlayer, type LineupRow, freezeLineup } from "./lineup";
+import { buildLineup, canPlay, carryIR, irFrees, swap, type LineupPlayer, type LineupRow, freezeLineup } from "./lineup";
 import { addDays, etDay } from "./dates";
 
 const p = (id: string, position: string, injury_status: string | null = null): LineupPlayer => ({ id, position, injury_status });
@@ -55,6 +55,24 @@ test("the IR slot frees a spot only while its player is still Out", () => {
   const better = new Map(players).set("hurt", p("hurt", "C", "Day-To-Day"));
   assert.ok(!irFrees(rows, better)); // got better: counts again, even though he is still in the slot
   assert.ok(!irFrees(buildLineup([], roster), players)); // nobody on IR
+});
+
+test("an IR move is carried to a later day's own save", () => {
+  const hurt2 = p("hurt2", "C", "Out");
+  const team = [...roster, hurt2]; // 14 players
+  const later = buildLineup([], team).filter((r): r is { slot: string; playerId: string } => !!r.playerId && r.slot !== "BE");
+  // on: he takes IR, the day's other players stay put, the 14th fills his old spot
+  let rows = carryIR(later, team, { on: "hurt", off: null });
+  assert.equal(slotOf(rows, "hurt"), "IR");
+  assert.equal(rows.filter((r) => r.slot === "BE").length, 0);
+  // on, when that day had someone else on IR: the newcomer wins it, the other goes to the bench
+  rows = carryIR([{ slot: "IR", playerId: "hurt2" }, ...later.filter((r) => r.playerId !== "hurt2")], team, { on: "hurt", off: "hurt2" });
+  assert.equal(slotOf(rows, "hurt"), "IR");
+  assert.ok(slotOf(rows, "hurt2")?.startsWith("BE"));
+  // off: he leaves IR for the bench
+  rows = carryIR([{ slot: "IR", playerId: "hurt" }, ...later.filter((r) => r.playerId !== "hurt")], team, { on: null, off: "hurt" });
+  assert.equal(rows.find((r) => r.slot === "IR")!.playerId, null);
+  assert.ok(slotOf(rows, "hurt")?.startsWith("BE"));
 });
 
 test("dates are US Eastern", () => {

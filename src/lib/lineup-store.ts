@@ -1,7 +1,7 @@
 import "server-only";
 import { rpc } from "./db";
 import { db } from "./supabase/server";
-import { buildLineup, irEligible, isSlot, type LineupRow } from "./lineup";
+import { buildLineup, carryIR, irEligible, isSlot, type LineupRow } from "./lineup";
 import type { RosterPlayer } from "./roster";
 import { today } from "./dates";
 
@@ -45,6 +45,17 @@ export async function onIR(teamIds?: string[]): Promise<Set<string>> {
   if (!ids.length) return new Set();
   const { data } = await db().from("players").select("id, injury_status").in("id", ids);
   return new Set((data ?? []).filter((p) => irEligible(p.injury_status)).map((p) => p.id));
+}
+
+// A move on or off IR on `day` is carried to every later day that has its own save (a Quick lineup saved last
+// week, say): otherwise that older save would quietly put him back on the bench and the team would show 14 players.
+export async function carryIRForward(teamId: string, day: string, roster: RosterPlayer[], ir: { on: string | null; off: string | null }) {
+  const { data, error } = await db().from("lineups").select("day, slot, player_id").eq("team_id", teamId).gt("day", day).order("day");
+  if (error) throw error;
+  for (const d of [...new Set((data ?? []).map((r) => r.day))]) {
+    const saved = (data ?? []).filter((r) => r.day === d).map((r) => ({ slot: r.slot, playerId: r.player_id }));
+    await saveLineup(teamId, d, carryIR(saved, roster, ir));
+  }
 }
 
 export async function saveLineup(teamId: string, day: string, rows: LineupRow[]) {
