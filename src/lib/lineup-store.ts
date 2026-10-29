@@ -1,6 +1,7 @@
 import "server-only";
 import { rpc } from "./db";
-import { buildLineup, isSlot, type LineupRow } from "./lineup";
+import { db } from "./supabase/server";
+import { buildLineup, irEligible, isSlot, type LineupRow } from "./lineup";
 import type { RosterPlayer } from "./roster";
 import { today } from "./dates";
 
@@ -35,11 +36,15 @@ export async function lineupFor(teamId: string, day: string, roster: RosterPlaye
   return (await lineupsOn([teamId], day, roster)).get(teamId)!;
 }
 
-// Players on IR right now (in the IR slot of their team's current lineup). They don't take a roster spot.
-// No team ids = every team.
+// Players on IR right now (in the IR slot of their team's current lineup) who still belong there: Out, or on the
+// NBA's injured reserve. They don't take a roster spot. A player who got better counts again until his GM moves
+// him, so a team can't sit a healthy 14th man on IR. No team ids = every team.
 export async function onIR(teamIds?: string[]): Promise<Set<string>> {
   const saved = await savedUpTo(teamIds ?? null, today());
-  return new Set(saved.filter((r) => r.slot === "IR").map((r) => r.player_id));
+  const ids = saved.filter((r) => r.slot === "IR").map((r) => r.player_id);
+  if (!ids.length) return new Set();
+  const { data } = await db().from("players").select("id, injury_status").in("id", ids);
+  return new Set((data ?? []).filter((p) => irEligible(p.injury_status)).map((p) => p.id));
 }
 
 export async function saveLineup(teamId: string, day: string, rows: LineupRow[]) {

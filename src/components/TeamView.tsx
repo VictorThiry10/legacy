@@ -20,6 +20,7 @@ import { lengthChoice } from "@/lib/pick-lengths";
 import { appStatus } from "@/lib/bidding";
 import { AUCTION_ON_HOLD } from "@/lib/auction-hold";
 import LineupTable, { type LinePlayer } from "./LineupTable";
+import { irEligible } from "@/lib/lineup";
 import QuickLineup from "./QuickLineup";
 import { matchups } from "@/lib/season";
 import BackBar from "./BackBar";
@@ -109,6 +110,13 @@ export default async function TeamView({ team, editable, base, sp, back, tradeHr
       cells: <>{cells(p, gameOf(p))}</>,
     }]),
   );
+  // A roster over the limit (or the cap) is stuck until someone goes: usually a player on IR who got better and counts again.
+  const overRoster = team.state.rosterCount > rules.rosterMax;
+  const irPlayer = day === now ? players.get(rows.find((r) => r.slot === "IR")?.playerId ?? "") : undefined;
+  const stuck = editable && (overRoster || team.capSpace < 0)
+    ? `${irPlayer && !irEligible(irPlayer.injury_status) ? `${irPlayer.name} is ${irPlayer.injury_status ?? "healthy"} now, not Out, so he counts again: ` : ""}${
+        overRoster ? `${team.state.rosterCount}/${rules.rosterMax} players` : `${money(-team.capSpace)} over the cap`}. Drop or trade a player to set your lineup, add or trade again.`
+    : null;
   const periodName = views(day, season).find((v) => v.key === period)!.label;
   const dayName = `${weekday(day).charAt(0)}${weekday(day).slice(1).toLowerCase()}, ${monthDay(day)}`;
   const viewsHref = `/team/views?${new URLSearchParams({ back: base, d: day, stat: period })}`;
@@ -120,7 +128,7 @@ export default async function TeamView({ team, editable, base, sp, back, tradeHr
         <BackBar
           href={back}
           title={<span className="flex items-center gap-2"><TeamAvatar team={team} size="sm" />{team.name}</span>}
-          sub={<>{team.manager_name ?? team.manager_email} · {team.state.rosterCount}/{rules.rosterMax} players · <span className={team.capSpace < 0 ? "text-bad" : ""}>{money(team.capSpace)} cap space</span>{team.state.onIR > 0 && <> · incl. {money(rules.minSalary)} IR relief</>}</>}
+          sub={<>{team.manager_name ?? team.manager_email} · <span className={overRoster ? "text-bad" : ""}>{team.state.rosterCount}/{rules.rosterMax} players</span> · <span className={team.capSpace < 0 ? "text-bad" : ""}>{money(team.capSpace)} cap space</span>{team.state.onIR > 0 && <> · incl. {money(rules.minSalary)} IR relief</>}</>}
           right={tradeHref && <Link href={tradeHref} transitionTypes={FORWARD} className="shrink-0 rounded-full bg-blue-fill px-4 py-1.5 text-sm font-semibold text-white">Trade</Link>}
         />
       ) : (
@@ -128,7 +136,7 @@ export default async function TeamView({ team, editable, base, sp, back, tradeHr
           <div>
             <h1 className="text-xl font-semibold">{team.name}</h1>
             <p className="text-muted text-sm">
-              {team.manager_name ?? team.manager_email} · {team.state.rosterCount}/{rules.rosterMax} players · {money(team.state.salary)} salary ·{" "}
+              {team.manager_name ?? team.manager_email} · <span className={overRoster ? "text-bad" : ""}>{team.state.rosterCount}/{rules.rosterMax} players</span> · {money(team.state.salary)} salary ·{" "}
               <span className={team.capSpace < 0 ? "text-bad" : ""}>{money(team.capSpace)} cap space</span>
               {team.state.onIR > 0 && <> · incl. {money(rules.minSalary)} IR relief</>}
             </p>
@@ -137,6 +145,7 @@ export default async function TeamView({ team, editable, base, sp, back, tradeHr
       )}
 
       {editable && <PushPrompt />}
+      {stuck && <p className="card text-sm text-bad">{stuck}</p>}
       {offers && extensions && freeAgency && rookieDraft && moves && lengths && <Pending offers={offers} extensions={extensions} freeAgency={freeAgency} rookieDraft={rookieDraft} moves={moves} lengths={lengths} />}
 
       <div className="flex items-center border-y border-line -mx-4 sm:mx-0 sm:rounded-2xl sm:border sm:bg-card">

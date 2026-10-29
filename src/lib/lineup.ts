@@ -26,6 +26,13 @@ export function canPlay(p: LineupPlayer, slot: string): boolean {
 
 export type LineupRow = { slot: string; playerId: string | null };
 
+// Does the IR slot free a roster spot (and the cap relief) in this lineup? Only while its player is still Out: a
+// player who got better counts as a rostered player again until his GM moves him (or drops someone).
+export const irFrees = (rows: LineupRow[], players: Map<string, LineupPlayer>) => {
+  const id = rows.find((r) => r.slot === "IR")?.playerId;
+  return !!id && irEligible(players.get(id)?.injury_status ?? null);
+};
+
 /**
  * The lineup a team fields on a day.
  * `saved` is the latest save on or before that day (empty if the team never saved one).
