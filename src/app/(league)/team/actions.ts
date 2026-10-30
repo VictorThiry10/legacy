@@ -12,6 +12,7 @@ import { quickLineup } from "@/lib/quick-lineup";
 import { addDays, etDay, isDay, today } from "@/lib/dates";
 import { guard, type ActionResult } from "@/lib/guard";
 import { money } from "@/lib/rules";
+import { perGame } from "@/lib/projection";
 
 // Move a player into a slot (swapping with whoever is there) for one day. Later days follow until changed.
 // The lineup on screen moves straight away; this checks and saves it. The live matchup catches up just after.
@@ -70,11 +71,7 @@ export async function setQuickLineup(from: string, to: string): Promise<ActionRe
       throw new Error(`${why}: drop or trade a player before changing your lineup.`);
     }
     const players = new Map(roster.map((p) => [p.id, p]));
-    const value = (id: string) => {
-      const p = players.get(id);
-      const s = p?.projection?.gp ? p.projection : p?.last_season?.gp ? p.last_season : null;
-      return s ? s.fpts / s.gp : 0;
-    };
+    const value = (id: string) => perGame(players.get(id)) ?? 0;
     const now = Date.now();
     for (let day = from; day <= to; day = addDays(day, 1)) {
       const todays = games.filter((g) => etDay(g.start) === day);

@@ -4,7 +4,8 @@ import { teamSummaries, type TeamSummary } from "@/lib/league";
 import { currentOf, matchups, scores, standings, type Matchup, type Standing } from "@/lib/season";
 import { movesRow } from "@/lib/roster";
 import { headline } from "@/lib/moves";
-import { weekLabel } from "@/lib/dates";
+import { monthDay, today, weekLabel } from "@/lib/dates";
+import { winner } from "@/lib/schedule";
 import { load } from "@/lib/guard";
 import TeamAvatar from "@/components/TeamAvatar";
 import PickMenu from "@/components/PickMenu";
@@ -66,7 +67,8 @@ const pct = (r: Standing) => {
 };
 
 // By conference when every team has one (the playoffs seed by conference): each ranked on its own, games back
-// within it, a line under the two that would go through. One table otherwise.
+// within it, a line under the two that would go through. One table otherwise. Record, win%, games back, points for
+// and against, streak: the team stays put while the numbers scroll sideways on a phone.
 async function Standings({ teams, myId }: { teams: TeamSummary[]; myId?: string }) {
   const table = await load(() => standings(teams.map((t) => t.id)));
   if ("err" in table) return <p className="bg-card px-4 py-4 text-sm text-bad">{table.err}</p>;
@@ -74,9 +76,10 @@ async function Standings({ teams, myId }: { teams: TeamSummary[]; myId?: string 
   const groups = byConference
     ? (Object.keys(CONFERENCES) as Conference[]).map((c) => ({ title: CONFERENCES[c], rows: table.ok.filter((r) => teams.find((t) => t.id === r.teamId)?.conference === c) }))
     : [{ title: "League standings", rows: table.ok }];
-  const cols = "grid grid-cols-[1.5rem_minmax(0,1fr)_4.5rem_3.5rem_2.5rem] items-center gap-2";
+  const cols = "grid min-w-[36rem] grid-cols-[minmax(11rem,1fr)_4.5rem_3.5rem_2.5rem_3.5rem_3.5rem_2.75rem] items-center gap-2";
+  const streak = (s: string) => (s.startsWith("W") ? "text-good" : s.startsWith("L") ? "text-bad" : "text-muted");
   return (
-    <div className="bg-card">
+    <div className="overflow-x-auto bg-card [scrollbar-width:none]">
       {groups.map(({ title, rows }) => {
         const lead = rows[0];
         const gb = (r: Standing) => {
@@ -85,19 +88,23 @@ async function Standings({ teams, myId }: { teams: TeamSummary[]; myId?: string 
         };
         return (
           <div key={title}>
-            <div className={`${cols} border-y border-line px-4 py-2 ${head}`}>
-              <span /><span>{title}</span><span className="text-center">Record</span><span className="text-center">Win%</span><span className="text-center">GB</span>
+            <div className={`${cols} border-y border-line py-2 ${head}`}>
+              <span className="sticky left-0 z-10 bg-card pl-4">{title}</span>
+              <span className="text-center">Record</span><span className="text-center">Win%</span><span className="text-center">GB</span>
+              <span className="text-center">PF</span><span className="text-center">PA</span><span className="pr-4 text-center">Strk</span>
             </div>
             {rows.map((r, i) => {
               const t = teams.find((x) => x.id === r.teamId);
               const line = byConference && i === 1 && rows.length > 2; // the playoff line
               return (
-                <div key={r.teamId} className={`${cols} px-4 py-3 ${line ? "border-b-2 border-line" : "border-b border-line/60"} ${r.teamId === myId ? "bg-blue/10" : ""}`}>
-                  <span className="text-muted">{i + 1}</span>
-                  <TeamCell t={t} />
+                <div key={r.teamId} className={`${cols} py-3 ${line ? "border-b-2 border-line" : "border-b border-line/60"} ${r.teamId === myId ? "bg-[color-mix(in_srgb,var(--blue)_10%,var(--card))]" : "bg-card"}`}>
+                  <span className="sticky left-0 z-10 flex min-w-0 items-center gap-2 bg-inherit pl-4"><span className="w-4 shrink-0 text-muted">{i + 1}</span><TeamCell t={t} /></span>
                   <span className="text-center num">{r.w}-{r.l}-{r.t}</span>
                   <span className="text-center num">{pct(r)}</span>
                   <span className="text-center num text-muted">{gb(r)}</span>
+                  <span className="text-center num text-muted">{Math.round(r.pf)}</span>
+                  <span className="text-center num text-muted">{Math.round(r.pa)}</span>
+                  <span className={`pr-4 text-center num font-semibold ${streak(r.streak)}`}>{r.streak || "-"}</span>
                 </div>
               );
             })}
@@ -150,39 +157,51 @@ function Game({ m, team, home, away }: { m: Matchup; team: (id: string | null) =
   );
 }
 
+// The playoff bracket: the two semifinals on the left, the final on the right, a line joining them. Seeds fill in
+// when the regular season is over (season.ts fillPlayoffs); the loser of a finished round goes grey.
 async function Playoffs({ team }: { team: (id: string | null) => TeamSummary | undefined }) {
   const r = await load(async () => {
     const all = (await matchups()).filter((m) => m.round !== "regular");
-    return { all, s: await scores(all.filter((m) => m.home_team_id && m.away_team_id)) };
+    return { all, s: await scores(all.filter((m) => m.home_team_id && m.away_team_id)), byConference: (await teamSummaries()).every((t) => isConference(t.conference)) };
   });
   if ("err" in r) return <p className="bg-card px-4 py-4 text-sm text-bad">{r.err}</p>;
-  const { all, s } = r.ok;
-  if (!all.length) return <p className="bg-card px-4 py-6 text-center text-sm text-muted">No playoffs yet.</p>;
+  const { all, s, byConference } = r.ok;
+  const semis = all.filter((m) => m.round === "semi"), final = all.find((m) => m.round === "final");
+  if (!semis.length) return <p className="bg-card px-4 py-6 text-center text-sm text-muted">No playoffs yet.</p>;
   // the semifinals seed by conference when the teams have them (Paris, then London), 1 v 4 and 2 v 3 otherwise
   const names = Object.values(CONFERENCES);
-  const byConference = (await teamSummaries()).every((t) => isConference(t.conference));
   const placeholder = (m: Matchup, i: number) =>
     m.round === "final" ? ["Semifinal 1 winner", "Semifinal 2 winner"]
     : byConference ? [`${names[i]} 2nd seed`, `${names[i]} 1st seed`]
     : i === 0 ? ["4th seed", "1st seed"] : ["3rd seed", "2nd seed"];
+  const dates = (m: Matchup) => `${monthDay(m.starts)} to ${monthDay(m.ends)}`;
+  const card = (m: Matchup, i: number) => {
+    const sc = s.get(m.id);
+    const over = !!m.home_team_id && !!m.away_team_id && m.ends < today();
+    const won = over && sc ? winner({ home_team_id: m.home_team_id!, away_team_id: m.away_team_id! }, sc.home, sc.away) : null;
+    const rows: [string | null, number | undefined, string][] = [[m.away_team_id, sc?.away, placeholder(m, i)[0]], [m.home_team_id, sc?.home, placeholder(m, i)[1]]];
+    const inner = rows.map(([id, pts, fallback], k) => (
+      <div key={k} className={`flex items-center justify-between gap-2 px-3 py-2 text-sm ${won && won !== id ? "text-muted" : ""}`}>
+        <span className="flex min-w-0 items-center gap-2">{id && <TeamAvatar team={team(id)} size="sm" />}<span className={`truncate ${id ? "font-medium" : "text-muted"}`}>{team(id)?.name ?? fallback}</span></span>
+        {id && <span className={`num shrink-0 ${won === id ? "font-bold" : "font-semibold"}`}>{(pts ?? 0).toFixed(1)}</span>}
+      </div>
+    ));
+    const box = "block divide-y divide-line/60 rounded-xl border border-line bg-card";
+    return m.home_team_id ? <Link key={m.id} href={`/matchup?m=${m.id}`} className={box}>{inner}</Link> : <div key={m.id} className={box}>{inner}</div>;
+  };
   return (
-    <div className="bg-card">
-      {(["semi", "final"] as const).map((round) => {
-        const games = all.filter((m) => m.round === round);
-        if (!games.length) return null;
-        return (
-          <div key={round}>
-            <div className={`border-y border-line px-4 py-2 ${head}`}>{weekLabel(games[0])}</div>
-            {games.map((m, i) =>
-              m.home_team_id ? (
-                <Game key={m.id} m={m} team={team} home={s.get(m.id)?.home ?? 0} away={s.get(m.id)?.away ?? 0} />
-              ) : (
-                <div key={m.id} className="border-b border-line/60 px-4 py-3 text-sm text-muted">{placeholder(m, i).join(" vs ")}</div>
-              ),
-            )}
-          </div>
-        );
-      })}
+    <div className="bg-card px-4 py-4">
+      <div className={`mb-2 grid grid-cols-[1fr_1.5rem_1fr] ${head}`}>
+        <span>Semifinals<span className="block font-normal normal-case tracking-normal text-muted">{dates(semis[0])}</span></span>
+        <span />
+        {final && <span>Final<span className="block font-normal normal-case tracking-normal text-muted">{dates(final)}</span></span>}
+      </div>
+      <div className="grid grid-cols-[1fr_1.5rem_1fr] items-center">
+        <div className="flex flex-col gap-8">{semis.map(card)}</div>
+        {/* from the middle of each semifinal to the final */}
+        <div className="relative self-stretch"><div className="absolute inset-x-0 bottom-[calc(25%-1rem)] top-[calc(25%-1rem)] rounded-r-lg border-y-2 border-r-2 border-line" /></div>
+        <div>{final && card(final, 0)}</div>
+      </div>
     </div>
   );
 }

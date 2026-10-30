@@ -41,7 +41,7 @@ export async function syncPlayers() {
 
 // ESPN's league injury report -> players' injury status and note. Only players whose status changed are written,
 // and for each one on a fantasy roster, that GM gets a push: hurt, ruled out, upgraded, or cleared.
-// Runs every 10 minutes, and after each player refresh.
+// Runs every 10 minutes (autoRefresh), and after each player refresh.
 export async function syncInjuries() {
   const report = new Map(parseInjuries(await get("/injuries")).map((i) => [i.playerId, i]));
   const { data: players, error } = await db().from("players").select("id, name, injury_status, injury_note").limit(2000);
@@ -193,17 +193,21 @@ export const rookieClass = unstable_cache(
 );
 
 // ---------- automatic refresh ----------
-// Called every 10 minutes by a timer. Each part has its own rhythm, remembered in the sync_log table,
+// Called every 2 minutes by a timer. Each part has its own rhythm, remembered in the sync_log table,
 // so calling it more often (or by a stranger) never does extra work.
+const stamp = (name: string) => db().from("sync_log").upsert({ name, last_run: new Date().toISOString() });
+
 async function due(name: string, minutes: number) {
-  const d = db();
-  const { data } = await d.from("sync_log").select("last_run").eq("name", name).maybeSingle();
+  const { data } = await db().from("sync_log").select("last_run").eq("name", name).maybeSingle();
   if (data && Date.now() - new Date(data.last_run).getTime() < minutes * 60_000) return false;
-  await d.from("sync_log").upsert({ name, last_run: new Date().toISOString() });
+  await stamp(name);
   return true;
 }
 
-async function attempt<T>(fn: () => Promise<T>) {
+type Failed = { error: string };
+const failed = (x: unknown): x is Failed => typeof x === "object" && x !== null && "error" in x;
+
+async function attempt<T>(fn: () => Promise<T>): Promise<T | Failed> {
   try {
     return await fn();
   } catch (e) {
@@ -211,24 +215,31 @@ async function attempt<T>(fn: () => Promise<T>) {
   }
 }
 
+// Scores every 2 minutes while games are on (or about to start), once an hour otherwise; injuries every 10 minutes
+// either way. "scores-run" is the last attempt (the rhythm); "scores" is the last success, which is what the
+// Matchup page's "Scores updated" and the outage email (health.ts) go by: a feed that breaks shows up as stale.
+// Every failure is logged, so Vercel's function logs tell what broke.
 export async function autoRefresh() {
-  // The timer calls every 2 minutes: real work every couple of minutes while games are on, every 10 otherwise.
   const live = await gamesOnNow();
-  if (!(await due("scores", live ? 1.5 : 9.5))) return { skipped: live ? "ran under 2 minutes ago" : "no games on; ran under 10 minutes ago" };
-  const out: Record<string, unknown> = { scores: await attempt(syncRecent) };
-  if (await due("catch-up", 30)) out.catchUp = await attempt(catchUpGames);
-  out.fantasy = await attempt(refreshScores); // after box scores, so lineups score the latest stats
+  const out: Record<string, unknown> = {};
+  if (await due("scores-run", live ? 1.5 : 55)) {
+    out.scores = await attempt(syncRecent);
+    if (!failed(out.scores)) await stamp("scores");
+    if (await due("catch-up", 30)) out.catchUp = await attempt(catchUpGames);
+    out.fantasy = await attempt(refreshScores); // after box scores, so lineups score the latest stats
+  } else out.skipped = live ? "scores ran under 2 minutes ago" : "no games on; scores ran under an hour ago";
   if (await due("players", 55)) out.players = await attempt(syncPlayers); // ends with the injury report
   else if (await due("injuries", 9)) out.injuries = await attempt(syncInjuries);
   if (await due("schedule", 60 * 24 - 10)) {
     const day = 24 * 3600_000;
     out.schedule = await attempt(() => syncSchedule(new Date(Date.now() - day), new Date(Date.now() + 14 * day)));
   }
+  for (const [k, v] of Object.entries(out)) if (failed(v)) console.error(`espn refresh, ${k}:`, v.error);
   return out;
 }
 
 // A game is on, or tips off within 15 minutes (games last under 4 hours).
-async function gamesOnNow() {
+export async function gamesOnNow() {
   const now = Date.now();
   const { count } = await db().from("games").select("id", { count: "exact", head: true }).eq("final", false)
     .gte("start", new Date(now - 4 * 3600_000).toISOString()).lte("start", new Date(now + 15 * 60_000).toISOString());

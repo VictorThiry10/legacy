@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { myTeamOrWelcome } from "@/lib/auth";
 import { getSettings, teamSummaries, type TeamSummary } from "@/lib/league";
-import { currentOf, matchups, scores, standings, type Matchup, type Standing } from "@/lib/season";
+import { currentOf, frozenLineups, matchups, meetings, outlook, scores, standings, type Matchup, type Standing } from "@/lib/season";
+import { perGame } from "@/lib/projection";
 import { rosters, type RosterPlayer } from "@/lib/roster";
 import { lineupsOn } from "@/lib/lineup-store";
 import { SLOTS, isStarter, slotLabel, type LineupRow } from "@/lib/lineup";
@@ -9,7 +10,7 @@ import { gamesBetween, linesIn, teamAbbrs, type DayLine, type Game } from "@/lib
 import { scoreRows } from "@/lib/rules";
 import { nickname } from "@/lib/nba-teams";
 import { addDays, ago, isDay, minutesSince, monthDay, today, weekday } from "@/lib/dates";
-import { lastRuns } from "@/lib/espn";
+import { gamesOnNow, lastRuns } from "@/lib/espn";
 import { STALE_MINUTES } from "@/lib/health";
 import { headshot, shortName } from "@/lib/names";
 import TeamLogo from "@/components/TeamLogo";
@@ -28,7 +29,10 @@ export const dynamic = "force-dynamic";
 
 // Head to head, ESPN style: swipe through the week's matchups at the top, the score stays pinned while you
 // scroll, then one day at a time, slot by slot, one team on each side. My own team is always on the right.
-// A player who has played shows his game's score and his stat line; tapping his points opens the breakdown.
+// A player who has played shows his game's score and his stat line; tapping his points opens the breakdown; before
+// his game, his projected points sit there in grey. Under each score: the projected total, the games still to come,
+// and the two GMs' record against each other. A day that is over shows the lineup that was frozen and counted
+// (lineup_points), not the roster as it is now.
 export default async function MatchupPage({ searchParams }: PageProps<"/matchup">) {
   const [me, teams, sp, schedule, runs, { scoring }] = await Promise.all([myTeamOrWelcome(), teamSummaries(), searchParams, load(() => matchups()), lastRuns(), getSettings()]);
   const now = today();
@@ -54,15 +58,27 @@ export default async function MatchupPage({ searchParams }: PageProps<"/matchup"
         ? db().from("lineup_points").select("team_id, player_id, slot, fpts").in("team_id", ids).gte("day", m.starts).lte("day", m.ends)
         : null,
     ]);
-    const [lineups, lines] = await Promise.all([lineupsOn(ids, day, roster), linesIn(roster.map((p) => p.id), games.map((g) => g.id))]);
+    // a day that is over: what was frozen and counted, with the players who have left since
+    const frozen = !summary && day < now ? await frozenLineups(ids, day, roster) : null;
+    const everyone = frozen ? [...roster, ...frozen.gone] : roster;
+    const [saved, lines, h2h, look, liveNow] = await Promise.all([
+      lineupsOn(ids, day, roster), linesIn(everyone.map((p) => p.id), games.map((g) => g.id)),
+      L && R ? meetings(L, R) : null, outlook(m, ids, roster), gamesOnNow(),
+    ]);
+    const lineups = new Map(saved);
+    for (const [team, rows] of frozen?.lineups ?? []) lineups.set(team, rows);
     const pts = new Map<string, number>();
+    const bench = new Map<string, number>(); // the Summary's bench points per team
     if (summary) {
-      for (const c of counted?.data ?? []) if (isStarter(c.slot)) pts.set(c.player_id, (pts.get(c.player_id) ?? 0) + Number(c.fpts));
+      for (const c of counted?.data ?? []) {
+        if (isStarter(c.slot)) pts.set(c.player_id, (pts.get(c.player_id) ?? 0) + Number(c.fpts));
+        else if (c.slot.startsWith("BE")) bench.set(c.team_id, (bench.get(c.team_id) ?? 0) + Number(c.fpts));
+      }
     } else {
       for (const l of lines) pts.set(l.playerId, (pts.get(l.playerId) ?? 0) + l.fpts);
     }
     const weeks = [...new Set(all.map((x) => x.week))];
-    return { m, L, R, day, summary, s, table, roster, games, abbr, pts, lines, lineups, weekMs, weeks };
+    return { m, L, R, day, summary, s, table, roster: everyone, games, abbr, pts, bench, lines, lineups, weekMs, weeks, h2h, look, liveNow };
   });
 
   if ("err" in r) return <p className="card text-bad text-sm">{r.err}</p>;
@@ -74,7 +90,7 @@ export default async function MatchupPage({ searchParams }: PageProps<"/matchup"
       </div>
     );
   }
-  const { m, L, R, day, summary, s, table, roster, games, abbr, pts, lines, lineups, weekMs, weeks } = r.ok;
+  const { m, L, R, day, summary, s, table, roster, games, abbr, pts, bench, lines, lineups, weekMs, weeks, h2h, look, liveNow } = r.ok;
   const team = (id: string | null) => (id ? teams.find((t) => t.id === id) : undefined);
   // The big badge by the score. Mine opens the sheet to change my team's photo and colour.
   const badge = (id: string | null) => {
@@ -105,18 +121,26 @@ export default async function MatchupPage({ searchParams }: PageProps<"/matchup"
     const home = g.home_team_id === p.nba_team_id;
     return `${nice(day).slice(0, 3)} ${Number(day.slice(5, 7))}/${Number(day.slice(8))} ${home ? "vs." : "@"} ${nickname(abbr.get(home ? g.away_team_id : g.home_team_id) ?? "?")}`;
   };
-  // One side's points: tappable once he has played, 0.0 if his game ended without him, a dash before that.
+  // One side's points: tappable once he has played, 0.0 if his game ended without him, his projection in grey
+  // before his game tips off, a dash with no game.
   const points = (row: LineupRow | undefined, p: RosterPlayer | undefined, side: string) => {
     const l = p && line.get(p.id), g = gameOf(p);
     if (l && p && g) {
       return <div className={`flex items-center ${side}`}><ScoreButton points={l.fpts} name={p.name} headshot={headshot(p.headshot, 240)} game={gameTitle(g, p)} rows={scoreRows(l.stats, scoring)} /></div>;
     }
     const v = dayPts(row) ?? (!summary && p && g?.state === "post" ? 0 : undefined);
-    return <div className={`flex items-center text-[15px] num ${side} ${v == null ? "text-muted" : "font-semibold"}`}>{v == null ? "-" : v.toFixed(1)}</div>;
+    const proj = v == null && !summary && day >= now && g?.state === "pre" ? perGame(p) : null;
+    return <div className={`flex items-center text-[15px] num ${side} ${v == null ? "text-muted" : "font-semibold"}`}>{v != null ? v.toFixed(1) : proj != null ? proj.toFixed(1) : "-"}</div>;
   };
   const starters = pairs.filter((x) => isStarter(x.slot));
   const benchAndIR = pairs.filter((x) => !isStarter(x.slot));
   const dayTotal = (side: "l" | "r") => (summary ? scoreOf(m, side === "l" ? L : R) : starters.reduce((a, x) => a + (dayPts(x[side]) ?? 0), 0));
+  // points left on the bench (the IR slot isn't a choice)
+  const benchTotal = (side: "l" | "r") => (summary ? bench.get((side === "l" ? L : R) ?? "") ?? 0 : benchAndIR.filter((x) => x.slot.startsWith("BE")).reduce((a, x) => a + (dayPts(x[side]) ?? 0), 0));
+  // the week ahead: projected total (score so far plus the starters' games to come) and how many games are left
+  const ahead = m.ends >= now;
+  const proj = (id: string | null) => (ahead && id ? scoreOf(m, id) + (look.get(id)?.proj ?? 0) : null);
+  const toCome = (id: string | null) => (ahead && id ? look.get(id)?.left : undefined);
   const days: string[] = [];
   for (let d = m.starts; d <= m.ends; d = addDays(d, 1)) days.push(d);
   const dayMenu = [
@@ -173,15 +197,16 @@ export default async function MatchupPage({ searchParams }: PageProps<"/matchup"
         <MatchupSwipe prev={prevHref} next={nextHref}>
         {/* score, pinned under the tabs while scrolling */}
         <div className="sticky top-11 z-20 grid grid-cols-2 items-center bg-card px-4 py-3">
-          <div className="flex items-center gap-3">{badge(L)}<span className="num text-4xl font-black leading-none">{scoreOf(m, L).toFixed(1)}</span></div>
-          <div className="flex items-center justify-end gap-3"><span className="num text-4xl font-black leading-none">{scoreOf(m, R).toFixed(1)}</span>{badge(R)}</div>
+          <div className="flex items-center gap-3">{badge(L)}<Score pts={scoreOf(m, L)} proj={proj(L)} /></div>
+          <div className="flex items-center justify-end gap-3"><Score pts={scoreOf(m, R)} proj={proj(R)} right />{badge(R)}</div>
         </div>
-        <div className="grid grid-cols-2 gap-4 bg-card px-4 pb-4">
-          <TeamName t={team(L)} rec={table.find((x) => x.teamId === L)} />
-          <TeamName t={team(R)} rec={table.find((x) => x.teamId === R)} right />
+        <div className="grid grid-cols-2 gap-4 bg-card px-4 pb-3">
+          <TeamName t={team(L)} rec={table.find((x) => x.teamId === L)} left={toCome(L)} />
+          <TeamName t={team(R)} rec={table.find((x) => x.teamId === R)} left={toCome(R)} right />
         </div>
+        {h2h && <p className="bg-card px-4 pb-3 text-center text-[11px] text-muted">Head to head <span className="num font-semibold text-fg">{h2h[0]}-{h2h[1]}</span></p>}
 
-        {m.starts <= now && runs.scores && <Updated at={runs.scores} />}
+        {m.starts <= now && runs.scores && <Updated at={runs.scores} live={liveNow} />}
 
         <div className="flex items-center border-y border-line bg-card">
           {!summary && day > m.starts
@@ -202,6 +227,11 @@ export default async function MatchupPage({ searchParams }: PageProps<"/matchup"
               <span className="num text-right text-2xl font-bold">{dayTotal("r").toFixed(1)}</span>
             </div>
             <div className="opacity-80">{benchAndIR.map((x, k) => row(x, `${x.slot}-b${k}`))}</div>
+            <div className="grid grid-cols-[1fr_auto_1fr] items-center border-t border-line/60 bg-card px-4 py-2 text-muted">
+              <span className="num text-sm font-semibold">{benchTotal("l").toFixed(1)}</span>
+              <span className="text-xs font-semibold">Bench</span>
+              <span className="num text-right text-sm font-semibold">{benchTotal("r").toFixed(1)}</span>
+            </div>
           </div>
         </Slide>
         </MatchupSwipe>
@@ -210,9 +240,19 @@ export default async function MatchupPage({ searchParams }: PageProps<"/matchup"
   );
 }
 
-// When scores last came in; red once they're stale (the commissioner is emailed then too).
-function Updated({ at }: { at: string }) {
-  const stale = minutesSince(at) >= STALE_MINUTES;
+// The score, with the projected total under it while the week is on.
+function Score({ pts, proj, right }: { pts: number; proj: number | null; right?: boolean }) {
+  return (
+    <div className={right ? "text-right" : ""}>
+      <div className="num text-4xl font-black leading-none">{pts.toFixed(1)}</div>
+      {proj != null && <div className="num mt-1 text-[11px] leading-none text-muted">proj {proj.toFixed(1)}</div>}
+    </div>
+  );
+}
+
+// When scores last came in; red once they're stale while games are on (the commissioner is emailed then too).
+function Updated({ at, live }: { at: string; live: boolean }) {
+  const stale = live && minutesSince(at) >= STALE_MINUTES;
   return (
     <p className={`bg-card px-4 pb-2 text-center text-[11px] ${stale ? "text-bad" : "text-muted"}`}>
       {stale ? "Scores last updated" : "Scores updated"} {ago(at)}
@@ -220,12 +260,13 @@ function Updated({ at }: { at: string }) {
   );
 }
 
-function TeamName({ t, rec, right }: { t?: TeamSummary; rec?: Standing; right?: boolean }) {
+// Team, GM and record; while the week is on, the starters' games still to come.
+function TeamName({ t, rec, left, right }: { t?: TeamSummary; rec?: Standing; left?: number; right?: boolean }) {
   if (!t) return <div className={`text-sm text-muted ${right ? "text-right" : ""}`}>To be decided</div>;
   return (
     <Link href={`/teams/${t.id}`} className={`min-w-0 ${right ? "text-right" : ""}`}>
       <div className="truncate font-semibold">{t.name}</div>
-      <div className="truncate text-xs text-muted">{t.manager_name ?? ""} · {rec ? `${rec.w}-${rec.l}${rec.t ? `-${rec.t}` : ""}` : "0-0"}</div>
+      <div className="truncate text-xs text-muted">{t.manager_name ?? ""} · {rec ? `${rec.w}-${rec.l}${rec.t ? `-${rec.t}` : ""}` : "0-0"}{left != null && <> · {left} games left</>}</div>
     </Link>
   );
 }
