@@ -14,7 +14,7 @@ import * as A from "../actions";
 
 export const dynamic = "force-dynamic";
 
-// Commissioner: which free agents go in which round, when the rounds open, the GMs who can sign in, and a restart for test runs.
+// Commissioner: which free agents go in which round, when the rounds open, and the GMs who can sign in.
 export default async function Setup({ searchParams }: PageProps<"/bidding/setup">) {
   const team = await bidTeam();
   if (!team || !(await commishVerified(team))) redirect("/bidding");
@@ -31,14 +31,9 @@ export default async function Setup({ searchParams }: PageProps<"/bidding/setup"
           href="/bidding"
           title="Rounds"
           right={
-            <div className="flex gap-2">
-              <ActionForm action={A.autoFill} confirm="Fill every empty spot with the best free agents left (last season's fantasy points per game)?">
-                <button className={GHOST}>Auto fill</button>
-              </ActionForm>
-              <ActionForm action={A.restart} confirm="Restart free agency? Every bid and free agency signing is deleted, and the schedule is cleared. The player lists stay.">
-                <button className={`${GHOST} text-bad`}>Restart</button>
-              </ActionForm>
-            </div>
+            <ActionForm action={A.autoFill} confirm="Fill every empty spot with the best free agents left (last season's fantasy points per game)?">
+              <button className={GHOST}>Auto fill</button>
+            </ActionForm>
           }
         />
 

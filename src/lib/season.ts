@@ -4,12 +4,16 @@ import { db } from "./supabase/server";
 import { all, rpc } from "./db";
 import { addDays, etDay, today } from "./dates";
 import { getSettings } from "./league";
-import { freezeLineup, isSlot, isStarter } from "./lineup";
+import { freezeLineup, isSlot, isStarter, SLOTS, type LineupRow } from "./lineup";
 import { gamesBetween } from "./nba";
-import { lineupsFrom, savedUpTo } from "./lineup-store";
+import { lineupsFrom, lineupsOn, savedUpTo } from "./lineup-store";
 import { rosters } from "./roster";
 import { buildSchedule, conferenceGroups, rehearsalSchedule, semifinalPairs, winner } from "./schedule";
 import { CONFERENCES, isConference } from "./conferences";
+import { headToHead, tabulate, type Played, type Standing } from "./standings";
+import { perGame } from "./projection";
+import type { Player } from "./league";
+import type { RosterPlayer } from "./roster";
 import type { Row } from "./supabase/types";
 
 // The season: who plays whom each week, each team's frozen daily lineups and points, scores and standings.
@@ -138,8 +142,8 @@ export async function refreshScores() {
   }
   if (!days.length) return { days: 0 };
   await fillPlayoffs(ms);
-  const { data: done } = await db().from("lineup_points").select("day").gte("day", days[0]).lte("day", now);
-  const frozenDays = new Set((done ?? []).map((r) => r.day));
+  const done = await all((a, b) => db().from("lineup_points").select("day").gte("day", days[0]).lte("day", now).range(a, b));
+  const frozenDays = new Set(done.map((r) => r.day));
   const caughtUp: string[] = [];
   for (const day of days) {
     if (day === now) await snapshotDay(day);
@@ -213,21 +217,80 @@ export async function weekPoints(m: Matchup): Promise<Map<string, number>> {
   return out;
 }
 
-export type Standing = { teamId: string; w: number; l: number; t: number; pf: number; pa: number };
+export type { Standing };
 
-// Wins and losses from finished regular season weeks (playoffs don't count).
-export async function standings(teamIds: string[]): Promise<Standing[]> {
-  const done = (await matchups()).filter((m) => m.round === "regular" && m.ends < today());
+// Finished weeks of a kind, with their scores, as the standings count them.
+async function played(ms: Matchup[], round?: Matchup["round"]): Promise<Played[]> {
+  const done = ms.filter((m) => (!round || m.round === round) && m.home_team_id && m.away_team_id && m.ends < today());
   const s = await scores(done);
-  const table = new Map(teamIds.map((id) => [id, { teamId: id, w: 0, l: 0, t: 0, pf: 0, pa: 0 }]));
-  for (const m of done) {
-    const { home, away } = s.get(m.id)!;
-    const h = table.get(m.home_team_id!), a = table.get(m.away_team_id!);
-    if (!h || !a) continue;
-    h.pf += home; h.pa += away; a.pf += away; a.pa += home;
-    if (home > away) { h.w++; a.l++; } else if (away > home) { a.w++; h.l++; } else { h.t++; a.t++; }
+  return done.map((m) => ({ week: m.week, home: m.home_team_id!, away: m.away_team_id!, homePts: s.get(m.id)!.home, awayPts: s.get(m.id)!.away }));
+}
+
+// Wins and losses from finished regular season weeks (playoffs don't count), with points for and against and the streak.
+export async function standings(teamIds: string[]): Promise<Standing[]> {
+  return tabulate(teamIds, await played(await matchups(), "regular"));
+}
+
+// Two teams' finished meetings this season, playoffs included: [a's wins, b's wins]; null before they have met.
+export async function meetings(a: string, b: string): Promise<[number, number] | null> {
+  const [wa, wb] = headToHead(a, b, await played(await matchups()));
+  return wa + wb ? [wa, wb] : null;
+}
+
+// What each team actually fielded on a day that is over, as frozen in lineup_points: the lineup rows (SLOTS order,
+// extra bench rows last) and the players who have left the roster since (so the page can still show them, with the
+// points they scored for this team). Teams with nothing frozen that day are left out: the page falls back to the saves.
+export type Frozen = { lineups: Map<string, LineupRow[]>; gone: RosterPlayer[] };
+export async function frozenLineups(teamIds: string[], day: string, roster: RosterPlayer[]): Promise<Frozen> {
+  const rows = teamIds.length
+    ? await all((a, b) => db().from("lineup_points").select("team_id, slot, player_id").in("team_id", teamIds).eq("day", day).range(a, b))
+    : [];
+  const lineups = new Map<string, LineupRow[]>();
+  for (const team of new Set(rows.map((r) => r.team_id))) {
+    const mine = rows.filter((r) => r.team_id === team);
+    const at = new Map(mine.map((r) => [r.slot, r.player_id]));
+    const out: LineupRow[] = SLOTS.map((slot) => ({ slot, playerId: at.get(slot) ?? null }));
+    for (const r of mine) if (!isSlot(r.slot)) out.splice(out.length - 1, 0, { slot: "BE", playerId: r.player_id });
+    lineups.set(team, out);
   }
-  return [...table.values()].sort((x, y) => y.w + y.t / 2 - (x.w + x.t / 2) || y.pf - x.pf);
+  const known = new Set(roster.map((p) => p.id));
+  const missing = [...new Set(rows.filter((r) => !known.has(r.player_id)).map((r) => r.player_id))];
+  const { data } = missing.length ? await db().from("players").select("*").in("id", missing) : { data: [] };
+  const teamOf = new Map(rows.map((r) => [r.player_id, r.team_id]));
+  const gone = ((data ?? []) as Player[]).map((p) => ({ ...p, contract_id: "", salary: 0, years: 0, season_signed: 0, team_id: teamOf.get(p.id)! }));
+  return { lineups, gone };
+}
+
+// The rest of a matchup for each team: starters' games still to come (today's not yet tipped off, then every later
+// day with the lineup that stands) and the fantasy points they project to (lib/projection.ts). The projected total
+// is the score so far plus that.
+export type Outlook = { left: number; proj: number };
+export async function outlook(m: Matchup, teamIds: string[], roster: RosterPlayer[]): Promise<Map<string, Outlook>> {
+  const out = new Map(teamIds.map((id) => [id, { left: 0, proj: 0 }]));
+  const now = today();
+  if (!teamIds.length || m.ends < now) return out;
+  const from = m.starts > now ? m.starts : now;
+  const days: string[] = [];
+  for (let d = from; d <= m.ends; d = addDays(d, 1)) days.push(d);
+  const [games, lineups] = await Promise.all([gamesBetween(from, m.ends), Promise.all(days.map((d) => lineupsOn(teamIds, d, roster)))]);
+  const players = new Map(roster.map((p) => [p.id, p]));
+  const at = Date.now();
+  days.forEach((d, i) => {
+    const todays = games.filter((g) => etDay(g.start) === d);
+    for (const team of teamIds) {
+      const o = out.get(team)!;
+      for (const r of lineups[i].get(team) ?? []) {
+        const p = r.playerId ? players.get(r.playerId) : undefined;
+        if (!p?.nba_team_id || !isStarter(r.slot)) continue;
+        const g = todays.find((g) => g.home_team_id === p.nba_team_id || g.away_team_id === p.nba_team_id);
+        if (!g || Date.parse(g.start) <= at) continue; // no game, or it has started: what he scores is in the score
+        o.left++;
+        o.proj += perGame(p) ?? 0;
+      }
+    }
+  });
+  for (const o of out.values()) o.proj = round1(o.proj);
+  return out;
 }
 
 // Commissioner changed the scoring weights: recount every box score and lineup day.

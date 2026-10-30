@@ -38,14 +38,15 @@ Once everyone has joined, the commissioner builds the head to head schedule in S
 Players and the schedule load by themselves through the refresh job below.
 
 ## 6. Automatic refresh
-A timer in Supabase calls the site every 10 minutes. The site then refreshes scores every time,
-injuries and stats every hour, and the next two weeks of schedule once a day (it keeps track itself).
+A timer in Supabase calls the site every 2 minutes. The site then refreshes scores every 2 minutes while games
+are on and once an hour otherwise, injuries every 10 minutes, players and stats every hour, and the next two weeks of
+schedule once a day (it keeps track itself).
 Vercel also calls it once a day as a backup. In Supabase SQL Editor, run once:
 
 ```sql
 create extension if not exists pg_cron;
 create extension if not exists pg_net;
-select cron.schedule('espn-refresh', '*/10 * * * *',
+select cron.schedule('espn-refresh', '*/2 * * * *',
   $$ select net.http_get(url := 'https://YOUR-SITE.vercel.app/api/cron/espn', timeout_milliseconds := 290000) $$);
 ```
 

@@ -489,12 +489,6 @@ export async function lockContracts(team: Team, locked: boolean) {
   if (error) fail(error);
 }
 
-export async function restart(team: Team) {
-  await commish(team);
-  const { season } = await getSettings();
-  await rpc("bidding_restart", { p_season: season });
-}
-
 // ---------- commissioner setup: which players go in which round ----------
 
 // `signed`: players in the round who have since joined a team (a free agent pickup). They're skipped in the auction.

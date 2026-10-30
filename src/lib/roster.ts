@@ -7,6 +7,7 @@ import { ADDS_LOCKED, ADDS_PER_WEEK, addsLocked, capOf, capSpace, money, rosterP
 import { onIR } from "./lineup-store";
 import { gamesBetween } from "./nba";
 import { addDays, dayName, etDay, today } from "./dates";
+import { announceDrop } from "./announce";
 
 // Rosters and every way they change. All roster moves go through here: each one is checked against the
 // league rules, then written in one step together with its line in the transactions log.
@@ -138,7 +139,7 @@ export async function pickUp(o: { teamId: string; playerId: string; dropContract
   return `${who?.name ?? "Player"} added${dropped ? `, ${dropped.name} dropped to waivers` : ""}.`;
 }
 
-// Has his NBA game today started (or finished)? Today's lineups are re-frozen from the rosters every 10 minutes,
+// Has his NBA game today started (or finished)? Today's lineups are re-frozen from the rosters every few minutes,
 // so dropping him now would take his points out of today's score. He can go tomorrow.
 export async function lockedToday(p: { nba_team_id?: string | null }) {
   if (!p.nba_team_id) return false;
@@ -157,8 +158,9 @@ export async function dropPlayer(o: { teamId: string; contractId: string }) {
 }
 
 export async function releaseContract(contractId: string, note?: string) {
-  const { season } = await getSettings();
+  const [{ season }, { data: c }] = await Promise.all([getSettings(), db().from("contracts").select("player_id, team_id").eq("id", contractId).maybeSingle()]);
   await rpc("roster_release", { p_contract: contractId, p_season: season, p_note: note ?? "" });
+  if (c) await announceDrop(c.player_id, c.team_id); // the other GMs hear he's on waivers
   return "Released. He's on waivers now.";
 }
 

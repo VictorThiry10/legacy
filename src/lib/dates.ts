@@ -27,6 +27,9 @@ const ROUND: Record<string, string> = { semi: "Semifinal", final: "Final" };
 export const weekLabel = (m: { week: number; starts: string; ends: string; round?: string; is_test?: boolean }) =>
   `${m.is_test ? "Test · " : ""}${ROUND[m.round ?? ""] ?? `Week ${m.week}`} · ${monthDay(m.starts)} to ${monthDay(m.ends)}`;
 
+// A moment on the league's clock (London): "Sat 8:00".
+export const londonTime = (iso: string) => new Date(iso).toLocaleString("en-GB", { timeZone: "Europe/London", weekday: "short", hour: "numeric", minute: "2-digit" }).replace(",", "");
+
 export const minutesSince = (iso: string, now = Date.now()) => Math.max(0, Math.round((now - Date.parse(iso)) / 60_000));
 
 // How long ago a moment was, in words: "just now", "3 min ago", "2 h ago", "3 days ago".

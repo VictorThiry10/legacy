@@ -56,10 +56,6 @@ export async function lockContracts(locked: boolean) {
   return run(async () => B.lockContracts(await me(), locked));
 }
 
-export async function restart() {
-  return run(async () => B.restart(await me()));
-}
-
 // setup page (forms)
 export async function addToRound(f: FormData) {
   return run(async () => B.addToRound(await me(), Number(f.get("round")), String(f.get("player"))));

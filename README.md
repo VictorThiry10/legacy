@@ -18,7 +18,7 @@ Database (server only):
 - `waivers.ts` every dropped player goes on waivers for 48 hours of sealed bids, then to the best legal bid or free agency
 - `lottery.ts` the rookie lottery's field: last season's records and each team's odds (pure) · `draft.ts` the rookie draft: the lottery drawn once and saved, then one pick at a time, each signing a rookie · `rookies.ts` the rookies with a set price
 - `lineup-store.ts` saved lineups · `season.ts` matchups, frozen daily lineup points, scores, standings
-- `nba.ts` games and box scores · `espn.ts` + `espn-parse.ts` the ESPN feed and the 10 minute refresh
+- `nba.ts` games and box scores · `espn.ts` + `espn-parse.ts` the ESPN feed and its refresh (every 2 minutes while games are on, hourly otherwise)
 
 ## Database
 One Supabase project. Changes live in `supabase/migrations`, applied in filename order; never edit an applied file,

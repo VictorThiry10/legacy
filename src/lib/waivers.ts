@@ -6,6 +6,7 @@ import { ADDS_USED, addsThisWeek, capSpaces, lockedToday, problemsFor, rosters }
 import { onIR } from "./lineup-store";
 import { BID_STEP, money, rankWaiverBids, addsLockedFor, ADDS_LOCKED } from "./rules";
 import type { Row } from "./supabase/types";
+import { announceDrop, announceSettled } from "./announce";
 
 // Waivers. Every dropped player sits on waivers for 24 hours (settings.waiver_hours) and then until the next 8:00
 // London, when all waivers clear (the database works out the time: waiver_closes_at). Meanwhile GMs send sealed
@@ -111,6 +112,9 @@ async function settle(w: Waiver): Promise<"claimed" | "unclaimed" | "postponed">
   const count = `${bids.length} sealed bid${bids.length === 1 ? "" : "s"}`;
   const note = winner ? `Waiver claim, ${count}` : bids.length ? `Cleared waivers, no bid fit under the rules (${count})` : "Cleared waivers, no bids";
   await rpc("waiver_settle", { p_waiver: w.id, p_bid: winner?.id ?? null, p_bids: bids.length, p_season: season, p_note: note });
+  // word to the GMs: the winner, the outbid, and everyone about the player the winner dropped to make room
+  await announceSettled(w, winner ? { team_id: winner.teamId, amount: winner.amount } : null, [...new Set(bids.map((b) => b.team_id))]);
+  if (winner && leaving) await announceDrop(leaving.id, winner.teamId);
   return winner ? "claimed" : "unclaimed";
 }
 

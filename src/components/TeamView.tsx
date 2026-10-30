@@ -22,7 +22,8 @@ import { AUCTION_ON_HOLD } from "@/lib/auction-hold";
 import LineupTable, { type LinePlayer } from "./LineupTable";
 import { irEligible } from "@/lib/lineup";
 import QuickLineup from "./QuickLineup";
-import { matchups } from "@/lib/season";
+import { frozenLineups, matchups } from "@/lib/season";
+import { perGame } from "@/lib/projection";
 import BackBar from "./BackBar";
 import TeamAvatar from "./TeamAvatar";
 
@@ -35,6 +36,7 @@ type Key = (typeof STATS)[number][0];
 type Agg = Record<Key, number> & { gp: number; fpts: number };
 
 // ESPN style lineup: one day at a time, a stats view picker, one row per slot. `editable` only for the signed in owner.
+// A day that is over shows the lineup that was frozen and counted (lineup_points), players since dropped included.
 export default async function TeamView({ team, editable, base, sp, back, tradeHref }: {
   team: TeamSummary; editable: boolean; base: string; sp: Search; back?: string; tradeHref?: string; // tradeHref: a Trade button in the back bar
 }) {
@@ -59,8 +61,11 @@ export default async function TeamView({ team, editable, base, sp, back, tradeHr
   const lengths = editable ? lengthChoice(team).catch(() => null) : null;
   const [{ rules, season }, roster, games, abbr, weeks] = await Promise.all([getSettings(), rosters([team.id]), gamesBetween(day, day), teamAbbrs(), editable ? matchups(team.id) : []]);
   const week = weeks.find((m) => m.starts <= day && day <= m.ends); // the matchup this day is part of (Quick lineup's "rest of matchup")
-  const [rows, lines] = await Promise.all([lineupFor(team.id, day, roster), boxLines(roster.map((p) => p.id))]);
-  const players = new Map(roster.map((p) => [p.id, p]));
+  const frozen = day < now ? await frozenLineups([team.id], day, roster) : null; // what counted that day
+  const everyone = frozen ? [...roster, ...frozen.gone] : roster;
+  const [saved, lines] = await Promise.all([frozen?.lineups.has(team.id) ? null : lineupFor(team.id, day, roster), boxLines(everyone.map((p) => p.id))]);
+  const rows = frozen?.lineups.get(team.id) ?? saved!;
+  const players = new Map(everyone.map((p) => [p.id, p]));
   const gameOf = (p?: RosterPlayer) => (p?.nba_team_id ? games.find((g) => g.home_team_id === p.nba_team_id || g.away_team_id === p.nba_team_id) : undefined);
   const locked = (p?: RosterPlayer) => day < now || (!!gameOf(p) && new Date(gameOf(p)!.start) <= new Date());
   const inPeriod = (l: BoxLine) =>
@@ -81,13 +86,15 @@ export default async function TeamView({ team, editable, base, sp, back, tradeHr
     return a;
   };
   // Everything after the slot pill and photo, for one player (or an empty slot). Pts is always the day on screen
-  // (his game that day, once he has played); Avg and the stats follow the stats view.
+  // (his game that day, once he has played; his projection in grey before it tips off); Avg and the stats follow
+  // the stats view.
   const cells = (p: RosterPlayer | null, g: ReturnType<typeof gameOf>) => {
     const a = p ? agg(p.id) : null;
     const played = p ? lines.find((l) => l.playerId === p.id && l.day === day) : undefined;
+    const proj = !played && day >= now && g?.state === "pre" ? perGame(p) : null;
     const val = (k: Key) => (!a || !a.gp ? "--" : period !== "day" ? (a[k] / a.gp).toFixed(1) : String(a[k]));
     return [
-      <td key="pts" className="num text-right font-semibold">{played ? round(played.fpts) : <span className="text-muted">--</span>}</td>,
+      <td key="pts" className="num text-right font-semibold">{played ? round(played.fpts) : <span className="text-muted">{proj != null ? proj.toFixed(1) : "--"}</span>}</td>,
       <td key="avg" className="num text-right">{a?.gp ? (a.fpts / a.gp).toFixed(1) : <span className="text-muted">--</span>}</td>,
       <td key="opp">{g && p ? oppLabel(g, p.nba_team_id!, abbr) : <span className="text-muted">--</span>}</td>,
       <td key="status" className="text-xs">{g && p ? <GameStatus g={g} teamId={p.nba_team_id!} /> : <span className="text-muted">--</span>}</td>,
@@ -95,7 +102,7 @@ export default async function TeamView({ team, editable, base, sp, back, tradeHr
     ];
   };
   const linePlayers: Record<string, LinePlayer> = Object.fromEntries(
-    roster.map((p) => [p.id, {
+    everyone.map((p) => [p.id, {
       id: p.id, name: p.name, position: p.position, injury_status: p.injury_status,
       headshot: headshot(p.headshot, 110), locked: locked(p),
       info: (
