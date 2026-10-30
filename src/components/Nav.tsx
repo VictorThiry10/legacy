@@ -15,6 +15,12 @@ const TABS = [
 export default function Nav() {
   const path = usePathname();
   const [tapped, setTapped] = useState<{ href: string; from: string } | null>(null);
+  // a tap is forgotten once the page changes (coming back to the same page by a link, not a tab, must not light the old tab)
+  const [seen, setSeen] = useState(path);
+  if (seen !== path) {
+    setSeen(path);
+    setTapped(null);
+  }
   const on = (href: string) => path === href || path.startsWith(`${href}/`) || (href === "/matchup" && path === "/") || (href === "/team" && path.startsWith("/teams/")) || (href === "/league" && path.startsWith("/settings"));
   const active = tapped?.from === path ? TABS.findIndex(([h]) => h === tapped.href) : TABS.findIndex(([h]) => on(h));
   return (
