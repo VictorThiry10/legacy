@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { db } from "@/lib/supabase/server";
 import { playerOverviewCached } from "@/lib/espn";
-import { regularSeasonStarted } from "@/lib/nba";
+import { regularSeasonStarted, teamAbbrs } from "@/lib/nba";
 import { getMe } from "@/lib/auth";
 import { getSettings, type Player } from "@/lib/league";
 import { money, yearsLeft, addsLockedFor } from "@/lib/rules";
@@ -21,13 +21,14 @@ import { isWatched } from "@/lib/watchlist";
 type Line = { label: string; gp: number; min: number; pts: number; reb: number; ast: number; stl: number; blk: number; to: number; fpts: number };
 const TABS = [["overview", "Overview"], ["news", "News"], ["log", "Game Log"], ["moves", "Transactions"]] as const;
 
-// One player, ESPN style: big header card, a stats strip, then Overview / News / Game Log / Transactions.
+// One player, ESPN style: big header card, a stats strip, then Overview / News / Game Log / Transactions. The
+// Overview carries the last five games, with a button to the full log.
 export default async function PlayerPage({ params, searchParams }: PageProps<"/players/[id]">) {
   const [{ id }, sp] = await Promise.all([params, searchParams]);
   const tab = TABS.some(([k]) => k === sp.tab) ? (sp.tab as string) : "overview";
   const d = db();
   const overview = playerOverviewCached(id).catch(() => null); // ESPN: streamed in below, the page doesn't wait for it
-  const [{ data: player }, { data: contract }, { data: logs }, { data: moves }, me, { season }, onWaivers, regular, watched] = await Promise.all([
+  const [{ data: player }, { data: contract }, { data: logs }, { data: moves }, me, { season }, onWaivers, regular, watched, abbr] = await Promise.all([
     d.from("players").select("*").eq("id", id).maybeSingle(),
     d.from("contracts").select("id, salary, years, season_signed, team:teams(id, name)").eq("player_id", id).eq("active", true).maybeSingle(),
     d.from("player_games").select("*, game:games(start, home_team_id, away_team_id, home_score, away_score, season_type)").eq("player_id", id).eq("played", true),
@@ -37,6 +38,7 @@ export default async function PlayerPage({ params, searchParams }: PageProps<"/p
     getMe().then((m) => waiverFor(id, m?.team?.id)),
     regularSeasonStarted(),
     getMe().then((m) => (m?.team ? isWatched(m.team.id, id).catch(() => false) : false)),
+    teamAbbrs(),
   ]);
   if (!player) notFound();
   const p = player as unknown as Player & { injury_note: string | null };
@@ -45,7 +47,7 @@ export default async function PlayerPage({ params, searchParams }: PageProps<"/p
 
   // This season so far (our box scores), and last season (ESPN totals).
   // Preseason games count until opening night (handy for testing), then drop out.
-  type Log = { pts: number; reb: number; ast: number; stl: number; blk: number; tov: number; min: number; fpts: number; game: { start: string; season_type: number | null } };
+  type Log = { pts: number; reb: number; ast: number; stl: number; blk: number; tov: number; min: number; fpts: number; nba_team_id: string | null; game: { start: string; home_team_id: string; away_team_id: string; season_type: number | null } };
   const games = ((logs ?? []) as unknown as Log[])
     .filter((g) => !regular || g.game.season_type !== 1)
     .sort((a, b) => b.game.start.localeCompare(a.game.start));
@@ -59,6 +61,26 @@ export default async function PlayerPage({ params, searchParams }: PageProps<"/p
   if (ls?.gp) lines.push({ label: seasonLabel(ls.season), gp: ls.gp, min: ls.min, pts: ls.pts, reb: ls.reb, ast: ls.ast, stl: ls.stl, blk: ls.blk, to: ls.to, fpts: ls.fpts });
   const main = lines[0];
   const tabHref = (k: string) => (k === "overview" ? `/players/${id}` : `/players/${id}?tab=${k}`);
+  // "BOS" at home, "@BOS" away, by the team he played for that night
+  const opp = (g: Log) => (g.game.home_team_id === g.nba_team_id ? abbr.get(g.game.away_team_id) ?? "?" : `@${abbr.get(g.game.home_team_id) ?? "?"}`);
+  const gameLog = (rows: Log[]) => (
+    <div className="-mx-4 overflow-x-auto">
+      <table className="t whitespace-nowrap">
+        <thead><tr><th className="pl-4">Date</th><th>Opp</th>{["MIN", "PTS", "REB", "AST", "STL", "BLK", "TO", "FPTS"].map((h) => <th key={h} className="text-right">{h}</th>)}</tr></thead>
+        <tbody>
+          {rows.map((g, i) => (
+            <tr key={i}>
+              <td className="pl-4 text-muted"><LocalTime iso={g.game.start} mode="day" /></td>
+              <td className="text-muted">{opp(g)}</td>
+              <td className="num text-right">{g.min}</td><td className="num text-right">{g.pts}</td><td className="num text-right">{g.reb}</td>
+              <td className="num text-right">{g.ast}</td><td className="num text-right">{g.stl}</td><td className="num text-right">{g.blk}</td>
+              <td className="num text-right">{g.tov}</td><td className="num text-right pr-4 font-semibold">{Number(g.fpts).toFixed(1)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
 
   return (
     <Slide>
@@ -166,6 +188,14 @@ export default async function PlayerPage({ params, searchParams }: PageProps<"/p
                   </div>
                 ) : <p className="text-sm text-muted">No NBA games yet.</p>}
               </Section>
+              {games.length > 0 && (
+                <Section title="Last 5 games">
+                  {gameLog(games.slice(0, 5))}
+                  {games.length > 5 && (
+                    <Link href={tabHref("log")} replace scroll={false} className="inline-block rounded-full bg-blue-fill px-5 py-1.5 text-sm font-semibold text-white">Full game log</Link>
+                  )}
+                </Section>
+              )}
               <Suspense fallback={null}>
                 <Espn data={overview}>
                   {(o) => (
@@ -205,23 +235,7 @@ export default async function PlayerPage({ params, searchParams }: PageProps<"/p
 
           {tab === "log" && (
             <Section title="Game log">
-              {games.length ? (
-                <div className="-mx-4 overflow-x-auto">
-                  <table className="t whitespace-nowrap">
-                    <thead><tr><th className="pl-4">Date</th>{["MIN", "PTS", "REB", "AST", "STL", "BLK", "TO", "FPTS"].map((h) => <th key={h} className="text-right">{h}</th>)}</tr></thead>
-                    <tbody>
-                      {games.map((g, i) => (
-                        <tr key={i}>
-                          <td className="pl-4 text-muted"><LocalTime iso={g.game.start} mode="day" /></td>
-                          <td className="num text-right">{g.min}</td><td className="num text-right">{g.pts}</td><td className="num text-right">{g.reb}</td>
-                          <td className="num text-right">{g.ast}</td><td className="num text-right">{g.stl}</td><td className="num text-right">{g.blk}</td>
-                          <td className="num text-right">{g.tov}</td><td className="num text-right pr-4 font-semibold">{Number(g.fpts).toFixed(1)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : <p className="text-sm text-muted">No games played this season yet.</p>}
+              {games.length ? gameLog(games) : <p className="text-sm text-muted">No games played this season yet.</p>}
             </Section>
           )}
 
@@ -247,7 +261,9 @@ export default async function PlayerPage({ params, searchParams }: PageProps<"/p
             </Section>
           )}
 
-          {!overview && <p className="text-xs text-muted">ESPN didn&apos;t answer this time. Refresh to try again.</p>}
+          <Suspense fallback={null}>
+            <Espn data={overview}>{(o) => (o ? null : <p className="text-xs text-muted">ESPN didn&apos;t answer this time. Refresh to try again.</p>)}</Espn>
+          </Suspense>
         </div>
       </div>
     </Slide>
