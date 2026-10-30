@@ -30,8 +30,8 @@ export const dynamic = "force-dynamic";
 // Head to head, ESPN style: swipe through the week's matchups at the top, the score stays pinned while you
 // scroll, then one day at a time, slot by slot, one team on each side. My own team is always on the right.
 // A player who has played shows his game's score and his stat line; tapping his points opens the breakdown; before
-// his game, his projected points sit there in grey. Under each score: the projected total, the games still to come,
-// and the two GMs' record against each other. A day that is over shows the lineup that was frozen and counted
+// his game, his projected points sit there in grey. Under each score: the projected total, and the two GMs' record
+// against each other. A day that is over shows the lineup that was frozen and counted
 // (lineup_points), not the roster as it is now.
 export default async function MatchupPage({ searchParams }: PageProps<"/matchup">) {
   const [me, teams, sp, schedule, runs, { scoring }] = await Promise.all([myTeamOrWelcome(), teamSummaries(), searchParams, load(() => matchups()), lastRuns(), getSettings()]);
@@ -137,10 +137,9 @@ export default async function MatchupPage({ searchParams }: PageProps<"/matchup"
   const dayTotal = (side: "l" | "r") => (summary ? scoreOf(m, side === "l" ? L : R) : starters.reduce((a, x) => a + (dayPts(x[side]) ?? 0), 0));
   // points left on the bench (the IR slot isn't a choice)
   const benchTotal = (side: "l" | "r") => (summary ? bench.get((side === "l" ? L : R) ?? "") ?? 0 : benchAndIR.filter((x) => x.slot.startsWith("BE")).reduce((a, x) => a + (dayPts(x[side]) ?? 0), 0));
-  // the week ahead: projected total (score so far plus the starters' games to come) and how many games are left
+  // the week ahead: projected total (score so far plus the starters' games to come)
   const ahead = m.ends >= now;
   const proj = (id: string | null) => (ahead && id ? scoreOf(m, id) + (look.get(id)?.proj ?? 0) : null);
-  const toCome = (id: string | null) => (ahead && id ? look.get(id)?.left : undefined);
   const days: string[] = [];
   for (let d = m.starts; d <= m.ends; d = addDays(d, 1)) days.push(d);
   const dayMenu = [
@@ -201,8 +200,8 @@ export default async function MatchupPage({ searchParams }: PageProps<"/matchup"
           <div className="flex items-center justify-end gap-3"><Score pts={scoreOf(m, R)} proj={proj(R)} right />{badge(R)}</div>
         </div>
         <div className="grid grid-cols-2 gap-4 bg-card px-4 pb-3">
-          <TeamName t={team(L)} rec={table.find((x) => x.teamId === L)} left={toCome(L)} />
-          <TeamName t={team(R)} rec={table.find((x) => x.teamId === R)} left={toCome(R)} right />
+          <TeamName t={team(L)} rec={table.find((x) => x.teamId === L)} />
+          <TeamName t={team(R)} rec={table.find((x) => x.teamId === R)} right />
         </div>
         {h2h && <p className="bg-card px-4 pb-3 text-center text-[11px] text-muted">Head to head <span className="num font-semibold text-fg">{h2h[0]}-{h2h[1]}</span></p>}
 
@@ -260,13 +259,12 @@ function Updated({ at, live }: { at: string; live: boolean }) {
   );
 }
 
-// Team, GM and record; while the week is on, the starters' games still to come.
-function TeamName({ t, rec, left, right }: { t?: TeamSummary; rec?: Standing; left?: number; right?: boolean }) {
+function TeamName({ t, rec, right }: { t?: TeamSummary; rec?: Standing; right?: boolean }) {
   if (!t) return <div className={`text-sm text-muted ${right ? "text-right" : ""}`}>To be decided</div>;
   return (
     <Link href={`/teams/${t.id}`} className={`min-w-0 ${right ? "text-right" : ""}`}>
       <div className="truncate font-semibold">{t.name}</div>
-      <div className="truncate text-xs text-muted">{t.manager_name ?? ""} · {rec ? `${rec.w}-${rec.l}${rec.t ? `-${rec.t}` : ""}` : "0-0"}{left != null && <> · {left} games left</>}</div>
+      <div className="truncate text-xs text-muted">{t.manager_name ?? ""} · {rec ? `${rec.w}-${rec.l}${rec.t ? `-${rec.t}` : ""}` : "0-0"}</div>
     </Link>
   );
 }
