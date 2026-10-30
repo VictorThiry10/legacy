@@ -239,11 +239,12 @@ export default async function MatchupPage({ searchParams }: PageProps<"/matchup"
   );
 }
 
-// The score, with the projected total under it while the week is on.
+// The score, with the projected total under it while the week is on. Four digits (a thousand points) go a size
+// down, so the two scores never run into each other on a phone.
 function Score({ pts, proj, right }: { pts: number; proj: number | null; right?: boolean }) {
   return (
     <div className={right ? "text-right" : ""}>
-      <div className="num text-4xl font-black leading-none">{pts.toFixed(1)}</div>
+      <div className={`num font-black leading-none ${pts >= 1000 ? "text-[26px]" : "text-4xl"}`}>{pts.toFixed(1)}</div>
       {proj != null && <div className="num mt-1 text-[11px] leading-none text-muted">proj {proj.toFixed(1)}</div>}
     </div>
   );
