@@ -15,7 +15,7 @@ const TABS = [
 export default function Nav() {
   const path = usePathname();
   const [tapped, setTapped] = useState<{ href: string; from: string } | null>(null);
-  const on = (href: string) => path === href || path.startsWith(`${href}/`) || (href === "/team" && (path === "/" || path.startsWith("/teams/"))) || (href === "/league" && path.startsWith("/settings"));
+  const on = (href: string) => path === href || path.startsWith(`${href}/`) || (href === "/matchup" && path === "/") || (href === "/team" && path.startsWith("/teams/")) || (href === "/league" && path.startsWith("/settings"));
   const active = tapped?.from === path ? TABS.findIndex(([h]) => h === tapped.href) : TABS.findIndex(([h]) => on(h));
   return (
     <nav className="relative mx-auto grid max-w-7xl grid-cols-4">
