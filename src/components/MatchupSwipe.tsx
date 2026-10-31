@@ -1,6 +1,7 @@
 "use client";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef } from "react";
+import { tap } from "@/lib/haptics";
 
 // Swipe left / right on a matchup to go to the next / previous one (slides like a page turn).
 // Neighbours are loaded in advance so the swipe is instant, and the current chip is scrolled into view.
@@ -21,8 +22,10 @@ export default function MatchupSwipe({ prev, next, children }: { prev?: string; 
         if (!s) return;
         const dx = e.changedTouches[0].clientX - s.x, dy = e.changedTouches[0].clientY - s.y;
         if (Math.abs(dx) < 60 || Math.abs(dx) < 1.5 * Math.abs(dy)) return; // a scroll, not a swipe
-        if (dx < 0 && next) router.push(next, { scroll: false, transitionTypes: ["nav-forward"] });
-        if (dx > 0 && prev) router.push(prev, { scroll: false, transitionTypes: ["nav-back"] });
+        const to = dx < 0 ? next : prev;
+        if (!to) return;
+        tap();
+        router.push(to, { scroll: false, transitionTypes: [dx < 0 ? "nav-forward" : "nav-back"] });
       }}
     >
       {children}

@@ -8,6 +8,7 @@ import PlayerCard, { CardBack, cardImages } from "./PlayerCard";
 import { preload, ready } from "./preload";
 import { BidStatus, ease, Gm, GOLD, reasonText, roundName } from "./ui";
 import s from "./gold.module.css";
+import { tap as tick } from "@/lib/haptics";
 
 // Each player's moments, in ms from when his photo is ready: the card gathers light and trembles, turns over,
 // the team he signs with spells itself out, the amount counts up and lands, then every other bid.
@@ -131,6 +132,7 @@ function Stage({ item, player, teams, meId, leftovers, onStart, onFinish }: {
   // Only in the last chance round: tap to jump to the end of a player, tap again for the next.
   const tap = () => {
     if (!live.current || !leftovers) return;
+    tick();
     if (stage < OTHERS) {
       setJumped(true);
       setStage(OTHERS);

@@ -2,6 +2,7 @@
 import { useOptimistic, useRef, useState, useTransition } from "react";
 import { canPlay, isStarter, slotLabel, swap, type LineupPlayer, type LineupRow } from "@/lib/lineup";
 import { moveSlot } from "@/app/(league)/team/actions";
+import { confirm } from "@/lib/haptics";
 
 // One player's row content, prepared on the server: name cell, stat cells, and what the move rules need.
 export type LinePlayer = LineupPlayer & { name: string; headshot: string | null; locked: boolean; info: React.ReactNode; cells: React.ReactNode };
@@ -25,6 +26,7 @@ export default function LineupTable({ rows, players, head, empty, day, editable 
     const next = swap(shown, move, to, new Map(Object.entries(players)));
     setMove(null);
     if (typeof next === "string") return setErr(next);
+    confirm();
     setErr("");
     setFlash([movingFrom, to]);
     clearTimeout(flashTimer.current);
