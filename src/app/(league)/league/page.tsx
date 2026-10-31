@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { getMe } from "@/lib/auth";
 import { teamSummaries, type TeamSummary } from "@/lib/league";
-import { currentOf, matchups, scores, standings, type Matchup, type Standing } from "@/lib/season";
+import { currentOf, matchups, playoffChances, scores, standings, type Matchup, type Standing } from "@/lib/season";
 import { movesRow } from "@/lib/roster";
 import { headline } from "@/lib/moves";
 import { monthDay, today, weekLabel } from "@/lib/dates";
@@ -68,15 +68,17 @@ const pct = (r: Standing) => {
 
 // By conference when every team has one (the playoffs seed by conference): each ranked on its own, games back
 // within it, a line under the two that would go through. One table otherwise. Record, win%, games back, points for
-// and against, streak: the team stays put while the numbers scroll sideways on a phone.
+// and against, streak, playoff chance: the team stays put while the numbers scroll sideways on a phone.
 async function Standings({ teams, myId }: { teams: TeamSummary[]; myId?: string }) {
-  const table = await load(() => standings(teams.map((t) => t.id)));
+  const ids = teams.map((t) => t.id);
+  const table = await load(() => standings(ids));
   if ("err" in table) return <p className="bg-card px-4 py-4 text-sm text-bad">{table.err}</p>;
+  const odds = await playoffChances(ids).catch(() => new Map<string, number>());
   const byConference = teams.every((t) => isConference(t.conference));
   const groups = byConference
     ? (Object.keys(CONFERENCES) as Conference[]).map((c) => ({ title: CONFERENCES[c], rows: table.ok.filter((r) => teams.find((t) => t.id === r.teamId)?.conference === c) }))
     : [{ title: "League standings", rows: table.ok }];
-  const cols = "grid min-w-[36rem] grid-cols-[minmax(11rem,1fr)_4.5rem_3.5rem_2.5rem_3.5rem_3.5rem_2.75rem] items-center gap-2";
+  const cols = "grid min-w-[40rem] grid-cols-[minmax(11rem,1fr)_4.5rem_3.5rem_2.5rem_3.5rem_3.5rem_2.75rem_3rem] items-center gap-2";
   const streak = (s: string) => (s.startsWith("W") ? "text-good" : s.startsWith("L") ? "text-bad" : "text-muted");
   return (
     <div className="overflow-x-auto bg-card [scrollbar-width:none]">
@@ -91,7 +93,7 @@ async function Standings({ teams, myId }: { teams: TeamSummary[]; myId?: string 
             <div className={`${cols} border-y border-line py-2 ${head}`}>
               <span className="sticky left-0 z-10 bg-card pl-4">{title}</span>
               <span className="text-center">Record</span><span className="text-center">Win%</span><span className="text-center">GB</span>
-              <span className="text-center">PF</span><span className="text-center">PA</span><span className="pr-4 text-center">Strk</span>
+              <span className="text-center">PF</span><span className="text-center">PA</span><span className="text-center">Strk</span><span className="pr-4 text-center">PO%</span>
             </div>
             {rows.map((r, i) => {
               const t = teams.find((x) => x.id === r.teamId);
@@ -104,7 +106,8 @@ async function Standings({ teams, myId }: { teams: TeamSummary[]; myId?: string 
                   <span className="text-center num text-muted">{gb(r)}</span>
                   <span className="text-center num text-muted">{Math.round(r.pf)}</span>
                   <span className="text-center num text-muted">{Math.round(r.pa)}</span>
-                  <span className={`pr-4 text-center num font-semibold ${streak(r.streak)}`}>{r.streak || "-"}</span>
+                  <span className={`text-center num font-semibold ${streak(r.streak)}`}>{r.streak || "-"}</span>
+                  <span className="pr-4 text-center num">{odds.has(r.teamId) ? `${odds.get(r.teamId)}%` : "-"}</span>
                 </div>
               );
             })}

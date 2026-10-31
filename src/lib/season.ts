@@ -6,12 +6,11 @@ import { addDays, etDay, today } from "./dates";
 import { getSettings } from "./league";
 import { freezeLineup, isSlot, isStarter, SLOTS, type LineupRow } from "./lineup";
 import { gamesBetween } from "./nba";
-import { lineupsFrom, lineupsOn, savedUpTo } from "./lineup-store";
+import { lineupsFrom, savedUpTo } from "./lineup-store";
 import { rosters } from "./roster";
 import { buildSchedule, conferenceGroups, rehearsalSchedule, semifinalPairs, winner } from "./schedule";
 import { CONFERENCES, isConference } from "./conferences";
-import { headToHead, tabulate, type Played, type Standing } from "./standings";
-import { perGame } from "./projection";
+import { headToHead, playoffChances as chances, tabulate, type Played, type Standing } from "./standings";
 import type { Player } from "./league";
 import type { RosterPlayer } from "./roster";
 import type { Row } from "./supabase/types";
@@ -261,36 +260,18 @@ export async function frozenLineups(teamIds: string[], day: string, roster: Rost
   return { lineups, gone };
 }
 
-// The rest of a matchup for each team: starters' games still to come (today's not yet tipped off, then every later
-// day with the lineup that stands) and the fantasy points they project to (lib/projection.ts). The projected total
-// is the score so far plus that.
-export type Outlook = { left: number; proj: number };
-export async function outlook(m: Matchup, teamIds: string[], roster: RosterPlayer[]): Promise<Map<string, Outlook>> {
-  const out = new Map(teamIds.map((id) => [id, { left: 0, proj: 0 }]));
+// Each team's chance of making the playoffs, in %, from the regular season so far and the weeks still to play
+// (standings.ts playoffChances): a sure thing once the table is settled.
+export async function playoffChances(teamIds: string[]): Promise<Map<string, number>> {
+  const ms = await matchups();
   const now = today();
-  if (!teamIds.length || m.ends < now) return out;
-  const from = m.starts > now ? m.starts : now;
-  const days: string[] = [];
-  for (let d = from; d <= m.ends; d = addDays(d, 1)) days.push(d);
-  const [games, lineups] = await Promise.all([gamesBetween(from, m.ends), Promise.all(days.map((d) => lineupsOn(teamIds, d, roster)))]);
-  const players = new Map(roster.map((p) => [p.id, p]));
-  const at = Date.now();
-  days.forEach((d, i) => {
-    const todays = games.filter((g) => etDay(g.start) === d);
-    for (const team of teamIds) {
-      const o = out.get(team)!;
-      for (const r of lineups[i].get(team) ?? []) {
-        const p = r.playerId ? players.get(r.playerId) : undefined;
-        if (!p?.nba_team_id || !isStarter(r.slot)) continue;
-        const g = todays.find((g) => g.home_team_id === p.nba_team_id || g.away_team_id === p.nba_team_id);
-        if (!g || Date.parse(g.start) <= at) continue; // no game, or it has started: what he scores is in the score
-        o.left++;
-        o.proj += perGame(p) ?? 0;
-      }
-    }
-  });
-  for (const o of out.values()) o.proj = round1(o.proj);
-  return out;
+  const [done, { data: teams }] = await Promise.all([played(ms, "regular"), db().from("teams").select("id, conference").in("id", teamIds)]);
+  const upcoming = ms.filter((m) => m.round === "regular" && m.home_team_id && m.away_team_id && m.ends >= now)
+    .map((m) => ({ week: m.week, home: m.home_team_id!, away: m.away_team_id! }));
+  const byConference = (teams ?? []).length === teamIds.length && (teams ?? []).every((t) => isConference(t.conference))
+    ? Object.keys(CONFERENCES).map((c) => teamIds.filter((id) => teams!.find((t) => t.id === id)?.conference === c))
+    : null;
+  return chances(teamIds, done, upcoming, byConference);
 }
 
 // Commissioner changed the scoring weights: recount every box score and lineup day.
