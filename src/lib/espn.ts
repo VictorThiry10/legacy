@@ -239,11 +239,16 @@ export async function autoRefresh() {
 }
 
 // A game is on, or tips off within 15 minutes (games last under 4 hours).
-export async function gamesOnNow() {
+export const gamesOnNow = async () => (await liveSince()) !== null;
+
+// When the live window opened: 15 minutes before the earliest game still on (or about to start). null: no game on.
+// The outage check (health.ts) counts staleness from here, not from the last idle refresh an hour before tip-off.
+export async function liveSince(): Promise<number | null> {
   const now = Date.now();
-  const { count } = await db().from("games").select("id", { count: "exact", head: true }).eq("final", false)
-    .gte("start", new Date(now - 4 * 3600_000).toISOString()).lte("start", new Date(now + 15 * 60_000).toISOString());
-  return (count ?? 0) > 0;
+  const { data } = await db().from("games").select("start").eq("final", false)
+    .gte("start", new Date(now - 4 * 3600_000).toISOString()).lte("start", new Date(now + 15 * 60_000).toISOString())
+    .order("start").limit(1);
+  return data?.length ? Date.parse(data[0].start) - 15 * 60_000 : null;
 }
 
 // Box scores for any game of the last week that started but isn't final in our records: after an outage,
