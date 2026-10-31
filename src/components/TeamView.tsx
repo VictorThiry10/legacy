@@ -23,7 +23,6 @@ import LineupTable, { type LinePlayer } from "./LineupTable";
 import { irEligible } from "@/lib/lineup";
 import QuickLineup from "./QuickLineup";
 import { frozenLineups, matchups } from "@/lib/season";
-import { perGame } from "@/lib/projection";
 import BackBar from "./BackBar";
 import TeamAvatar from "./TeamAvatar";
 
@@ -86,15 +85,13 @@ export default async function TeamView({ team, editable, base, sp, back, tradeHr
     return a;
   };
   // Everything after the slot pill and photo, for one player (or an empty slot). Pts is always the day on screen
-  // (his game that day, once he has played; his projection in grey before it tips off); Avg and the stats follow
-  // the stats view.
+  // (his game that day, once he has played); Avg and the stats follow the stats view.
   const cells = (p: RosterPlayer | null, g: ReturnType<typeof gameOf>) => {
     const a = p ? agg(p.id) : null;
     const played = p ? lines.find((l) => l.playerId === p.id && l.day === day) : undefined;
-    const proj = !played && day >= now && g?.state === "pre" ? perGame(p) : null;
     const val = (k: Key) => (!a || !a.gp ? "--" : period !== "day" ? (a[k] / a.gp).toFixed(1) : String(a[k]));
     return [
-      <td key="pts" className="num text-right font-semibold">{played ? round(played.fpts) : <span className="text-muted">{proj != null ? proj.toFixed(1) : "--"}</span>}</td>,
+      <td key="pts" className="num text-right font-semibold">{played ? round(played.fpts) : <span className="text-muted">--</span>}</td>,
       <td key="avg" className="num text-right">{a?.gp ? (a.fpts / a.gp).toFixed(1) : <span className="text-muted">--</span>}</td>,
       <td key="opp">{g && p ? oppLabel(g, p.nba_team_id!, abbr) : <span className="text-muted">--</span>}</td>,
       <td key="status" className="text-xs">{g && p ? <GameStatus g={g} teamId={p.nba_team_id!} /> : <span className="text-muted">--</span>}</td>,
