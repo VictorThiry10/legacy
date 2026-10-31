@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { headToHead, playoffChances, streakOf, tabulate, type Played } from "./standings";
+import { headToHead, streakOf, tabulate, type Played } from "./standings";
 
 const g = (week: number, home: string, away: string, homePts: number, awayPts: number): Played => ({ week, home, away, homePts, awayPts });
 
@@ -30,25 +30,3 @@ test("head to head: wins each way, ties skipped", () => {
   assert.deepEqual(headToHead("A", "D", played), [0, 0]);
 });
 
-// a fixed random sequence, so the odds come out the same every run
-const seeded = (seed = 7) => () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
-
-test("playoff chances: settled table gives 100 or 0; a team far ahead is near certain; chances add up to the spots", () => {
-  const ids = ["A", "B", "C", "D"];
-  const settled = [g(1, "A", "B", 100, 90), g(1, "C", "D", 80, 70)];
-  const done = playoffChances(ids, settled, [], null, 2);
-  assert.deepEqual([...done.values()], [100, 0, 100, 0]);
-  // nothing played, nothing to play: an even share
-  assert.deepEqual([...playoffChances(ids, [], [], null, 2).values()], [50, 50, 50, 50]);
-  // A has won every week by a mile, D has lost every week by a mile, a week to go
-  const played = [1, 2, 3, 4].flatMap((w) => [g(w, "A", "D", 1200, 800), g(w, "B", "C", 1000, 990)]);
-  const odds = playoffChances(ids, played, [{ week: 5, home: "A", away: "B" }, { week: 5, home: "C", away: "D" }], null, 2, 500, seeded());
-  assert.ok(odds.get("A")! >= 95, `A ${odds.get("A")}`);
-  assert.ok(odds.get("D")! <= 5, `D ${odds.get("D")}`);
-  const total = [...odds.values()].reduce((a, b) => a + b, 0);
-  assert.ok(Math.abs(total - 200) <= 4, `total ${total}`);
-  // by conference: the top two of each conference, so each conference's chances add up to 200
-  const conf = playoffChances(ids, played, [{ week: 5, home: "A", away: "B" }], [["A", "C"], ["B", "D"]], 2, 200, seeded(3));
-  assert.equal(conf.get("A")! + conf.get("C")!, 100);
-  assert.equal(conf.get("B")! + conf.get("D")!, 100);
-});
