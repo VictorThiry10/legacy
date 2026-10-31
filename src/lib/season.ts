@@ -10,7 +10,7 @@ import { lineupsFrom, savedUpTo } from "./lineup-store";
 import { rosters } from "./roster";
 import { buildSchedule, conferenceGroups, rehearsalSchedule, semifinalPairs, winner } from "./schedule";
 import { CONFERENCES, isConference } from "./conferences";
-import { headToHead, playoffChances as chances, tabulate, type Played, type Standing } from "./standings";
+import { headToHead, tabulate, type Played, type Standing } from "./standings";
 import type { Player } from "./league";
 import type { RosterPlayer } from "./roster";
 import type { Row } from "./supabase/types";
@@ -258,20 +258,6 @@ export async function frozenLineups(teamIds: string[], day: string, roster: Rost
   const teamOf = new Map(rows.map((r) => [r.player_id, r.team_id]));
   const gone = ((data ?? []) as Player[]).map((p) => ({ ...p, contract_id: "", salary: 0, years: 0, season_signed: 0, team_id: teamOf.get(p.id)! }));
   return { lineups, gone };
-}
-
-// Each team's chance of making the playoffs, in %, from the regular season so far and the weeks still to play
-// (standings.ts playoffChances): a sure thing once the table is settled.
-export async function playoffChances(teamIds: string[]): Promise<Map<string, number>> {
-  const ms = await matchups();
-  const now = today();
-  const [done, { data: teams }] = await Promise.all([played(ms, "regular"), db().from("teams").select("id, conference").in("id", teamIds)]);
-  const upcoming = ms.filter((m) => m.round === "regular" && m.home_team_id && m.away_team_id && m.ends >= now)
-    .map((m) => ({ week: m.week, home: m.home_team_id!, away: m.away_team_id! }));
-  const byConference = (teams ?? []).length === teamIds.length && (teams ?? []).every((t) => isConference(t.conference))
-    ? Object.keys(CONFERENCES).map((c) => teamIds.filter((id) => teams!.find((t) => t.id === id)?.conference === c))
-    : null;
-  return chances(teamIds, done, upcoming, byConference);
 }
 
 // Commissioner changed the scoring weights: recount every box score and lineup day.
