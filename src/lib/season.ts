@@ -141,7 +141,10 @@ export async function refreshScores() {
   }
   if (!days.length) return { days: 0 };
   await fillPlayoffs(ms);
-  const done = await all((a, b) => db().from("lineup_points").select("day").gte("day", days[0]).lte("day", now).range(a, b));
+  const [done, { data: open }] = await Promise.all([
+    all((a, b) => db().from("lineup_points").select("day").gte("day", days[0]).lte("day", now).range(a, b)),
+    db().from("games").select("start").eq("final", false).gte("start", `${addDays(days[0], -1)}T00:00:00Z`).lt("start", `${now}T00:00:00Z`),
+  ]);
   const frozenDays = new Set(done.map((r) => r.day));
   const caughtUp: string[] = [];
   for (const day of days) {
@@ -151,8 +154,12 @@ export async function refreshScores() {
       caughtUp.push(day);
     }
   }
-  await rpc("score_lineup_points", { p_from: days[0], p_to: now });
-  return { days: days.length, caughtUp };
+  // Recount only the days whose points can still move: today, a day just caught up, and an earlier day with a game
+  // still on (a late tip-off runs past midnight). Recounting all eight every 2 minutes was wasted work.
+  const stillOn = (open ?? []).map((g) => etDay(g.start)).filter((d) => days.includes(d));
+  const from = [now, ...caughtUp, ...stillOn].reduce((a, b) => (a < b ? a : b));
+  await rpc("score_lineup_points", { p_from: from, p_to: now });
+  return { days: days.length, caughtUp, from };
 }
 
 // Playoff teams fill in as soon as the round before is over: semis 1 v 4 and 2 v 3, then the two winners.
