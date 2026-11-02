@@ -216,7 +216,7 @@ async function attempt<T>(fn: () => Promise<T>): Promise<T | Failed> {
 }
 
 // Scores every 2 minutes while games are on (or about to start), once an hour otherwise; injuries every 10 minutes
-// either way. "scores-run" is the last attempt (the rhythm); "scores" is the last success, which is what the
+// either way; rosters and season stats every 6 hours (the whole league's players: the heaviest parse we do). "scores-run" is the last attempt (the rhythm); "scores" is the last success, which is what the
 // Matchup page's "Scores updated" and the outage email (health.ts) go by: a feed that breaks shows up as stale.
 // Every failure is logged, so Vercel's function logs tell what broke.
 export async function autoRefresh() {
@@ -228,7 +228,7 @@ export async function autoRefresh() {
     if (await due("catch-up", 30)) out.catchUp = await attempt(catchUpGames);
     out.fantasy = await attempt(refreshScores); // after box scores, so lineups score the latest stats
   } else out.skipped = live ? "scores ran under 2 minutes ago" : "no games on; scores ran under an hour ago";
-  if (await due("players", 55)) out.players = await attempt(syncPlayers); // ends with the injury report
+  if (await due("players", 355)) out.players = await attempt(syncPlayers); // every 6 hours (rosters, stats: heavy); ends with the injury report
   else if (await due("injuries", 9)) out.injuries = await attempt(syncInjuries);
   if (await due("schedule", 60 * 24 - 10)) {
     const day = 24 * 3600_000;

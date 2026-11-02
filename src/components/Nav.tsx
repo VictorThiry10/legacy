@@ -29,7 +29,7 @@ export default function Nav() {
         <Link
           key={href}
           href={href}
-          prefetch={true}
+          prefetch={false} // every tab is a dynamic page: prefetching rendered all four on the server at each load (loading.tsx covers the tap)
           onClick={() => setTapped({ href, from: path })}
           className={`flex h-11 items-center justify-center text-[13px] font-semibold uppercase tracking-wide transition-colors duration-200 ${i === active ? "text-fg" : "text-muted hover:text-fg"}`}
         >

@@ -153,7 +153,7 @@ export default async function TeamView({ team, editable, base, sp, back, tradeHr
       {offers && extensions && freeAgency && rookieDraft && moves && lengths && <Pending offers={offers} extensions={extensions} freeAgency={freeAgency} rookieDraft={rookieDraft} moves={moves} lengths={lengths} />}
 
       <div className="flex items-center border-y border-line -mx-4 sm:mx-0 sm:rounded-2xl sm:border sm:bg-card">
-        <Link href={href({ d: addDays(day, -1) })} replace={!!back} prefetch={true} transitionTypes={BACK} className="px-4 py-2 text-xl text-muted hover:text-fg" aria-label="Previous day">‹</Link>
+        <Link href={href({ d: addDays(day, -1) })} replace={!!back} prefetch={false} transitionTypes={BACK} className="px-4 py-2 text-xl text-muted hover:text-fg" aria-label="Previous day">‹</Link>
         <div className="flex-1 text-center leading-tight">
           <DatePicker
             day={day} today={now} label={dayName} path={base}
@@ -163,7 +163,7 @@ export default async function TeamView({ team, editable, base, sp, back, tradeHr
             <Link href={href({ d: now })} replace={!!back} transitionTypes={day < now ? FORWARD : BACK} className="block text-[10px] uppercase tracking-wide text-muted hover:text-fg">Today</Link>
           )}
         </div>
-        <Link href={href({ d: addDays(day, 1) })} replace={!!back} prefetch={true} transitionTypes={FORWARD} className="px-4 py-2 text-xl text-muted hover:text-fg" aria-label="Next day">›</Link>
+        <Link href={href({ d: addDays(day, 1) })} replace={!!back} prefetch={false} transitionTypes={FORWARD} className="px-4 py-2 text-xl text-muted hover:text-fg" aria-label="Next day">›</Link>
       </div>
 
       <div className="flex gap-2">

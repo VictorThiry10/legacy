@@ -34,7 +34,7 @@ export default async function League({ searchParams }: PageProps<"/league">) {
         <div className="bg-card px-4 py-3 sm:rounded-t-2xl">
           <div className="grid grid-cols-4 rounded-full bg-line/80 p-1 text-sm">
             {VIEWS.map(([k, label]) => (
-              <Link key={k} href={k === "standings" ? "/league" : `/league?view=${k}`} prefetch={true} scroll={false}
+              <Link key={k} href={k === "standings" ? "/league" : `/league?view=${k}`} prefetch={false} scroll={false}
                 className={`rounded-full py-2 text-center font-medium ${view === k ? "bg-card shadow-sm" : "text-fg/80"}`}>
                 {label}
               </Link>

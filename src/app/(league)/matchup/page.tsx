@@ -154,7 +154,7 @@ export default async function MatchupPage({ searchParams }: PageProps<"/matchup"
   return (
     <Slide>
       <div className="-mx-4 -mt-6 sm:mx-0 sm:mt-0">
-        {live && <AutoRefresh seconds={60} />}
+        {live && <AutoRefresh seconds={60} watch="/api/stamp" />}
 
         {/* swipe through this week's matchups */}
         <div className="flex snap-x gap-2 overflow-x-auto bg-card px-3 pb-1 pt-2.5 [scrollbar-width:none]">
@@ -169,7 +169,7 @@ export default async function MatchupPage({ searchParams }: PageProps<"/matchup"
               <Link
                 key={x.id}
                 href={href({ m: x.id })}
-                prefetch={true}
+                prefetch={false}
                 id={x.id === m.id ? "current-matchup" : undefined}
                 transitionTypes={weekMs.indexOf(x) < weekMs.indexOf(m) ? BACK : FORWARD}
                 className={`flex shrink-0 snap-start items-center gap-2 rounded-full px-3 py-1.5 text-sm ${x.id === m.id ? "border-2 border-fg" : "border-2 border-transparent bg-line/70"}`}
@@ -201,11 +201,11 @@ export default async function MatchupPage({ searchParams }: PageProps<"/matchup"
 
         <div className="flex items-center border-y border-line bg-card">
           {!summary && day > m.starts
-            ? <Link href={href({ m: m.id, d: addDays(day, -1) })} prefetch={true} transitionTypes={BACK} className="px-6 py-2.5 text-xl text-muted hover:text-fg" aria-label="Previous day">‹</Link>
+            ? <Link href={href({ m: m.id, d: addDays(day, -1) })} prefetch={false} transitionTypes={BACK} className="px-6 py-2.5 text-xl text-muted hover:text-fg" aria-label="Previous day">‹</Link>
             : <span className="px-6 py-2.5 text-xl text-line">‹</span>}
           <div className="flex-1 text-center"><PickMenu label={summary ? "Summary" : nice(day)} items={dayMenu} /></div>
           {!summary && day < m.ends
-            ? <Link href={href({ m: m.id, d: addDays(day, 1) })} prefetch={true} transitionTypes={FORWARD} className="px-6 py-2.5 text-xl text-muted hover:text-fg" aria-label="Next day">›</Link>
+            ? <Link href={href({ m: m.id, d: addDays(day, 1) })} prefetch={false} transitionTypes={FORWARD} className="px-6 py-2.5 text-xl text-muted hover:text-fg" aria-label="Next day">›</Link>
             : <span className="px-6 py-2.5 text-xl text-line">›</span>}
         </div>
 
