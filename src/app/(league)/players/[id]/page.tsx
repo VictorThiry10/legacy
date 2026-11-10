@@ -215,16 +215,6 @@ export default async function PlayerPage({ params, searchParams }: PageProps<"/p
                 <Espn data={overview}>
                   {(o) => (
                     <>
-                      {o?.outlook && (
-                        <Section title="Outlook">
-                          <details className="group">
-                            <summary className="list-none cursor-pointer">
-                              <p className="text-sm leading-relaxed line-clamp-4 group-open:line-clamp-none">{o.outlook}</p>
-                              <span className="mt-1 inline-block text-sm font-medium text-accent group-open:hidden">Show more</span>
-                            </summary>
-                          </details>
-                        </Section>
-                      )}
                       {(o?.note || !!o?.news.length) && (
                         <Section title="Recent news">
                           <NewsList note={o?.note ?? null} news={(o?.news ?? []).slice(0, 3)} />

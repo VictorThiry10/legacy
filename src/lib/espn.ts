@@ -164,7 +164,7 @@ async function projections(season: number) {
   }
 }
 
-// One player's latest note, outlook, ranks and headlines (fetched when their page opens).
+// One player's latest note, ranks and headlines (fetched when their page opens).
 export async function playerOverview(id: string) {
   try {
     return parseOverview(await get(`/athletes/${encodeURIComponent(id)}/overview`, WEB));

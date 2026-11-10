@@ -68,10 +68,10 @@ test("season totals: Doncic technicals count", () => {
   assert.equal(l.fpts, 3310);
 });
 
-test("player overview: note, outlook, ranks", () => {
+test("player overview: note, ranks", () => {
   const o = parseOverview({
     rotowire: { headline: "Feeling good", story: "More detail", published: "Mon Sep 28 12:12:40 PDT 2026" },
-    fantasy: { draftRank: "4", positionRank: "2", percentOwned: "99.92", projection: "Big year ahead." },
+    fantasy: { draftRank: "4", positionRank: "2", percentOwned: "99.92" },
     news: [{ headline: "H1", description: "D1", published: "2026-09-28T21:29:27.000+00:00", links: { web: { href: "https://espn.com/x" } } }, { description: "no headline" }],
   });
   assert.equal(o.note?.headline, "Feeling good");
