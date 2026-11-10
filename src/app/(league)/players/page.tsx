@@ -22,8 +22,9 @@ import ScrollBox from "@/components/ScrollBox";
 export const dynamic = "force-dynamic";
 
 type Params = Record<string, string | undefined>;
-// Which stat line the table shows: last season (the default), ESPN's projection, this season so far, or the last
-// 7, 14 or 30 days. The last three come from our own box scores, added up by the player_totals database function.
+// Which stat line the table shows: this season so far (the default; Victor, 2026-11-10), the last 7, 14 or 30 days,
+// last season, or ESPN's projection. The first four come from our own box scores, added up by the player_totals
+// database function.
 const PERIODS = ["last", "proj", "season", "7", "14", "30"] as const;
 type Period = (typeof PERIODS)[number];
 const POSITIONS = ["PG", "SG", "SF", "PF", "C"];
@@ -60,7 +61,7 @@ async function StatsTable({ sp }: { sp: Params }) {
   // at everyone.
   const show = sp.show ?? (q || watch ? "all" : "av");
   const play = isDay(sp.play) ? sp.play : ""; // only players whose NBA team plays that day
-  const period: Period = PERIODS.includes(sp.stats as Period) ? (sp.stats as Period) : "last";
+  const period: Period = PERIODS.includes(sp.stats as Period) ? (sp.stats as Period) : "season";
   const d = db();
   const { season } = await getSettings();
 
@@ -105,8 +106,8 @@ async function StatsTable({ sp }: { sp: Params }) {
   const shown = list.slice(0, count);
   const lastYear = players.find((p) => p.last_season?.season)?.last_season?.season ?? season;
   const periods: [string, string][] = [
-    ["proj", `Projections (${seasonLabel(season + 1)})`], ["", `Last season (${seasonLabel(lastYear)})`],
-    ["7", "Last 7 days"], ["14", "Last 14 days"], ["30", "Last 30 days"], ["season", `This season (${seasonLabel(season + 1)})`],
+    ["", `This season (${seasonLabel(season + 1)})`], ["7", "Last 7 days"], ["14", "Last 14 days"], ["30", "Last 30 days"],
+    ["last", `Last season (${seasonLabel(lastYear)})`], ["proj", `Projections (${seasonLabel(season + 1)})`],
   ];
   const heading = { last: `${seasonLabel(lastYear)} stats`, proj: `${seasonLabel(season + 1)} projections`, season: `${seasonLabel(season + 1)} stats`, 7: "Last 7 days", 14: "Last 14 days", 30: "Last 30 days" }[period];
 
@@ -212,7 +213,7 @@ const chip = (on: boolean) => `${pill} transition-colors active:opacity-70 ${on 
 function FilterBar({ sp, show, play, perGame, period, periods, teams }: {
   sp: Params; show: string; play: string; perGame: boolean; period: Period; periods: [string, string][]; teams: string[];
 }) {
-  const filtered = (!!sp.show && sp.show !== "av") || !perGame || sp.mine === "0" || !!play || !!sp.team || period !== "last";
+  const filtered = (!!sp.show && sp.show !== "av") || !perGame || sp.mine === "0" || !!play || !!sp.team || period !== "season";
   if (sp.search || sp.q) {
     const keep = Object.fromEntries(Object.entries(sp).filter(([k, v]) => v && k !== "q" && k !== "search")) as Record<string, string>;
     return <SearchBar path="/players" params={keep} initial={sp.q ?? ""} cancelHref={href(sp, { q: undefined, search: undefined })} />;
@@ -227,7 +228,7 @@ function FilterBar({ sp, show, play, perGame, period, periods, teams }: {
       <Link href={href(sp, { search: "1" })} prefetch={false} scroll={false} className={`${chip(false)} shrink-0`} aria-label="Search"><SearchIcon /></Link>
       <PlayerFilters
         className={`${chip(filtered)} shrink-0`}
-        value={{ show, mine: sp.mine === "0" ? "0" : "", play, team: sp.team ?? "", stats: period === "last" ? "" : period, view: perGame ? "" : "tot" }}
+        value={{ show, mine: sp.mine === "0" ? "0" : "", play, team: sp.team ?? "", stats: period === "season" ? "" : period, view: perGame ? "" : "tot" }}
         periods={periods}
         days={days}
         teams={teams.map((t): [string, string] => [t, NBA_TEAMS[t]])}

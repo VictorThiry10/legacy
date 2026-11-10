@@ -8,7 +8,7 @@ import { SLOTS, isStarter, slotLabel, type LineupRow } from "@/lib/lineup";
 import { gamesBetween, linesIn, teamAbbrs, type DayLine, type Game } from "@/lib/nba";
 import { scoreRows } from "@/lib/rules";
 import { nickname } from "@/lib/nba-teams";
-import { addDays, ago, isDay, minutesSince, monthDay, today, weekday } from "@/lib/dates";
+import { addDays, ago, isDay, minutesSince, monthDay, openingDay, today, weekday } from "@/lib/dates";
 import { gamesOnNow, lastRuns } from "@/lib/espn";
 import { STALE_MINUTES } from "@/lib/health";
 import { headshot, shortName } from "@/lib/names";
@@ -34,12 +34,13 @@ export const dynamic = "force-dynamic";
 export default async function MatchupPage({ searchParams }: PageProps<"/matchup">) {
   const [me, teams, sp, schedule, runs, { scoring }] = await Promise.all([myTeamOrWelcome(), teamSummaries(), searchParams, load(() => matchups()), lastRuns(), getSettings()]);
   const now = today();
+  const opens = openingDay(); // last night until 13:00 London: the page opens on the games just played, and their matchup
   const r = await load(async () => {
     if ("err" in schedule) throw new Error(schedule.err);
     const all = schedule.ok;
     const mine = all.filter((x) => x.home_team_id === me.id || x.away_team_id === me.id);
     const picked = all.find((x) => x.id === sp.m);
-    const week = picked?.week ?? (typeof sp.week === "string" ? Number(sp.week) : (currentOf(mine, now) ?? currentOf(all, now))?.week);
+    const week = picked?.week ?? (typeof sp.week === "string" ? Number(sp.week) : (currentOf(mine, opens) ?? currentOf(all, opens))?.week);
     const weekMs = all.filter((x) => x.week === week);
     const m = picked ?? weekMs.find((x) => x.home_team_id === me.id || x.away_team_id === me.id) ?? weekMs.find((x) => x.home_team_id) ?? weekMs[0];
     if (!m) return null;
@@ -47,7 +48,7 @@ export default async function MatchupPage({ searchParams }: PageProps<"/matchup"
     const [L, R] = m.home_team_id === me.id ? [m.away_team_id, m.home_team_id] : m.away_team_id === me.id ? [m.home_team_id, m.away_team_id] : [m.away_team_id, m.home_team_id];
     // Summary: the whole matchup, each player's points while in a starting slot (the lineup shown is today's).
     const summary = sp.d === "summary";
-    const asked = !summary && typeof sp.d === "string" && isDay(sp.d) ? sp.d : now;
+    const asked = summary ? now : typeof sp.d === "string" && isDay(sp.d) ? sp.d : opens;
     const day = asked < m.starts ? m.starts : asked > m.ends ? m.ends : asked;
     const ids = [L, R].filter((x): x is string => !!x);
     const [s, table, roster, games, abbr, counted] = await Promise.all([
