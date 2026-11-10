@@ -4,7 +4,7 @@ import { boxLines, gamesBetween, teamAbbrs, type BoxLine } from "@/lib/nba";
 import { GameStatus, oppLabel } from "./GameInfo";
 import { movesRow, rosters, type RosterPlayer } from "@/lib/roster";
 import { lineupFor } from "@/lib/lineup-store";
-import { addDays, isDay, longDate, monthDay, today, weekday } from "@/lib/dates";
+import { addDays, isDay, longDate, monthDay, openingDay, today, weekday } from "@/lib/dates";
 import { viewKey, views } from "@/lib/team-views";
 import type { SeasonLine } from "@/lib/espn-parse";
 import Slide, { BACK, FORWARD } from "./Slide";
@@ -41,7 +41,7 @@ export default async function TeamView({ team, editable, base, sp, back, tradeHr
 }) {
   const str = (k: string) => (typeof sp[k] === "string" ? (sp[k] as string) : "");
   const now = today();
-  const day = isDay(str("d")) ? str("d") : now;
+  const day = isDay(str("d")) ? str("d") : openingDay(); // last night until 13:00 London
   const period = viewKey(str("stat"));
   const href = (o: Record<string, string>) => {
     const q = new URLSearchParams({ d: day, stat: period, ...o });

@@ -10,6 +10,15 @@ export function addDays(day: string, n: number) {
   return d.toISOString().slice(0, 10);
 }
 
+// The day the Team and Matchup pages open on: last night's games until 13:00 London, today after that (Victor,
+// 2026-11-10). Until 5:00 London's date is a day ahead of the US Eastern one, and from 13:00 the two are the same.
+const london = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/London", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", hourCycle: "h23" });
+export function openingDay(now = new Date()) {
+  const p = Object.fromEntries(london.formatToParts(now).map((x) => [x.type, x.value]));
+  const day = `${p.year}-${p.month}-${p.day}`;
+  return Number(p.hour) < 13 ? addDays(day, -1) : day;
+}
+
 export const isDay = (s: unknown): s is string => typeof s === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s);
 
 // 0 = Sunday ... 6 = Saturday
