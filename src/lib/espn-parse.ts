@@ -215,11 +215,10 @@ export function parseProjections(json: FantasyPlayers, espnYear: number, w: Scor
   return out;
 }
 
-// ---------- one player's page: latest note, outlook, ranks, headlines ----------
+// ---------- one player's page: latest note, ranks, headlines ----------
 export type NewsItem = { headline: string; description: string | null; published: string | null; url: string | null; image?: string | null; athleteIds?: string[] };
 export type Overview = {
   note: { headline: string; story: string | null; published: string | null } | null;
-  outlook: string | null;
   rank: number | null;
   positionRank: number | null;
   rostered: number | null;
@@ -228,7 +227,7 @@ export type Overview = {
 
 type OverviewJson = {
   rotowire?: { headline?: string; story?: string; description?: string; published?: string };
-  fantasy?: { draftRank?: string; positionRank?: string; percentOwned?: string; projection?: string };
+  fantasy?: { draftRank?: string; positionRank?: string; percentOwned?: string };
   news?: { headline?: string; description?: string; published?: string; links?: { web?: { href?: string } } }[];
 };
 
@@ -238,7 +237,6 @@ export function parseOverview(json: OverviewJson): Overview {
   const r = json.rotowire;
   return {
     note: r?.headline ? { headline: r.headline, story: r.story ?? null, published: r.published ?? null } : null,
-    outlook: json.fantasy?.projection ?? null,
     rank: num(json.fantasy?.draftRank),
     positionRank: num(json.fantasy?.positionRank),
     rostered: num(json.fantasy?.percentOwned),
