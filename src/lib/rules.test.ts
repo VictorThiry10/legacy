@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { resolveRound, revealRound, maxBid, yearsLeft, DEFAULT_SETTINGS as S, drawLottery, lotteryOdds, fantasyPoints, scoreRows, rosterProblems, teamState, capOf, capSpace, weekOf, rankWaiverBids, slot, parseSchedule, DAILY, addsLocked, addsLockedFor, type Schedule, type TeamState, type Bid } from "./rules";
+import { resolveRound, revealRound, maxBid, yearsLeft, DEFAULT_SETTINGS as S, drawLottery, lotteryOdds, fantasyPoints, scoreRows, rosterProblems, teamState, capOf, capSpace, weekOf, addsIn, earlyAddOpen, addOffer, rankWaiverBids, slot, parseSchedule, DAILY, addsLocked, addsLockedFor, type Schedule, type TeamState, type Bid } from "./rules";
+import { etDay } from "./dates";
 
 const M = 1_000_000;
 const team = (id: string, salary = 0, rosterCount = 0): TeamState => ({ id, salary, rosterCount, onIR: 0, slotsUsed: {} });
@@ -249,6 +250,40 @@ test("adds: one per Monday to Sunday week", () => {
   assert.deepEqual(weekOf("2026-10-22"), { starts: "2026-10-19", ends: "2026-10-25" }); // a Thursday
   assert.deepEqual(weekOf("2026-10-25"), { starts: "2026-10-19", ends: "2026-10-25" }); // Sunday still counts
   assert.deepEqual(weekOf("2026-10-26"), { starts: "2026-10-26", ends: "2026-11-01" }); // Monday starts fresh
+});
+
+test("next week's add opens early: Sunday, from the first tip-off", () => {
+  const tips = ["2026-11-15T20:30:00Z", "2026-11-15T23:00:00Z", "2026-11-16T02:00:00Z"]; // Sunday 15 Nov: 3:30, 6:00 and 9:00 pm Eastern
+  const at = (iso: string) => Date.parse(iso);
+  assert.equal(earlyAddOpen("2026-11-15", tips, at("2026-11-15T20:29:59Z")), false); // not before the first game
+  assert.equal(earlyAddOpen("2026-11-15", tips, at("2026-11-15T20:30:00Z")), true);
+  assert.equal(earlyAddOpen("2026-11-15", [...tips].reverse(), at("2026-11-15T21:00:00Z")), true); // the first game, whatever the order
+  assert.equal(earlyAddOpen("2026-11-15", tips, at("2026-11-16T04:59:00Z")), true); // until the Eastern day ends
+  assert.equal(earlyAddOpen("2026-11-14", ["2026-11-14T17:00:00Z"], at("2026-11-14T23:00:00Z")), false); // a Saturday
+  assert.equal(earlyAddOpen("2026-11-16", ["2026-11-17T00:00:00Z"], at("2026-11-17T01:00:00Z")), false); // Monday: the new week has its own add
+  assert.equal(earlyAddOpen("2026-11-15", [], at("2026-11-15T06:00:00Z")), true); // a Sunday with no games: open all day
+});
+
+test("next week's add: only once this week's is used, and only one", () => {
+  const free = { used: 0, limit: 1 }, used = { used: 1, limit: 1 };
+  assert.equal(addOffer(free, null), "now");
+  assert.equal(addOffer(free, free), "now"); // this week's first, even on Sunday evening
+  assert.equal(addOffer(used, null), null); // not Sunday after the first tip-off yet
+  assert.equal(addOffer(used, free), "early");
+  assert.equal(addOffer(used, used), null); // a free agent already held, or already signed, for next week
+});
+
+test("an add made early counts in the week it signs: Monday 8:00 London is always a Monday in US Eastern", () => {
+  const thisWeek = weekOf("2026-11-15"), nextWeek = weekOf("2026-11-16");
+  const pickup = etDay("2026-11-15T19:00:00Z"); // this week's add, used on Sunday afternoon
+  const signs = etDay("2026-11-16T08:00:00Z"); // the held free agent signs when waivers clear
+  assert.equal(signs, "2026-11-16");
+  assert.equal(addsIn(thisWeek, [pickup, signs]), 1);
+  assert.equal(addsIn(nextWeek, [pickup, signs]), 1); // so on Monday the new week's add is used
+  assert.equal(addsIn(nextWeek, [pickup]), 0);
+  // the weeks the clocks disagree (US an hour ahead in March, an hour behind in late October): still Monday
+  assert.equal(etDay("2027-03-15T08:00:00Z"), "2027-03-15");
+  assert.equal(etDay("2026-10-26T08:00:00Z"), "2026-10-26");
 });
 
 test("no adds before the season: pickups and waiver bids open on 20 October 2026, midnight London", () => {

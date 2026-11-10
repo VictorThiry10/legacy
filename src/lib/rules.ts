@@ -209,6 +209,23 @@ export function weekOf(day: string) {
   const starts = addDays(day, -((weekdayIndex(day) + 6) % 7)); // back to Monday
   return { starts, ends: addDays(starts, 6) };
 }
+// How many of these days (the days adds were signed, or will be) fall in a week.
+export const addsIn = (week: { starts: string; ends: string }, days: string[]) => days.filter((d) => d >= week.starts && d <= week.ends).length;
+
+// Next week's add opens early (Victor, 2026-11-10): on Sunday, from the first NBA tip-off of the day, a GM who has
+// used this week's add can already make next week's. It is signed on Monday morning when waivers clear (8:00
+// London), so he can't play this week, and it counts as next week's add. A waiver bid then is the same thing: every
+// waiver still open clears on Monday or later. A free agent is held for the GM until then, first come first served
+// (lib/waivers.ts). A Sunday with no NBA games is open all day: nothing is left to play for.
+export function earlyAddOpen(day: string, tipoffs: string[], now = Date.now()) {
+  if (weekdayIndex(day) !== 0) return false;
+  return !tipoffs.length || Math.min(...tipoffs.map((t) => Date.parse(t))) <= now;
+}
+// The add a GM can make right now: this week's while it lasts ("now"), else next week's once it has opened early
+// ("early", if that one isn't used or held already), else none.
+type Adds = { used: number; limit: number };
+export const addOffer = (thisWeek: Adds, nextWeek: Adds | null): "now" | "early" | null =>
+  thisWeek.used < thisWeek.limit ? "now" : nextWeek && nextWeek.used < nextWeek.limit ? "early" : null;
 
 // Renounce Rights: each GM can give up one signing per season (Victor, 2026-10-09: "just 1 renounce per GM"). The player goes to the next bidder.
 export const RENOUNCE_RIGHTS = 1;

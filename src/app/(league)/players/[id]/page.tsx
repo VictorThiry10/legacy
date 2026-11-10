@@ -118,14 +118,18 @@ export default async function PlayerPage({ params, searchParams }: PageProps<"/p
                 </>
               ) : w ? (
                 <>
-                  <span className="font-medium text-orange">On waivers</span>
-                  <div className="text-xs text-muted">Bids close <LocalTime iso={w.waiver.closes_at} mode="day" /> <LocalTime iso={w.waiver.closes_at} /></div>
+                  <span className="font-medium text-orange">{w.waiver.held_for ? "Claimed" : "On waivers"}</span>
+                  <div className="text-xs text-muted">{w.waiver.held_for ? "Signs" : "Bids close"} <LocalTime iso={w.waiver.closes_at} mode="day" /> <LocalTime iso={w.waiver.closes_at} /></div>
                 </>
               ) : "Free Agent"}
             </div>
             <div className="flex flex-wrap items-center gap-2 pt-1">
               {!c && me?.team && (addsLockedFor(w?.waiver) ? (
                 <span className="rounded-full bg-line px-3 py-1.5 text-xs font-semibold">Adds open 20 Oct</span>
+              ) : w?.waiver.held_for ? (
+                w.waiver.held_for === me.team.id && (
+                  <Link href={`/players/${p.id}/add`} transitionTypes={FORWARD} className="rounded-full border-[1.5px] border-orange bg-card px-5 py-1.5 text-sm font-semibold text-orange hover:bg-orange/10">Yours Monday</Link>
+                )
               ) : w ? (
                 w.waiver.dropped_by === me.team.id ? (
                   <span className="rounded-full bg-line px-3 py-1.5 text-xs font-semibold">You dropped him</span>
