@@ -2,6 +2,7 @@
 import { useState, useTransition } from "react";
 import { watch } from "@/app/(league)/players/actions";
 import FlagIcon from "./FlagIcon";
+import { tap } from "@/lib/haptics";
 
 // The flag on a player's page: on my watch list or not. It flips at once, and flips back if the save fails.
 export default function WatchButton({ playerId, name, watched }: { playerId: string; name: string; watched: boolean }) {
@@ -9,6 +10,7 @@ export default function WatchButton({ playerId, name, watched }: { playerId: str
   const [, start] = useTransition();
   const flip = () => {
     const next = !on;
+    tap();
     setOn(next);
     start(async () => {
       const r = await watch(playerId, next);

@@ -6,6 +6,7 @@ import { FORWARD } from "../Slide";
 import type { CardPlayer } from "@/lib/bidding";
 import { headshot } from "@/lib/names";
 import { BID_STEP, money } from "@/lib/rules";
+import { confirm, tap } from "@/lib/haptics";
 
 const STEP = BID_STEP; // whole millions
 
@@ -25,7 +26,13 @@ export default function BidSheet({ player, current, max, min, onClose, onBid }: 
 
   const set = (v: number) => {
     setText(null);
-    setAmt(clamp(v));
+    const next = clamp(v);
+    if (next !== value) tap();
+    setAmt(next);
+  };
+  const bid = (amount: number | null) => {
+    confirm();
+    onBid(amount);
   };
 
   return (
@@ -85,7 +92,7 @@ export default function BidSheet({ player, current, max, min, onClose, onBid }: 
               <button onClick={() => set(min)} className="hover:text-fg">{money(min)}</button>
               <button onClick={() => set(max)} className="hover:text-fg">Max {money(max)}</button>
             </div>
-            <button onClick={() => onBid(value)} className="mt-6 w-full rounded-full bg-crimson py-3 font-semibold text-white transition active:scale-[0.98]">
+            <button onClick={() => bid(value)} className="mt-6 w-full rounded-full bg-crimson py-3 font-semibold text-white transition active:scale-[0.98]">
               {current !== undefined ? "Update bid" : "Place bid"}
             </button>
           </>
@@ -93,7 +100,7 @@ export default function BidSheet({ player, current, max, min, onClose, onBid }: 
           <p className="mt-6 text-center text-sm text-muted">Your roster is full.</p>
         )}
         {current !== undefined && (
-          <button onClick={() => onBid(null)} className="mt-2 h-10 w-full text-sm text-muted hover:text-fg">
+          <button onClick={() => bid(null)} className="mt-2 h-10 w-full text-sm text-muted hover:text-fg">
             Take back my bid
           </button>
         )}
