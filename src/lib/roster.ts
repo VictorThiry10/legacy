@@ -3,7 +3,7 @@ import { db } from "./supabase/server";
 import { all, fail, rpc } from "./db";
 import type { Move } from "./moves";
 import { getSettings, type Player } from "./league";
-import { ADDS_LOCKED, ADDS_PER_WEEK, addsLocked, capOf, capSpace, money, rosterProblems, teamState, weekOf } from "./rules";
+import { ADDS_LOCKED, ADDS_PER_WEEK, addsIn, addsLocked, capOf, capSpace, earlyAddOpen, money, rosterProblems, teamState, weekOf } from "./rules";
 import { onIR } from "./lineup-store";
 import { gamesBetween } from "./nba";
 import { addDays, dayName, etDay, today } from "./dates";
@@ -92,18 +92,35 @@ export async function signPlayer(o: {
   return `Signed for ${money(o.salary)}, ${o.years} year${o.years > 1 ? "s" : ""}.`;
 }
 
-// A team's adds this week (free agent pickups and waiver claims, whether or not he was dropped since) against the
-// weekly limit (rules.ts). A reverted add is deleted, so it doesn't count.
-export async function addsThisWeek(teamId: string, day = today()) {
+// A team's adds in the week of this day (free agent pickups and waiver claims, whether or not he was dropped since)
+// against the weekly limit (rules.ts). A reverted add is deleted, so it doesn't count. A free agent held for the
+// team (next week's add, made early) counts in the week he signs; exceptWaiver leaves out the one being settled.
+export async function addsThisWeek(teamId: string, day = today(), exceptWaiver?: string) {
   const week = weekOf(day);
-  const { data, error } = await db().from("contracts").select("created_at").eq("team_id", teamId)
-    .in("acquired_via", ["free_agent", "waiver"]).gte("created_at", `${addDays(week.starts, -1)}T00:00:00Z`);
+  const [{ data, error }, { data: held, error: e2 }] = await Promise.all([
+    db().from("contracts").select("created_at").eq("team_id", teamId)
+      .in("acquired_via", ["free_agent", "waiver"]).gte("created_at", `${addDays(week.starts, -1)}T00:00:00Z`),
+    db().from("waivers").select("id, closes_at").eq("status", "open").eq("held_for", teamId),
+  ]);
   if (error) fail(error);
-  const used = (data ?? []).filter((c) => etDay(c.created_at) >= week.starts && etDay(c.created_at) <= week.ends).length;
-  return { used, limit: ADDS_PER_WEEK, ...week, next: addDays(week.ends, 1) };
+  if (e2) fail(e2);
+  const days = [...(data ?? []).map((c) => c.created_at), ...(held ?? []).filter((w) => w.id !== exceptWaiver).map((w) => w.closes_at)].map(etDay);
+  return { used: addsIn(week, days), limit: ADDS_PER_WEEK, ...week, next: addDays(week.ends, 1) };
 }
 export const ADDS_USED = (a: { limit: number; next: string }) =>
   `${a.limit} add${a.limit === 1 ? "" : "s"} per week: you've used this week's. Next one ${dayName(a.next)}.`;
+export const NEXT_ADD_USED = "Next week's add is used too.";
+export const HELD = "Another GM has claimed him.";
+
+// Has next week's add opened early (rules.ts)? Sunday, once the day's first NBA game has tipped off.
+export async function earlyAddIsOpen() {
+  const day = today();
+  return earlyAddOpen(day, (await gamesBetween(day, day)).map((g) => g.start));
+}
+// Next week's adds for a team whose add this week is used, once they have opened early; null until then.
+export async function nextWeekAdds(teamId: string, thisWeek: { used: number; limit: number; next: string }) {
+  return thisWeek.used >= thisWeek.limit && (await earlyAddIsOpen()) ? addsThisWeek(teamId, thisWeek.next) : null;
+}
 
 // Free agent pickup: $min salary for 1 year, first come first served. A full roster must drop someone in the same step.
 // The dropped player goes on waivers (lib/waivers.ts), and so a player on waivers can't be picked up this way.
@@ -114,8 +131,8 @@ export async function pickUp(o: { teamId: string; playerId: string; dropContract
   const { season, rules } = await getSettings();
   const { data: taken } = await db().from("contracts").select("id").eq("player_id", o.playerId).eq("active", true).maybeSingle();
   if (taken) throw new Error("Someone just picked him up.");
-  const { data: waived } = await db().from("waivers").select("id").eq("player_id", o.playerId).eq("status", "open").maybeSingle();
-  if (waived) throw new Error("He is on waivers: place a bid instead.");
+  const { data: waived } = await db().from("waivers").select("id, held_for").eq("player_id", o.playerId).eq("status", "open").maybeSingle();
+  if (waived) throw new Error(waived.held_for ? HELD : "He is on waivers: place a bid instead.");
   const mine = await rosters([o.teamId]);
   const ir = await onIR([o.teamId]);
   const onRoster = mine.filter((p) => !ir.has(p.id)).length;

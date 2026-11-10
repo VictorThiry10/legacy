@@ -152,14 +152,14 @@ export type Database = {
       >;
       waivers: Table<
         {
-          closed_at: string | null; closes_at: string; contract_id: string | null; created_at: string; dropped_by: string | null; id: string;
-          note: string | null; player_id: string; season: number; status: string;
+          closed_at: string | null; closes_at: string; contract_id: string | null; created_at: string; dropped_by: string | null; held_for: string | null;
+          id: string; note: string | null; player_id: string; season: number; status: string;
         },
         {
-          closed_at?: string | null; closes_at: string; contract_id?: string | null; created_at?: string; dropped_by?: string | null; id?: string;
-          note?: string | null; player_id: string; season: number; status?: string;
+          closed_at?: string | null; closes_at: string; contract_id?: string | null; created_at?: string; dropped_by?: string | null; held_for?: string | null;
+          id?: string; note?: string | null; player_id: string; season: number; status?: string;
         },
-        [FK<"waivers_contract_id_fkey", "contract_id", "contracts">, FK<"waivers_dropped_by_fkey", "dropped_by", "teams">, FK<"waivers_player_id_fkey", "player_id", "players">]
+        [FK<"waivers_contract_id_fkey", "contract_id", "contracts">, FK<"waivers_dropped_by_fkey", "dropped_by", "teams">, FK<"waivers_held_for_fkey", "held_for", "teams">, FK<"waivers_player_id_fkey", "player_id", "players">]
       >;
     };
     Views: {
@@ -200,6 +200,8 @@ export type Database = {
         Returns: string;
       };
       draft_picks_fill: { Args: { p_first: number; p_years: number }; Returns: undefined };
+      early_add: { Args: { p_team: string; p_player: string; p_amount: number; p_drop: string | null; p_season: number; p_week: string }; Returns: string };
+      early_add_cancel: { Args: { p_waiver: string; p_team: string }; Returns: undefined };
       rookie_lottery_save: { Args: { p_year: number; p_order: string[]; p_odds: Json }; Returns: boolean };
       rookie_pick: { Args: { p_year: number; p_team: string; p_player: string; p_salary: number; p_years: number; p_season: number; p_note: string }; Returns: number };
       trade_offer_accept: { Args: { p_offer: string; p_season: number }; Returns: undefined };

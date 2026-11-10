@@ -4,7 +4,7 @@ import { redirect, RedirectType } from "next/navigation";
 import { requireTeam } from "@/lib/auth";
 import { pickUp } from "@/lib/roster";
 import { reservedForDraft } from "@/lib/draft";
-import { placeBid, settleWaivers, withdrawBid } from "@/lib/waivers";
+import { holdFreeAgent, placeBid, releaseHold, settleWaivers, withdrawBid } from "@/lib/waivers";
 import { BID_STEP } from "@/lib/rules";
 
 // Add a free agent (dropping someone if the roster is full), then go to my team.
@@ -52,4 +52,17 @@ export async function bid(f: FormData) {
 
 export async function unbid(f: FormData) {
   await onBid(f, (teamId, playerId) => withdrawBid({ teamId, playerId }));
+}
+
+// Next week's add, made early on a free agent: he is held for me until Monday morning (the page then shows it).
+export async function addEarly(f: FormData) {
+  await onBid(f, async (teamId, playerId) => {
+    await settleWaivers();
+    if (await reservedForDraft(playerId).catch(() => false)) throw new Error("He's in the rookie draft: until it's over, he can only be drafted.");
+    return holdFreeAgent({ teamId, playerId, dropContractId: String(f.get("drop") ?? "") || undefined });
+  });
+}
+
+export async function cancelEarly(f: FormData) {
+  await onBid(f, (teamId, playerId) => releaseHold({ teamId, playerId }));
 }

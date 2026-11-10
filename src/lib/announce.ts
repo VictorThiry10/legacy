@@ -29,12 +29,14 @@ export const announceDrop = (playerId: string, byTeamId: string) => quietly(asyn
 });
 
 // The waiver settled: the winner hears he has him, the GMs he outbid hear who got him and for how much (the salary is
-// in the moves log anyway), and when no bid fit the rules the bidders hear he's a free agent now.
-export const announceSettled = (w: { id: string; player_id: string }, winner: { team_id: string; amount: number } | null, bidders: string[]) => quietly(async () => {
+// in the moves log anyway), and when no bid fit the rules the bidders hear he's a free agent now. A free agent held
+// for one GM (next week's add, made early) has that GM as its only bidder: he hears whether it went through.
+export const announceSettled = (w: { id: string; player_id: string; held_for?: string | null }, winner: { team_id: string; amount: number } | null, bidders: string[]) => quietly(async () => {
   if (!bidders.length) return;
   const { player, team } = await names(w.player_id, []);
   const url = `/players/${w.player_id}`, tag = `waiver-${w.id}`;
+  if (!winner && w.held_for) return void (await notifyTeams(bidders, { title: `${player} not added`, body: "It didn't fit under the rules. Free agent now.", url, tag }));
   if (!winner) return void (await notifyTeams(bidders, { title: `${player} cleared waivers`, body: "No bid fit under the rules. Free agent now.", url, tag }));
-  await notifyTeams([winner.team_id], { title: `${player} is yours`, body: `Waiver claim · ${money(winner.amount)}, 1 year`, url, tag });
+  await notifyTeams([winner.team_id], { title: `${player} is yours`, body: `${w.held_for ? "Added" : "Waiver claim"} · ${money(winner.amount)}, 1 year`, url, tag });
   await notifyTeams(bidders.filter((t) => t !== winner.team_id), { title: `${player} went to ${team(winner.team_id)}`, body: `Outbid · ${money(winner.amount)}`, url, tag });
 });

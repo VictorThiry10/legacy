@@ -85,6 +85,9 @@ async function StatsTable({ sp }: { sp: Params }) {
   const lineOf = (p: Player) => (period === "last" ? p.last_season : period === "proj" ? p.projection : recent.get(p.id));
   const players = (rows ?? []) as Player[];
   const owner = new Map(((owned ?? []) as unknown as { player_id: string; team: { id: string; name: string } }[]).map((o) => [o.player_id, o.team]));
+  // a free agent held for a GM until waivers clear (next week's add, made early): that GM's initials, in orange
+  const gms = new Map([...owner.values()].map((t) => [t.id, t]));
+  const held = (id: string) => gms.get(waivers.get(id)?.held_for ?? "");
   const abbr = new Map(players.filter((p) => p.nba_team_id).map((p) => [p.nba_team_id!, p.nba_team ?? ""]));
   const nextGame = new Map<string, { start: string; opp: string }>();
   for (const g of games ?? []) {
@@ -159,6 +162,7 @@ async function StatsTable({ sp }: { sp: Params }) {
                   <td className="text-center text-xs font-semibold">
                     {o ? <Link href={`/teams/${o.id}`} prefetch={false} transitionTypes={["nav-forward"]} title={o.name} className="hover:underline">{initials(o.name)}</Link>
                       : addsLockedFor(waivers.get(p.id)) ? null
+                      : held(p.id) ? <Link href={`/players/${p.id}`} prefetch={false} transitionTypes={["nav-forward"]} title={`Claimed by ${held(p.id)!.name}`} className="text-orange hover:underline">{initials(held(p.id)!.name)}</Link>
                       : waivers.has(p.id) ? <Link href={`/players/${p.id}/add`} prefetch={false} transitionTypes={["nav-forward"]} className="inline-flex h-6 w-6 items-center justify-center rounded-full border-[1.5px] border-orange text-orange font-bold" title="On waivers: sealed bids" aria-label={`Bid on ${p.name}`}>+</Link>
                       : <Link href={`/players/${p.id}/add`} prefetch={false} transitionTypes={["nav-forward"]} className="inline-flex h-6 w-6 items-center justify-center rounded-full border-[1.5px] border-good text-good font-bold" title="Free agent" aria-label={`Add ${p.name}`}>+</Link>}
                   </td>
