@@ -6,11 +6,15 @@ import { playerOverviewCached } from "@/lib/espn";
 import { regularSeasonStarted, teamAbbrs } from "@/lib/nba";
 import { getMe } from "@/lib/auth";
 import { getSettings, type Player } from "@/lib/league";
-import { money, yearsLeft, addsLockedFor } from "@/lib/rules";
+import { money, yearsLeft, addsLockedFor, scoreRows } from "@/lib/rules";
 import { seasonLabel } from "@/lib/player-stats";
 import TeamLogo from "@/components/TeamLogo";
 import { waiverFor } from "@/lib/waivers";
 import LocalTime from "@/components/LocalTime";
+import ScoreButton from "@/components/ScoreButton";
+import { headshot } from "@/lib/names";
+import { nickname } from "@/lib/nba-teams";
+import { etDay, weekday } from "@/lib/dates";
 import Slide, { FORWARD } from "@/components/Slide";
 import BackLink from "@/components/BackLink";
 import WatchButton from "@/components/WatchButton";
@@ -28,7 +32,7 @@ export default async function PlayerPage({ params, searchParams }: PageProps<"/p
   const tab = TABS.some(([k]) => k === sp.tab) ? (sp.tab as string) : "overview";
   const d = db();
   const overview = playerOverviewCached(id).catch(() => null); // ESPN: streamed in below, the page doesn't wait for it
-  const [{ data: player }, { data: contract }, { data: logs }, { data: moves }, me, { season }, onWaivers, regular, watched, abbr] = await Promise.all([
+  const [{ data: player }, { data: contract }, { data: logs }, { data: moves }, me, { season, scoring }, onWaivers, regular, watched, abbr] = await Promise.all([
     d.from("players").select("*").eq("id", id).maybeSingle(),
     d.from("contracts").select("id, salary, years, season_signed, team:teams(id, name)").eq("player_id", id).eq("active", true).maybeSingle(),
     d.from("player_games").select("*, game:games(start, home_team_id, away_team_id, home_score, away_score, season_type)").eq("player_id", id).eq("played", true),
@@ -51,7 +55,7 @@ export default async function PlayerPage({ params, searchParams }: PageProps<"/p
 
   // This season so far (our box scores), and last season (ESPN totals).
   // Preseason games count until opening night (handy for testing), then drop out.
-  type Log = { pts: number; reb: number; ast: number; stl: number; blk: number; tov: number; min: number; fpts: number; nba_team_id: string | null; game: { start: string; home_team_id: string; away_team_id: string; season_type: number | null } };
+  type Log = { pts: number; fgm: number; fga: number; reb: number; ast: number; stl: number; blk: number; tov: number; tf: number; ej: number; win: number; min: number; fpts: number; nba_team_id: string | null; game: { start: string; home_team_id: string; away_team_id: string; season_type: number | null } };
   const games = ((logs ?? []) as unknown as Log[])
     .filter((g) => !regular || g.game.season_type !== 1)
     .sort((a, b) => b.game.start.localeCompare(a.game.start));
@@ -67,8 +71,15 @@ export default async function PlayerPage({ params, searchParams }: PageProps<"/p
   const tabHref = (k: string) => (k === "overview" ? `/players/${id}` : `/players/${id}?tab=${k}`);
   // "BOS" at home, "@BOS" away, by the team he played for that night
   const opp = (g: { home_team_id: string; away_team_id: string }, team: string | null) => (g.home_team_id === team ? abbr.get(g.away_team_id) ?? "?" : `@${abbr.get(g.home_team_id) ?? "?"}`);
+  // "Sun 11/22 vs. Pistons", the heading of the scoring pop-up (as on Matchup)
+  const gameTitle = (g: Log) => {
+    const day = etDay(g.game.start), home = g.game.home_team_id === g.nba_team_id;
+    const wd = weekday(day);
+    return `${wd.charAt(0)}${wd.slice(1).toLowerCase()} ${Number(day.slice(5, 7))}/${Number(day.slice(8))} ${home ? "vs." : "@"} ${nickname(abbr.get(home ? g.game.away_team_id : g.game.home_team_id) ?? "?")}`;
+  };
   const COLS = ["FPTS", "MIN", "PTS", "REB", "AST", "STL", "BLK", "TO"];
-  // The game log, ESPN style: date, opponent, fantasy points first; the next game on top with dashes when asked.
+  // The game log, ESPN style: date, opponent, fantasy points first (tap them for the scoring breakdown); the next
+  // game on top with dashes when asked.
   const gameLog = (rows: Log[], upcoming: boolean) => (
     <div className="-mx-4 overflow-x-auto">
       <table className="t whitespace-nowrap">
@@ -85,7 +96,12 @@ export default async function PlayerPage({ params, searchParams }: PageProps<"/p
             <tr key={i}>
               <td className="pl-4 text-muted"><LocalTime iso={g.game.start} mode="day" /></td>
               <td className="text-muted">{opp(g.game, g.nba_team_id)}</td>
-              <td className="num text-right font-semibold">{Number(g.fpts).toFixed(1)}</td>
+              <td className="text-right">
+                <ScoreButton
+                  points={Number(g.fpts)} name={p.name} headshot={headshot(p.headshot, 240)} game={gameTitle(g)} className=""
+                  rows={scoreRows({ pts: g.pts, fgm: g.fgm, fga: g.fga, reb: g.reb, ast: g.ast, stl: g.stl, blk: g.blk, to: g.tov, tf: g.tf, ej: g.ej, win: g.win }, scoring)}
+                />
+              </td>
               <td className="num text-right">{g.min}</td><td className="num text-right">{g.pts}</td><td className="num text-right">{g.reb}</td>
               <td className="num text-right">{g.ast}</td><td className="num text-right">{g.stl}</td><td className="num text-right">{g.blk}</td>
               <td className="num text-right pr-4">{g.tov}</td>

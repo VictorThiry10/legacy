@@ -6,8 +6,8 @@ import { useScrollLock } from "./ScrollLock";
 export type ScoreRow = { label: string; per: number; n: number; score: number };
 
 // A player's fantasy points for one game. Tap it for the breakdown, ESPN style: each scoring category, what one is
-// worth, how many he had and what that adds up to.
-export default function ScoreButton({ points, name, headshot, game, rows, className = "" }: {
+// worth, how many he had and what that adds up to. `className` sets the number's size (the Matchup one by default).
+export default function ScoreButton({ points, name, headshot, game, rows, className = "text-[15px]" }: {
   points: number; name: string; headshot: string | null; game: string; rows: ScoreRow[]; className?: string;
 }) {
   const [open, setOpen] = useState(false);
@@ -21,7 +21,7 @@ export default function ScoreButton({ points, name, headshot, game, rows, classN
   const one = (n: number) => n.toFixed(1);
   return (
     <>
-      <button type="button" onClick={() => setOpen(true)} aria-label={`${name}: ${one(points)} points, see the breakdown`} className={`num text-[15px] font-semibold active:opacity-60 ${className}`}>
+      <button type="button" onClick={() => setOpen(true)} aria-label={`${name}: ${one(points)} points, see the breakdown`} className={`num font-semibold active:opacity-60 ${className}`}>
         {one(points)}
       </button>
       {open &&
