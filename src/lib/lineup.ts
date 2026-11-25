@@ -1,4 +1,5 @@
 // Lineup rules: slots, who can play where, and how a saved lineup fills out. Pure functions, easy to test.
+import { etDay } from "./dates";
 
 export const SLOTS = ["PG", "SG", "SF", "PF", "C", "G", "F", "UTIL1", "UTIL2", "UTIL3", "BE1", "BE2", "BE3", "IR"] as const;
 export type Slot = (typeof SLOTS)[number];
@@ -122,4 +123,14 @@ export function freezeLineup(built: LineupRow[], frozen: Placed[], tip: (playerI
   const wasFrozen = new Set(frozen.map((f) => f.playerId));
   for (const r of rows) if (tip(r.playerId) === undefined || wasFrozen.has(r.playerId)) put(r.slot, r.playerId);
   return [...out].map(([slot, playerId]) => ({ slot, playerId }));
+}
+
+// The earlier (US Eastern) days whose points can still move, so they must be recounted: a game of that day isn't
+// final yet, or tipped off in the last MOVING_HOURS. A late tip-off runs past midnight, and the last box score lands
+// in the very run that marks the game final, so its day is recounted for some hours more (Victor's Monday, 2026-11-23:
+// Utah at the Lakers ended after midnight and its last points were never counted).
+export const MOVING_HOURS = 8;
+export function movingDays(games: { start: string; final: boolean }[], today: string, now = Date.now()) {
+  const recent = now - MOVING_HOURS * 3600_000;
+  return [...new Set(games.filter((g) => !g.final || Date.parse(g.start) >= recent).map((g) => etDay(g.start)).filter((d) => d < today))].sort();
 }

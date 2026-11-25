@@ -4,7 +4,7 @@ import { db } from "./supabase/server";
 import { all, rpc } from "./db";
 import { addDays, etDay, today } from "./dates";
 import { getSettings } from "./league";
-import { freezeLineup, isSlot, isStarter, SLOTS, type LineupRow } from "./lineup";
+import { freezeLineup, isSlot, isStarter, movingDays, MOVING_HOURS, SLOTS, type LineupRow } from "./lineup";
 import { gamesBetween } from "./nba";
 import { lineupsFrom, savedUpTo } from "./lineup-store";
 import { rosters } from "./roster";
@@ -143,7 +143,9 @@ export async function refreshScores() {
   await fillPlayoffs(ms);
   const [done, { data: open }] = await Promise.all([
     all((a, b) => db().from("lineup_points").select("day").gte("day", days[0]).lte("day", now).range(a, b)),
-    db().from("games").select("start").eq("final", false).gte("start", `${addDays(days[0], -1)}T00:00:00Z`).lt("start", `${now}T00:00:00Z`),
+    // games of the earlier days (US Eastern: they tip off before 6:00 UTC of today) not final yet, or just played
+    db().from("games").select("start, final").gte("start", `${addDays(days[0], -1)}T00:00:00Z`).lt("start", `${now}T06:00:00Z`)
+      .or(`final.eq.false,start.gte.${new Date(Date.now() - MOVING_HOURS * 3600_000).toISOString()}`),
   ]);
   const frozenDays = new Set(done.map((r) => r.day));
   const caughtUp: string[] = [];
@@ -155,8 +157,8 @@ export async function refreshScores() {
     }
   }
   // Recount only the days whose points can still move: today, a day just caught up, and an earlier day with a game
-  // still on (a late tip-off runs past midnight). Recounting all eight every 2 minutes was wasted work.
-  const stillOn = (open ?? []).map((g) => etDay(g.start)).filter((d) => days.includes(d));
+  // still on or just over (movingDays). Recounting all eight every 2 minutes was wasted work.
+  const stillOn = movingDays(open ?? [], now).filter((d) => days.includes(d));
   const from = [now, ...caughtUp, ...stillOn].reduce((a, b) => (a < b ? a : b));
   await rpc("score_lineup_points", { p_from: from, p_to: now });
   return { days: days.length, caughtUp, from };
