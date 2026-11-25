@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildLineup, canPlay, irFrees, swap, type LineupPlayer, type LineupRow, freezeLineup } from "./lineup";
+import { buildLineup, canPlay, irFrees, swap, type LineupPlayer, type LineupRow, freezeLineup, movingDays } from "./lineup";
 import { addDays, etDay } from "./dates";
 
 const p = (id: string, position: string, injury_status: string | null = null): LineupPlayer => ({ id, position, injury_status });
@@ -90,4 +90,20 @@ test("freeze: each player's slot locks at his tip-off", () => {
     sort(freezeLineup([row("BE1", "b"), row("SG", "c"), row("PG", "x")], frozen, tip, T + 60)),
     sort([{ slot: "PG", playerId: "a" }, { slot: "BE1", playerId: "b" }, { slot: "SG", playerId: "c" }]),
   );
+});
+
+test("a late game keeps its day being recounted past midnight and after the final", () => {
+  const late = { start: "2026-11-24T03:30:00Z", final: false }; // Monday 22:30 Eastern, Utah at the Lakers
+  const early = { start: "2026-11-24T00:00:00Z", final: true }; // Monday 19:00 Eastern
+  const at = (iso: string) => Date.parse(iso);
+  // Tuesday 0:30 Eastern, the late game still on: Monday is recounted
+  assert.deepEqual(movingDays([early, late], "2026-11-24", at("2026-11-24T05:30:00Z")), ["2026-11-23"]);
+  // the run that marks it final has just saved its last box score: Monday is still recounted
+  assert.deepEqual(movingDays([{ ...late, final: true }], "2026-11-24", at("2026-11-24T06:10:00Z")), ["2026-11-23"]);
+  // the morning after: nothing left to move
+  assert.deepEqual(movingDays([early, { ...late, final: true }], "2026-11-24", at("2026-11-24T13:00:00Z")), []);
+  // today's own games are not an earlier day
+  assert.deepEqual(movingDays([{ start: "2026-11-25T00:00:00Z", final: false }], "2026-11-24", at("2026-11-25T01:00:00Z")), []);
+  // a game never marked final keeps its day open
+  assert.deepEqual(movingDays([{ start: "2026-11-21T00:00:00Z", final: false }], "2026-11-24", at("2026-11-24T13:00:00Z")), ["2026-11-20"]);
 });
